@@ -110,7 +110,7 @@
   @keyframes slide{from{transform:translateX(0)}to{transform:translateX(-50%)}}
 
   /* ── 通用分节 ── */
-  section{padding:68px 0}
+  section{padding:84px 0}
   .sec-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:28px;flex-wrap:wrap}
   .sec-head h2{margin:8px 0 0;font-size:clamp(22px,2.4vw,30px);letter-spacing:-.01em;font-weight:800}
   .sec-head p{margin:6px 0 0;color:var(--muted);font-size:13.5px;line-height:1.6;max-width:52ch}
@@ -237,19 +237,17 @@
       <div class="lbl">Multi-account console / Tauri 2 + Rust</div>
       <h1>把多个 WorkBuddy 账号，<br>当成<em>一台机器</em>来开。</h1>
       <p class="lead">
-        切号、签到、日常任务、积分、TOKEN、运行日志——六个分区一屏管完。
-        切换前先校验真实写入，失败自动回滚；用量预测按余额下降推天数，样本不足就说不足。
+        切号、签到、日常任务、积分、TOKEN、日志——一屏管完。
+        切换前校验真实写入，失败自动回滚；用量天数按余额下降推算，样本不足就说不足。
       </p>
       <div class="cta-row">
         <a class="btn solid" href="https://github.com/a634691481-arch/workbuddy-deck/releases/latest" target="_blank" rel="noopener">Windows 安装包</a>
         <a class="btn" href="https://github.com/a634691481-arch/workbuddy-deck/releases/latest" target="_blank" rel="noopener">免安装 zip</a>
-        <a class="btn" href="#panes">看六个分区 ↓</a>
       </div>
       <div class="meta">
         <div><b data-count="6">0</b><span>账号槽位</span></div>
         <div><b data-count="6">0</b><span>功能分区</span></div>
         <div><b data-count="3">0</b><span>支持平台</span></div>
-        <div><b>0<span style="color:var(--hazard)">s</span></b><span>本地读写</span></div>
       </div>
     </div>
 
@@ -276,7 +274,7 @@
       <div>
         <div class="lbl">01 — 06 / six panes</div>
         <h2>六个分区，各管一件事</h2>
-        <p>不给同一份数据做两处呈现。签到态在单元条，余额在遥测带，日志四源合一——同一信息只出现一次。</p>
+        <p>同一份数据只出现一次：签到态在单元条，余额在遥测带，日志四源合一。</p>
       </div>
       <div class="lbl">点击左侧切换 →</div>
     </div>
@@ -305,7 +303,7 @@
       <div>
         <div class="lbl">what is actually different</div>
         <h2>六件别家没有做的事</h2>
-        <p>切换本身是红海。真正省事的是切换前后的那几步：先验证、能回滚、算得清、查得到。</p>
+        <p>切换本身是红海。省事的是切换前后那几步：先验证、能回滚、算得清、查得到。</p>
       </div>
     </div>
 
@@ -313,32 +311,32 @@
       <div class="card">
         <div class="n">01</div>
         <h3>切号有三道硬门槛</h3>
-        <p>会话替换不足数直接 fail-closed，不写认证；写完回读磁盘校验 uid，不一致立刻回滚。宁可切不过去，不留半个坏状态。</p>
+        <p>会话数不足直接 fail-closed；写完回读 uid，不一致立刻回滚。</p>
       </div>
       <div class="card">
         <div class="n">02</div>
-        <h3>用量天数，样本不够就不猜</h3>
-        <p>只把<strong>余额下降</strong>算消耗，签到上涨不算负消耗；快照跨天按天归一。少于 3 天就显示「样本 1/3 天」，不给假天数。</p>
+        <h3>天数不够就说不猜</h3>
+        <p>只把余额下降算消耗，跨天按天归一；少于 3 天显示「样本 1/3 天」。</p>
       </div>
       <div class="card">
         <div class="n">03</div>
-        <h3>限流有台账，不是一句“被限了”</h3>
-        <p>次数 / 成功 / 已回滚 / 已中止 + 平均耗时，切换源单独一页。出问题先看这里，不用翻终端。</p>
+        <h3>限流有台账</h3>
+        <p>次数 / 成功 / 回滚 / 中止 + 平均耗时，出问题先看这一页。</p>
       </div>
       <div class="card">
         <div class="n">04</div>
-        <h3>健康分给出的是理由</h3>
-        <p>限流 −35、余额为 0 −50、余额不足 10% −30…… 卡片上一个圆点，悬停看到全部扣分项，不是黑箱评分。</p>
+        <h3>健康分给理由</h3>
+        <p>限流 −35、余额为 0 −50，悬停看到全部扣分项，不是黑箱评分。</p>
       </div>
       <div class="card">
         <div class="n">05</div>
         <h3>数据能带走</h3>
-        <p>四份 CSV 直接写盘：<code>accounts</code> <code>tokensDaily</code> <code>tokensModels</code> <code>credits</code>。带 BOM，Excel 双击不乱码。</p>
+        <p>四份 CSV 直接写盘，带 BOM，Excel 双击不乱码。</p>
       </div>
       <div class="card">
         <div class="n">06</div>
         <h3>托盘就是读数</h3>
-        <p>不开窗也知道「账号数 · 合计余额 · 最紧账号 ≈N 天」。预测样本不足时写「样本不足」，不编数字。</p>
+        <p>不开窗也知道账号数、合计余额、最紧账号还剩几天。</p>
       </div>
     </div>
   </section>
@@ -348,7 +346,7 @@
       <div>
         <div class="lbl">release loop</div>
         <h2>发版到升级，一条闭环</h2>
-        <p>推 tag 触发 CI，三平台并行构建并签名；客户端读同一个清单，验签通过才安装。中间没有手工上传。</p>
+        <p>推 tag 触发 CI，三平台并行构建并签名；客户端验签通过才安装，中间没有手工上传。</p>
       </div>
       <div class="lbl">GitHub Actions / minisign</div>
     </div>
@@ -372,7 +370,7 @@
       <div>
         <div class="lbl">build matrix</div>
         <h2>三个平台，同一份代码</h2>
-        <p>Windows 安装包与免安装 zip、Linux 的 AppImage / deb、macOS 的 dmg 与 app 包，全部由 CI 产出并签名。</p>
+        <p>Windows、Linux、macOS 的安装包全部由 CI 产出并签名。</p>
       </div>
       <div class="lbl">v0.1.1 released</div>
     </div>
@@ -381,25 +379,22 @@
       <div class="plat">
         <div class="os"><b>WINDOWS</b><span>● READY</span></div>
         <ul>
-          <li>WorkBuddy.Deck_x64-setup.exe</li>
-          <li>WorkBuddy.Deck_x64-portable.zip</li>
-          <li>.sig 签名随包发布</li>
+          <li>x64-setup.exe（安装版）</li>
+          <li>x64-portable.zip（免安装）</li>
         </ul>
       </div>
       <div class="plat">
         <div class="os"><b>LINUX</b><span>● READY</span></div>
         <ul>
-          <li>WorkBuddy.Deck_amd64.AppImage</li>
-          <li>WorkBuddy.Deck_amd64.deb</li>
-          <li>WebKitGTK 4.1 运行时</li>
+          <li>amd64.AppImage</li>
+          <li>amd64.deb</li>
         </ul>
       </div>
       <div class="plat">
         <div class="os"><b>MACOS</b><span>● READY</span></div>
         <ul>
-          <li>WorkBuddy.Deck_aarch64.dmg</li>
-          <li>WorkBuddy.Deck_aarch64.app.tar.gz</li>
-          <li>未签名，首次需右键打开</li>
+          <li>aarch64.dmg</li>
+          <li>aarch64.app.tar.gz</li>
         </ul>
       </div>
     </div>
@@ -407,7 +402,7 @@
 
   <div class="end reveal">
     <h2>现在就把账号池接上</h2>
-    <p>下载安装包，或拿走免安装 zip。数据全部留在本机 <span class="mono">~/.wb-switch</span>，不上传任何服务器。</p>
+    <p>数据全部留在本机 <span class="mono">~/.wb-switch</span>，不上传任何服务器。</p>
     <div class="cta-row" style="justify-content:center;display:flex;gap:10px;flex-wrap:wrap">
       <a class="btn solid" href="https://github.com/a634691481-arch/workbuddy-deck/releases/latest" target="_blank" rel="noopener">下载最新版</a>
       <a class="btn" href="https://github.com/a634691481-arch/workbuddy-deck" target="_blank" rel="noopener">看源码</a>
