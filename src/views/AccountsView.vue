@@ -25,11 +25,14 @@ import {
 
 import {
   accountDelete,
+  accountForecast,
   accountOverview,
   accountSetNote,
   refreshAllTokens,
   switchWorkbuddyAccount,
   workbuddyStatus,
+  type AccountForecastRow,
+  type AccountHealth,
   type AccountOverviewRow,
   type AccountPackage,
   type WorkbuddyStatus,
@@ -81,7 +84,103 @@ async function load(refresh = false) {
     loading.value = false;
     refreshing.value = false;
   }
+  // 预测是本地纯计算（读快照，不发请求）：主表出来后再补，失败不影响余额展示。
+  void loadForecast();
 }
+
+/**
+ * 用量预测：按 accountId 索引成 Map，卡片里 O(1) 取。
+ *
+ * 预测失败绝不能让整页报错——它只是余额旁边的一个附加读数。
+ */
+const forecasts = ref<Map<string, AccountForecastRow>>(new Map());
+const minBasisDays = ref(3);
+async function loadForecast() {
+  try {
+    const result = await accountForecast();
+    forecasts.value = new Map((result.accounts ?? []).map((row) => [row.accountId, row]));
+    if (result.minBasisDays) minBasisDays.value = result.minBasisDays;
+  } catch {
+    forecasts.value = new Map();
+  }
+}
+
+const forecastOf = (accountId: string) => forecasts.value.get(accountId) ?? null;
+
+/**
+ * 剩余天数的紧张度。主题只有一支强调色（hazard），所以用**明度**分层而不是加新色：
+ * <3 天实红、<7 天高亮正文色、其余留灰。
+ */
+const forecastTone = (row: AccountForecastRow | null) => {
+  if (!row) return "text-faint";
+  if (row.confidence !== "ok" || row.daysLeft === null) return "text-faint";
+  if (row.daysLeft < 3) return "text-hazard";
+  if (row.daysLeft < 7) return "text-foreground";
+  return "text-muted-foreground";
+};
+
+/**
+ * 卡片上的短标签。三种状态都给出**明确理由**，不留一个孤零零的 `--`：
+ * `≈2.4d` / `样本 1/3d` / `无消耗`。
+ */
+const forecastLabel = (row: AccountForecastRow | null) => {
+  if (!row) return "";
+  if (row.confidence === "insufficient") {
+    return t("ac.fcSample")
+      .replace("{n}", String(row.basisDays))
+      .replace("{min}", String(minBasisDays.value));
+  }
+  if (row.confidence === "flat" || row.daysLeft === null) return t("ac.fcFlat");
+  const days = row.daysLeft < 1 ? "<1" : row.daysLeft.toFixed(1);
+  return t("ac.fcDays").replace("{n}", days);
+};
+
+/** 悬停详情：日均、窗口、预计耗尽日、最近一次变动。 */
+const forecastTitle = (row: AccountForecastRow | null) => {
+  if (!row) return "";
+  const parts = [
+    t("ac.fcPerDay").replace("{n}", row.perDay.toFixed(1)),
+    t("ac.fcWindow").replace("{n}", String(row.basisDays)),
+  ];
+  if (row.depleteAt) {
+    parts.push(t("ac.fcDeplete").replace("{at}", fmtDate(row.depleteAt)));
+  }
+  if (row.lastDelta !== null && row.lastDelta !== 0) {
+    const sign = row.lastDelta > 0 ? "-" : "+";
+    parts.push(t("ac.fcLast").replace("{delta}", `${sign}${Math.abs(row.lastDelta).toFixed(1)}`));
+  }
+  return parts.join(" · ");
+};
+
+const fmtDate = (ms: number) =>
+  new Date(ms).toLocaleDateString(undefined, { month: "2-digit", day: "2-digit" });
+
+/** 健康点颜色：green / 灰白 / 红。主题只有一支强调色，所以用明度分层。 */
+const healthDot = (health: AccountHealth | null | undefined) => {
+  if (!health) return "bg-muted";
+  if (health.grade === "critical") return "bg-hazard";
+  if (health.grade === "warn") return "bg-foreground/60";
+  return "bg-success";
+};
+
+/** 原因码 → 文案。后端只给码，翻译在这里，避免中英分裂。 */
+const HEALTH_REASONS: Record<string, I18nKey> = {
+  rateLimited: "ac.hzRateLimited",
+  empty: "ac.hzEmpty",
+  lowBalance: "ac.hzLowBalance",
+  fetchError: "ac.hzFetchError",
+  depletingSoon: "ac.hzDepletingSoon",
+  expiringDominant: "ac.hzExpiring",
+};
+
+/** 悬停文案：分数 + 全部原因；没扣分时明说「正常」，不留空 title。 */
+const healthTitle = (health: AccountHealth | null | undefined) => {
+  if (!health) return "";
+  const reasons = (health.reasons ?? []).map((code) =>
+    HEALTH_REASONS[code] ? t(HEALTH_REASONS[code]) : code,
+  );
+  return `${health.score} · ${reasons.length > 0 ? reasons.join(" / ") : t("ac.hzOk")}`;
+};
 
 onMounted(async () => {
   // 先本地秒开，再后台补官方口径（失败不覆盖本地结果）；当前登录态并行查
@@ -167,7 +266,7 @@ async function remove(row: AccountOverviewRow) {
 }
 
 /** 卡片内「近期到期」只露 2 条，其余进弹框。 */
-const PREVIEW_PACKAGES = 2;
+
 
 /** 弹框当前展示的账号；null 表示关闭。 */
 const packageSheet = ref<AccountOverviewRow | null>(null);
@@ -274,6 +373,29 @@ const packageRatio = (item: AccountPackage) => {
 const isPriority = (row: AccountOverviewRow) =>
   row.ok && (row.expiringSoonRemaining ?? 0) > 0;
 
+/**
+ * 近期到期摘要：一行说清「几个包 · 最近什么时候到期」，明细留给「查看全部」弹框。
+ *
+ * 之前卡片里每条包都渲染名字 + 余额 + 时间 + 独立进度条，两个包就是八行视觉噪音，
+ * 用户的实际诉求是「有没有快过期的」，不是「逐条对账」。
+ */
+const expiringSummary = (row: AccountOverviewRow) => {
+  const items = row.resources;
+  if (items.length === 0) return "";
+  const soonest = items
+    .filter((item) => item.expireAt != null)
+    .reduce((best, item) => Math.min(best, item.expireAt as number), Number.POSITIVE_INFINITY);
+  // 包数右侧已经显示，这里只说「最近什么时候到期」，避免同一信息出现两遍。
+  if (!Number.isFinite(soonest)) return t("ac.longTerm");
+  return `${t("ac.nearest")} ${fmtExpire(soonest)}`;
+};
+
+/** 摘要的紧张度：有已过期或 24 小时内到期的包才标红。 */
+const expiringTone = (row: AccountOverviewRow) =>
+  row.resources.some((item) => item.expired || item.expiringSoon)
+    ? "text-hazard"
+    : "text-muted-foreground";
+
 /** 官方口径下的卡片排序：即将到期 > 有过期包 > 普通 > 失败；同档比最早到期时刻。 */
 const orderedRows = computed(() => {
   const list = [...rows.value];
@@ -284,15 +406,18 @@ const orderedRows = computed(() => {
     if (row.resources.some((item) => item.expired)) return 1;
     return 2;
   };
+  // 用 MAX_SAFE_INTEGER 而不是 Infinity：Infinity - Infinity = NaN，
+  // 会让「都没有到期时间」的两张卡片比较结果变成未定义顺序。
   const soonest = (row: AccountOverviewRow) =>
     row.resources
       .filter((item) => item.remaining > 0 && item.expireAt != null)
-      .reduce((best, item) => Math.min(best, item.expireAt as number), Number.POSITIVE_INFINITY);
+      .reduce((best, item) => Math.min(best, item.expireAt as number), Number.MAX_SAFE_INTEGER);
   return list.sort(
     (left, right) =>
       rank(left) - rank(right) || soonest(left) - soonest(right),
   );
 });
+
 
 /** 账号当前生效的限流条目（官方恢复时刻还没到的）。 */
 const activeLimits = (row: AccountOverviewRow) => {
@@ -351,6 +476,8 @@ const switchProgress = ref("");
  */
 const switchError = ref<null | {
   rolledBack: boolean;
+  /** 认证已还原，但目标账号的会话已被改写（还不了）。 */
+  sessionsDirty: boolean;
   result: string;
   stage: string;
   identity: string;
@@ -401,6 +528,7 @@ async function doSwitch() {
     if (!result.ok) {
       switchError.value = {
         rolledBack: result.rolledBack === true,
+        sessionsDirty: result.sessionsDirty === true,
         result: result.result ?? "blocked",
         stage: result.stage ?? "",
         identity: result.identity ?? "",
@@ -427,6 +555,7 @@ async function doSwitch() {
     // 走到这里只可能是 IPC 本身挂了（后端已把业务失败转成 ok:false）。
     switchError.value = {
       rolledBack: false,
+      sessionsDirty: false,
       result: "blocked",
       stage: "",
       identity: "",
@@ -526,7 +655,7 @@ async function doSwitch() {
 
       <div v-else class="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">
         <article
-          v-for="(row, index) in rows"
+          v-for="(row, index) in orderedRows"
           :key="row.accountId"
           class="flex min-w-0 flex-col border bg-card"
           :class="[
@@ -538,6 +667,12 @@ async function doSwitch() {
           <div class="flex items-start justify-between gap-2 px-3 pt-2.5">
             <div class="min-w-0">
               <div class="flex min-w-0 items-center gap-1.5">
+                <!-- 健康点：一眼扫出「哪个号快废了」，不占额外高度 -->
+                <span
+                  class="size-1.5 shrink-0 rounded-full"
+                  :class="healthDot(row.health)"
+                  :title="healthTitle(row.health)"
+                />
                 <span class="readout shrink-0 text-[9px] text-faint">{{ String(index + 1).padStart(2, "0") }}</span>
                 <span class="min-w-0 truncate text-[12px] text-foreground" :title="mask(row.label)">
                   {{ mask(row.label) }}
@@ -600,21 +735,30 @@ async function doSwitch() {
 
           <!-- 余额读数 -->
           <div class="mt-2 flex items-end justify-between gap-2 px-3">
-            <div class="flex min-w-0 items-baseline gap-1.5">
+            <div class="flex min-w-0 items-baseline gap-1.5 overflow-hidden">
               <Zap class="size-3.5 shrink-0 self-center text-hazard" />
               <span class="readout text-[24px] leading-none text-foreground">
                 {{ row.ok ? fmt(row.remaining) : "—" }}
               </span>
-              <span class="lbl text-faint">
+              <span class="lbl whitespace-nowrap text-faint">
                 / {{ fmt(row.capacity) }}
               </span>
             </div>
             <div class="flex shrink-0 flex-col items-end gap-0.5">
+              <!-- 预测放右列首行：余额行只留「数字 / 容量」，窄卡片下不会互相挤压 -->
+              <span
+                v-if="forecastLabel(forecastOf(row.accountId))"
+                class="readout whitespace-nowrap text-[9px] leading-none"
+                :class="forecastTone(forecastOf(row.accountId))"
+                :title="forecastTitle(forecastOf(row.accountId))"
+              >
+                {{ forecastLabel(forecastOf(row.accountId)) }}
+              </span>
               <span class="readout text-[9px] text-muted-foreground">
                 {{ row.packages }} {{ t("ac.packages") }}
               </span>
-              <span class="readout text-[9px] text-faint">
-                {{ t("ac.updated") }} {{ fmtTime(row.updatedAt) }}
+              <span class="readout text-[9px] text-faint" :title="`${t('ac.updated')} ${fmtTime(row.updatedAt)}`">
+                {{ fmtTime(row.updatedAt) }}
               </span>
             </div>
           </div>
@@ -626,53 +770,35 @@ async function doSwitch() {
             </div>
           </div>
 
-          <!-- 近期到期 -->
-          <div class="mt-2 flex-1 border-t border-border px-3 py-2">
-            <div class="flex items-baseline justify-between gap-2">
-              <span class="lbl">// {{ t("ac.expiring") }}</span>
-              <button
-                v-if="row.resources.length > 0"
-                type="button"
-                class="readout shrink-0 text-[9px] text-muted-foreground underline decoration-border-strong underline-offset-2 transition-colors hover:text-hazard"
-                @click="openPackages(row)"
-              >
-                {{ t("ac.viewAll") }} {{ row.resources.length }}
-              </button>
-            </div>
-
-            <p v-if="!row.ok" class="mt-1.5 text-[10px] leading-4 text-hazard">
+          <!-- 近期到期：一行摘要（几个包 · 最近到期），明细进弹框 -->
+          <div class="mt-2 flex flex-1 items-center gap-2 border-t border-border px-3 py-1.5">
+            <span class="lbl shrink-0">// {{ t("ac.expiring") }}</span>
+            <p
+              v-if="!row.ok"
+              class="min-w-0 flex-1 truncate text-[10px] text-hazard"
+              :title="row.error || t('ac.noSnapshot')"
+            >
               {{ row.error || t("ac.noSnapshot") }}
             </p>
-            <ul v-else-if="row.resources.length > 0" class="mt-1 space-y-1.5">
-              <li
-                v-for="(item, itemIndex) in row.resources.slice(0, PREVIEW_PACKAGES)"
-                :key="`${item.packageCode}-${itemIndex}`"
-                class="min-w-0"
-              >
-                <div class="flex items-baseline justify-between gap-2 text-[10px]">
-                  <span class="readout shrink-0 text-foreground">{{ fmt(item.remaining) }}</span>
-                  <span class="min-w-0 flex-1 truncate text-muted-foreground" :title="packageName(item)">
-                    {{ packageName(item) }}
-                  </span>
-                  <span
-                    class="readout shrink-0 text-[9px]"
-                    :class="item.expired ? 'text-hazard' : item.expiringSoon ? 'text-hazard' : 'text-faint'"
-                  >
-                    {{ fmtExpire(item.expireAt) }}
-                  </span>
-                </div>
-                <div class="mt-1 h-[2px] bg-muted" aria-hidden="true">
-                  <div
-                    class="h-full"
-                    :class="item.expiringSoon || item.expired ? 'bg-hazard' : 'bg-foreground/55'"
-                    :style="{ width: `${packageRatio(item)}%` }"
-                  />
-                </div>
-              </li>
-            </ul>
-            <p v-else class="mt-1.5 text-[10px] text-faint">
+            <p
+              v-else-if="row.resources.length > 0"
+              class="readout min-w-0 flex-1 truncate text-[10px]"
+              :class="expiringTone(row)"
+              :title="expiringSummary(row)"
+            >
+              {{ expiringSummary(row) }}
+            </p>
+            <p v-else class="min-w-0 flex-1 truncate text-[9px] text-faint">
               {{ mode === "local" ? t("ac.localHint") : t("ac.noPkg") }}
             </p>
+            <button
+              v-if="row.resources.length > 0"
+              type="button"
+              class="shrink-0 text-[9px] text-muted-foreground underline decoration-border-strong underline-offset-2 transition-colors hover:text-hazard"
+              @click="openPackages(row)"
+            >
+              {{ t("ac.viewAll") }}
+            </button>
           </div>
 
           <!-- 备注 / 删除 -->
@@ -881,6 +1007,61 @@ async function doSwitch() {
               <ul class="mt-1.5 list-disc space-y-1 pl-5 text-[10px] leading-4 text-muted-foreground">
                 <li v-for="(bullet, bulletIndex) in switchBullets" :key="bulletIndex">{{ bullet }}</li>
               </ul>
+            </div>
+
+            <!-- 失败现场：阶段 + 是否回滚 + 原始原因，全部留在弹框里 -->
+            <div v-if="switchError" class="mt-3 border border-hazard">
+              <div
+                class="flex items-center gap-1.5 border-b border-hazard bg-hazard-soft px-3 py-2 text-[11px] text-hazard"
+              >
+                <CircleAlert class="size-3.5 shrink-0" />
+                {{
+                  switchError.rolledBack
+                    ? switchError.sessionsDirty
+                      ? t("ac.switchRolledBackDirty")
+                      : t("ac.switchRolledBack")
+                    : t("ac.switchBlocked")
+                }}
+              </div>
+              <div class="flex gap-2 border-b border-border px-3 py-1.5 text-[10px]">
+                <span class="w-14 shrink-0 text-faint">{{ t("ac.switchStage") }}</span>
+                <span class="readout min-w-0 flex-1 text-foreground">{{
+                  stageLabel(switchError.stage)
+                }}</span>
+              </div>
+              <div
+                v-if="switchError.identity"
+                class="flex gap-2 border-b border-border px-3 py-1.5 text-[10px]"
+              >
+                <span class="w-14 shrink-0 text-faint">{{ t("ac.switchIdentity") }}</span>
+                <span class="readout min-w-0 flex-1 text-foreground">{{
+                  switchError.identity
+                }}</span>
+              </div>
+              <div
+                v-if="switchError.sessionsDirty"
+                class="flex gap-2 border-b border-border px-3 py-1.5 text-[10px]"
+              >
+                <span class="w-14 shrink-0 text-faint">{{ t("ac.switchSessions") }}</span>
+                <span class="min-w-0 flex-1 leading-4 text-hazard">{{
+                  t("ac.switchSessionsDirty")
+                }}</span>
+              </div>
+              <p
+                class="readout whitespace-pre-wrap break-words px-3 py-2 text-[10px] leading-4 text-muted-foreground"
+              >
+                {{ switchError.message }}
+              </p>
+              <button
+                type="button"
+                class="w-full border-t border-border px-3 py-1.5 text-left text-[10px] uppercase tracking-[0.1em] text-faint transition-colors hover:text-foreground"
+                @click="
+                  go('logs');
+                  closeSwitch();
+                "
+              >
+                {{ t("ac.switchViewLog") }}
+              </button>
             </div>
 
             <p v-if="switching" class="readout mt-3 flex items-center gap-2 text-[10px] text-foreground">

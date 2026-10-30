@@ -1,17 +1,27 @@
 <script setup lang="ts">
 /**
- * 运行日志：通知存档 + 自动日常记录 + 错误日志，三源合并成一条时间轴。
+ * 运行日志：通知存档 + 自动日常记录 + 错误日志 + 切换历史，四源合并成一条时间轴。
  *
- * 为什么合并：这三处原本各存各的（notifications.json / auto_daily_logs.json /
- * error.log），出问题时要在三个地方翻。这里统一按时间倒序排，配来源筛选与关键词
- * 搜索，形成「做了什么 → 结果如何 → 报了什么错」的单一视图。
+ * 为什么合并：这四处原本各存各的（notifications.json / auto_daily_logs.json /
+ * error.log / switch_history.json），出问题时要在四个地方翻。这里统一按时间倒序排，
+ * 配来源筛选与关键词搜索，形成「做了什么 → 结果如何 → 报了什么错」的单一视图。
+ * 切换源带结构化前后对照（谁→谁、复制几条、耗时、是否回滚），是其余三源缺的那层。
  * 清空是分源操作（只删当前筛选的那一源），不会误伤账号库与积分快照。
  */
-import { computed, onMounted, ref } from "vue";
+import { computed, onMounted, ref, watch } from "vue";
 import { CircleAlert, Eraser, Loader2, RefreshCw, Search } from "lucide-vue-next";
 
-import { eventsClear, eventsList, type EventList, type EventSource, type RunEvent } from "@/lib/api";
-import { t } from "@/lib/i18n";
+import {
+  eventsClear,
+  eventsList,
+  switchHistoryList,
+  type EventList,
+  type EventSource,
+  type RunEvent,
+  type SwitchHistoryEntry,
+  type SwitchHistoryList,
+} from "@/lib/api";
+import { t, type I18nKey } from "@/lib/i18n";
 
 type Filter = "all" | EventSource;
 
@@ -22,11 +32,58 @@ const filter = ref<Filter>("all");
 const keyword = ref("");
 const clearing = ref(false);
 
+/**
+ * 切换台账（原始结构）：与上面四源合并行是**同一份数据**的两种视图。
+ * 合并行给「时间轴里扫一眼」，台账给「切到切换源时看总量与失败率」。
+ * 只在切到 switch 筛选时拉取，不额外增加页面首屏开销。
+ */
+const history = ref<SwitchHistoryList | null>(null);
+const historyLoading = ref(false);
+
+async function loadHistory() {
+  historyLoading.value = true;
+  try {
+    history.value = await switchHistoryList(0);
+  } catch {
+    // 台账读不出来不影响主时间轴：合并行里已经有切换记录，这里静默降级。
+    history.value = null;
+  } finally {
+    historyLoading.value = false;
+  }
+}
+
+const historyStats = computed(() => {
+  const entries = history.value?.entries ?? [];
+  const count = (result: SwitchHistoryEntry["result"]) =>
+    entries.filter((entry) => entry.result === result).length;
+  const timed = entries.filter((entry) => entry.costMs > 0);
+  const avgCost = timed.length
+    ? timed.reduce((sum, entry) => sum + entry.costMs, 0) / timed.length / 1000
+    : 0;
+  return {
+    total: entries.length,
+    ok: count("ok"),
+    rolledBack: count("rolled_back"),
+    blocked: count("blocked"),
+    avgCost,
+  };
+});
+
+watch(
+  filter,
+  (value) => {
+    if (value === "switch" && !history.value) void loadHistory();
+  },
+  { immediate: true },
+);
+
 async function load() {
   loading.value = true;
   error.value = "";
   try {
     data.value = await eventsList(300);
+    // 正在看切换源时，刷新也要让台账跟上（两个请求并行，互不阻塞）。
+    if (filter.value === "switch") void loadHistory();
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : String(cause);
   } finally {
@@ -46,17 +103,36 @@ const stats = computed(
       notify: 0,
       auto: 0,
       errlog: 0,
+      switch: 0,
     },
 );
 
-/** 来源计数：筛选 tab 上的数字直接读这里，避免标签与分布条口径不一致。 */
-const sourceCount = (source: EventSource) =>
-  source === "notify" ? stats.value.notify : source === "auto" ? stats.value.auto : stats.value.errlog;
+const SOURCE_KEYS: Record<EventSource, I18nKey> = {
+  notify: "rl.srcNotify",
+  auto: "rl.srcAuto",
+  error: "rl.srcError",
+  switch: "rl.srcSwitch",
+};
 
-const FILTERS: { key: Filter; labelKey: "rl.all" | "rl.srcNotify" | "rl.srcAuto" | "rl.srcError" }[] = [
+/** 来源计数：筛选 tab 上的数字直接读这里，避免标签与分布条口径不一致。 */
+const sourceCount = (source: EventSource) => {
+  switch (source) {
+    case "notify":
+      return stats.value.notify;
+    case "auto":
+      return stats.value.auto;
+    case "switch":
+      return stats.value.switch;
+    default:
+      return stats.value.errlog;
+  }
+};
+
+const FILTERS: { key: Filter; labelKey: I18nKey }[] = [
   { key: "all", labelKey: "rl.all" },
   { key: "notify", labelKey: "rl.srcNotify" },
   { key: "auto", labelKey: "rl.srcAuto" },
+  { key: "switch", labelKey: "rl.srcSwitch" },
   { key: "error", labelKey: "rl.srcError" },
 ];
 
@@ -96,15 +172,18 @@ const levelBar = (level: RunEvent["level"]) => {
   }
 };
 
-const sourceLabel = (source: EventSource) =>
-  source === "notify" ? t("rl.srcNotify") : source === "auto" ? t("rl.srcAuto") : t("rl.srcError");
+const sourceLabel = (source: EventSource) => t(SOURCE_KEYS[source] ?? "rl.srcError");
 
 /** 来源分布条的宽度（按总数归一，全 0 时不画条）。 */
 const distribution = computed(() => {
-  const total = Math.max(1, stats.value.notify + stats.value.auto + stats.value.errlog);
+  const total = Math.max(
+    1,
+    stats.value.notify + stats.value.auto + stats.value.switch + stats.value.errlog,
+  );
   return [
     { key: "notify" as const, count: stats.value.notify, ratio: (stats.value.notify / total) * 100, tone: "bg-foreground/70" },
     { key: "auto" as const, count: stats.value.auto, ratio: (stats.value.auto / total) * 100, tone: "bg-hazard" },
+    { key: "switch" as const, count: stats.value.switch, ratio: (stats.value.switch / total) * 100, tone: "bg-foreground/40" },
     { key: "error" as const, count: stats.value.errlog, ratio: (stats.value.errlog / total) * 100, tone: "bg-hazard/50" },
   ];
 });
@@ -293,6 +372,45 @@ async function doClear() {
         </div>
         <div class="readout mt-1 flex justify-between text-[8px] text-faint">
           <span>00</span><span>06</span><span>12</span><span>18</span><span>23</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 切换台账：只在「切换记录」筛选下出现，给出总量与失败构成 -->
+    <section v-if="filter === 'switch'" class="shrink-0 border-b border-border bg-border">
+      <div class="grid grid-cols-4 gap-px">
+        <div class="bg-card px-3 py-2">
+          <div class="lbl">{{ t("rl.swTotal") }}</div>
+          <div class="readout mt-1 text-[16px] leading-none text-foreground">
+            {{ historyLoading && !history ? "···" : historyStats.total }}
+          </div>
+          <div v-if="historyStats.avgCost > 0" class="readout mt-0.5 text-[9px] text-faint">
+            {{ t("rl.swAvgCost") }} {{ historyStats.avgCost.toFixed(1) }}s
+          </div>
+        </div>
+        <div class="bg-card px-3 py-2">
+          <div class="lbl">{{ t("rl.swOk") }}</div>
+          <div class="readout mt-1 text-[16px] leading-none text-foreground">
+            {{ historyLoading && !history ? "···" : historyStats.ok }}
+          </div>
+        </div>
+        <div class="bg-card px-3 py-2">
+          <div class="lbl">{{ t("rl.swRolledBack") }}</div>
+          <div
+            class="readout mt-1 text-[16px] leading-none"
+            :class="historyStats.rolledBack > 0 ? 'text-hazard' : 'text-foreground'"
+          >
+            {{ historyLoading && !history ? "···" : historyStats.rolledBack }}
+          </div>
+        </div>
+        <div class="bg-card px-3 py-2">
+          <div class="lbl">{{ t("rl.swBlocked") }}</div>
+          <div
+            class="readout mt-1 text-[16px] leading-none"
+            :class="historyStats.blocked > 0 ? 'text-hazard' : 'text-foreground'"
+          >
+            {{ historyLoading && !history ? "···" : historyStats.blocked }}
+          </div>
         </div>
       </div>
     </section>

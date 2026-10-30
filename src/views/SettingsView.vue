@@ -6,14 +6,43 @@
  * 这里只做总览与快捷入口，避免同一份配置在两处维护出分歧。
  */
 import { computed, onMounted, ref } from "vue";
-import { CircleAlert, Eraser, FolderOpen, Loader2, RefreshCw } from "lucide-vue-next";
+import { CircleAlert, Download, Eraser, ExternalLink, FolderOpen, Loader2, RefreshCw } from "lucide-vue-next";
+import { open, save } from "@tauri-apps/plugin-dialog";
 
-import { eventsClear, openStoreDir, systemInfo, type EventSource, type SystemInfo } from "@/lib/api";
+import {
+  autoSwitchCheck,
+  autoSwitchSet,
+  autoSwitchStatus,
+  eventsClear,
+  exportAllData,
+  exportData,
+  openExternal,
+  openStoreDir,
+  systemInfo,
+  type AutoSwitchCheck,
+  type AutoSwitchConfig,
+  type AutoSwitchStatus,
+  type EventSource,
+  type ExportKind,
+  type SystemInfo,
+} from "@/lib/api";
 import { useShell } from "@/composables/useShell";
 import { locale, setLocale, t } from "@/lib/i18n";
 import { maskAll, setMaskAll } from "@/lib/task-meta";
 
 const { go } = useShell();
+
+/** 开源地址：只展示本应用仓库。 */
+const REPO_URL = "https://github.com/a634691481-arch/workbuddy-deck";
+
+async function openRepo(url: string) {
+  try {
+    const result = await openExternal(url);
+    if (!result.ok) notice.value = result.error ?? t("st.repoFail");
+  } catch (cause) {
+    notice.value = cause instanceof Error ? cause.message : String(cause);
+  }
+}
 
 const info = ref<SystemInfo | null>(null);
 const loading = ref(true);
@@ -32,7 +61,69 @@ async function load() {
   }
 }
 
-onMounted(() => void load());
+onMounted(() => {
+  void load();
+  void loadAutoSwitch();
+});
+
+// ───────────────────────── 限流自动切换 ─────────────────────────
+
+const autoSwitch = ref<AutoSwitchStatus | null>(null);
+const autoCheck = ref<AutoSwitchCheck | null>(null);
+const autoBusy = ref(false);
+
+async function loadAutoSwitch() {
+  try {
+    autoSwitch.value = await autoSwitchStatus();
+  } catch {
+    autoSwitch.value = null;
+  }
+}
+
+/** 局部更新：只发要改的字段，后端合并后回整体状态。 */
+async function patchAutoSwitch(patch: Partial<AutoSwitchConfig>) {
+  if (autoBusy.value) return;
+  autoBusy.value = true;
+  try {
+    const result = await autoSwitchSet(patch);
+    if (result.ok && result.status) autoSwitch.value = result.status;
+  } catch {
+    /* 写入失败保持旧状态，下一次进页面会重新拉 */
+  } finally {
+    autoBusy.value = false;
+  }
+}
+
+/** 手动判定：只回答「现在会怎么判」，绝不执行切换。 */
+async function runAutoCheck() {
+  if (autoBusy.value) return;
+  autoBusy.value = true;
+  try {
+    autoCheck.value = await autoSwitchCheck();
+  } catch {
+    autoCheck.value = null;
+  } finally {
+    autoBusy.value = false;
+  }
+}
+
+const autoOn = computed(() => autoSwitch.value?.config.enabled === true);
+const autoNotifyOnly = computed(() => autoSwitch.value?.config.notifyOnly !== false);
+
+function onNumberChange(event: Event, key: "cooldownMinutes" | "minRemaining", min: number) {
+  const raw = Number((event.target as HTMLInputElement).value);
+  if (!Number.isFinite(raw)) return;
+  void patchAutoSwitch({ [key]: Math.max(min, Math.round(raw)) } as Partial<AutoSwitchConfig>);
+}
+
+/** 最近一次判定的可读文案：动作 + 原因。 */
+const lastDecisionText = computed(() => {
+  const event = autoSwitch.value?.lastDecision;
+  if (!event) return "";
+  const action =
+    event.action === "switch" ? t("st.autoActSwitch") : event.action === "notify" ? t("st.autoActNotify") : t("st.autoActSkip");
+  return `${action} · ${event.reason ?? ""}`;
+});
 
 const schedule = computed(() => info.value?.schedule ?? {});
 const scheduleOn = computed(() => schedule.value.enabled === true);
@@ -46,6 +137,7 @@ const fileRows = computed(() => {
     { key: "accounts", labelKey: "st.fileAccounts" as const, rows: info.value?.accountCount ?? 0, stat: files.accounts },
     { key: "auto", labelKey: "st.fileAutoLogs" as const, rows: counts.autoLogs, stat: files.autoLogs },
     { key: "notify", labelKey: "st.fileNotify" as const, rows: counts.notify, stat: files.notifications },
+    { key: "switch", labelKey: "st.fileSwitch" as const, rows: counts.switchHistory, stat: files.switchHistory },
     { key: "error", labelKey: "st.fileError" as const, rows: counts.errorLines, stat: files.errorLog },
   ];
 });
@@ -60,13 +152,79 @@ async function openDir() {
   }
 }
 
-/** 维护区：清空某一源前先确认，避免误点把排障线索删干净。 */
-const clearTarget = ref<{ source: EventSource; labelKey: "st.clearNotify" | "st.clearAuto" | "st.clearError" } | null>(null);
+/**
+ * 数据导出：四份 CSV，全部由后端直接写盘。
+ *
+ * 为什么不用「复制到剪贴板」：Token 明细动辄上万行，剪贴板会卡死；
+ * 而且导出的意义就是能带进 Excel 做二次计算。
+ */
+const EXPORTS: { kind: ExportKind; labelKey: "st.exAccounts" | "st.exTokensDaily" | "st.exTokensModels" | "st.exCredits"; file: string }[] = [
+  { kind: "accounts", labelKey: "st.exAccounts", file: "accounts" },
+  { kind: "tokensDaily", labelKey: "st.exTokensDaily", file: "tokens-daily" },
+  { kind: "tokensModels", labelKey: "st.exTokensModels", file: "tokens-models" },
+  { kind: "credits", labelKey: "st.exCredits", file: "credits" },
+];
+
+const exporting = ref<"" | ExportKind | "all">("");
+const exportNote = ref("");
+const exportFailed = ref(false);
+
+const todayTag = () => new Date().toISOString().slice(0, 10);
+
+async function runExport(kind: ExportKind, file: string) {
+  if (exporting.value) return;
+  try {
+    const path = await save({
+      title: t("st.export"),
+      defaultPath: `${file}-${todayTag()}.csv`,
+      filters: [{ name: "CSV", extensions: ["csv"] }],
+    });
+    if (!path) return;
+    exporting.value = kind;
+    exportNote.value = "";
+    exportFailed.value = false;
+    const result = await exportData(kind, path);
+    exportFailed.value = !result.ok;
+    exportNote.value = result.ok
+      ? `${t("st.exDone")} · ${path}`
+      : `${t("st.exFail")} · ${result.error ?? ""}`;
+  } catch (cause) {
+    exportFailed.value = true;
+    exportNote.value = `${t("st.exFail")} · ${cause instanceof Error ? cause.message : String(cause)}`;
+  } finally {
+    exporting.value = "";
+  }
+}
+
+/** 全部导出：选一个目录，写四份文件，逐份汇报成功/失败。 */
+async function runExportAll() {
+  if (exporting.value) return;
+  try {
+    const dir = await open({ title: t("st.exAll"), directory: true, multiple: false });
+    if (!dir || typeof dir !== "string") return;
+    exporting.value = "all";
+    exportNote.value = "";
+    exportFailed.value = false;
+    const result = await exportAllData(dir);
+    exportFailed.value = !result.ok;
+    exportNote.value = result.ok
+      ? `${t("st.exDone")} · ${result.files.length} ${t("st.exFiles")} · ${dir}`
+      : `${t("st.exFail")} · ${result.failed}/${result.files.length}`;
+  } catch (cause) {
+    exportFailed.value = true;
+    exportNote.value = `${t("st.exFail")} · ${cause instanceof Error ? cause.message : String(cause)}`;
+  } finally {
+    exporting.value = "";
+  }
+}
+
+/** 维护区：清空某一源前先确认，避免误点把排障线索删干净。 */const clearTarget = ref<{ source: EventSource; labelKey: "st.clearNotify" | "st.clearAuto" | "st.clearError" | "st.clearSwitch" } | null>(null);
 const clearing = ref(false);
 
-const CLEARS: { source: EventSource; labelKey: "st.clearNotify" | "st.clearAuto" | "st.clearError" }[] = [
+const CLEARS: { source: EventSource; labelKey: "st.clearNotify" | "st.clearAuto" | "st.clearError" | "st.clearSwitch" }[] = [
   { source: "notify", labelKey: "st.clearNotify" },
   { source: "auto", labelKey: "st.clearAuto" },
+  { source: "switch", labelKey: "st.clearSwitch" },
   { source: "error", labelKey: "st.clearError" },
 ];
 
@@ -127,6 +285,18 @@ async function doClear() {
             <div class="flex items-center justify-between gap-3 px-3 py-2">
               <span class="text-[11px] text-muted-foreground">{{ t("st.version") }}</span>
               <span class="readout text-[11px] text-foreground">REV {{ info?.version ?? "—" }}</span>
+            </div>
+            <div class="flex items-center justify-between gap-3 px-3 py-2">
+              <span class="text-[11px] text-muted-foreground">{{ t("st.repo") }}</span>
+              <button
+                type="button"
+                class="readout flex max-w-[240px] items-center gap-1 border border-border-strong px-1.5 py-0.5 text-[9px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+                :title="REPO_URL"
+                @click="openRepo(REPO_URL)"
+              >
+                <span class="min-w-0 truncate">a634691481-arch/workbuddy-deck</span>
+                <ExternalLink class="size-2.5 shrink-0" />
+              </button>
             </div>
             <div class="flex items-center justify-between gap-3 px-3 py-2">
               <span class="text-[11px] text-muted-foreground">{{ t("st.platform") }}</span>
@@ -263,6 +433,132 @@ async function doClear() {
               </button>
             </div>
           </div>
+        </section>
+
+        <!-- 限流自动切换 -->
+        <section class="border border-border bg-card xl:col-span-2">
+          <div class="flex items-center justify-between border-b border-border px-3 py-1.5">
+            <span class="lbl">// {{ t("st.autoSwitch") }}</span>
+            <button
+              type="button"
+              class="readout border px-1.5 py-0.5 text-[8px] uppercase transition-colors disabled:opacity-40"
+              :class="autoOn ? 'border-hazard bg-hazard-soft text-hazard' : 'border-border-strong text-faint hover:text-foreground'"
+              :disabled="autoBusy"
+              @click="patchAutoSwitch({ enabled: !autoOn })"
+            >
+              {{ autoOn ? t("st.autoOn") : t("st.autoOff") }}
+            </button>
+          </div>
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
+            <span class="min-w-0 flex-1 text-[9px] leading-4 text-faint">{{ t("st.autoSwitchHint") }}</span>
+            <div class="flex shrink-0 gap-px bg-border">
+              <button
+                type="button"
+                class="px-2 py-1 text-[10px] transition-colors disabled:opacity-40"
+                :class="autoNotifyOnly ? 'bg-foreground text-background' : 'bg-card text-muted-foreground hover:text-foreground'"
+                :disabled="autoBusy || !autoOn"
+                @click="patchAutoSwitch({ notifyOnly: true })"
+              >
+                {{ t("st.autoNotify") }}
+              </button>
+              <button
+                type="button"
+                class="px-2 py-1 text-[10px] transition-colors disabled:opacity-40"
+                :class="!autoNotifyOnly ? 'bg-hazard text-white' : 'bg-card text-muted-foreground hover:text-foreground'"
+                :disabled="autoBusy || !autoOn"
+                @click="patchAutoSwitch({ notifyOnly: false })"
+              >
+                {{ t("st.autoApply") }}
+              </button>
+            </div>
+            <label class="flex shrink-0 items-center gap-1 text-[9px] text-faint">
+              {{ t("st.autoCooldown") }}
+              <input
+                type="number"
+                min="1"
+                max="1440"
+                class="readout w-12 border border-border-strong bg-input px-1 py-0.5 text-[10px] text-foreground"
+                :value="autoSwitch?.config.cooldownMinutes ?? 30"
+                :disabled="autoBusy"
+                @change="onNumberChange($event, 'cooldownMinutes', 1)"
+              />
+            </label>
+            <label class="flex shrink-0 items-center gap-1 text-[9px] text-faint">
+              {{ t("st.autoMin") }}
+              <input
+                type="number"
+                min="0"
+                max="100000"
+                class="readout w-14 border border-border-strong bg-input px-1 py-0.5 text-[10px] text-foreground"
+                :value="autoSwitch?.config.minRemaining ?? 50"
+                :disabled="autoBusy"
+                @change="onNumberChange($event, 'minRemaining', 0)"
+              />
+            </label>
+            <button
+              type="button"
+              class="flex shrink-0 items-center gap-1 border border-border-strong px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
+              :disabled="autoBusy"
+              @click="runAutoCheck()"
+            >
+              <Loader2 v-if="autoBusy" class="size-2.5 animate-spin" />
+              <RefreshCw v-else class="size-2.5" />
+              {{ t("st.autoCheckBtn") }}
+            </button>
+          </div>
+          <p
+            v-if="autoOn && !autoNotifyOnly"
+            class="border-t border-hazard/40 bg-hazard-soft px-3 py-1.5 text-[9px] leading-4 text-hazard"
+          >
+            {{ t("st.autoWarn") }}
+          </p>
+          <p v-if="autoCheck" class="border-t border-border px-3 py-1.5 text-[9px] leading-4 text-muted-foreground">
+            {{ t("st.autoCheckResult") }} · {{ autoCheck.decision.action }} · {{ autoCheck.decision.reason }}
+          </p>
+          <p v-if="lastDecisionText" class="truncate border-t border-border px-3 py-1.5 text-[9px] text-faint" :title="lastDecisionText">
+            {{ t("st.autoLast") }} · {{ lastDecisionText }}
+          </p>
+        </section>
+
+        <!-- 数据导出 -->
+        <section class="border border-border bg-card xl:col-span-2">
+          <div class="border-b border-border px-3 py-1.5">
+            <span class="lbl">// {{ t("st.export") }}</span>
+          </div>
+          <div class="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
+            <span class="text-[9px] text-faint">{{ t("st.exportHint") }}</span>
+            <div class="flex flex-wrap items-center gap-1.5">
+              <button
+                v-for="item in EXPORTS"
+                :key="item.kind"
+                type="button"
+                class="flex items-center gap-1 border border-border-strong px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
+                :disabled="exporting !== ''"
+                @click="runExport(item.kind, item.file)"
+              >
+                <Loader2 v-if="exporting === item.kind" class="size-2.5 animate-spin" />
+                <Download v-else class="size-2.5" />
+                {{ t(item.labelKey) }}
+              </button>
+              <button
+                type="button"
+                class="flex items-center gap-1 border border-border-strong px-2 py-1 text-[10px] uppercase tracking-[0.1em] text-foreground transition-colors hover:border-hazard hover:text-hazard disabled:opacity-40"
+                :disabled="exporting !== ''"
+                @click="runExportAll()"
+              >
+                <Loader2 v-if="exporting === 'all'" class="size-2.5 animate-spin" />
+                <FolderOpen v-else class="size-2.5" />
+                {{ t("st.exAll") }}
+              </button>
+            </div>
+          </div>
+          <p
+            v-if="exportNote"
+            class="readout break-all border-t border-border px-3 py-1.5 text-[9px]"
+            :class="exportFailed ? 'text-hazard' : 'text-success'"
+          >
+            {{ exportNote }}
+          </p>
         </section>
 
         <!-- 维护 -->

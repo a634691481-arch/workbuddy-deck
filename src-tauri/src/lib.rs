@@ -7,7 +7,9 @@
 
 mod commands;
 mod executor;
+mod export;
 mod scheduler;
+mod tray;
 
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -51,15 +53,23 @@ pub fn run() {
             commands::account_delete,
             commands::account_set_note,
             commands::account_overview,
+            commands::account_forecast,
             commands::workbuddy_status,
             commands::switch_workbuddy_account,
             commands::refresh_all_tokens,
             commands::events_list,
             commands::events_clear,
             commands::switch_history_list,
-            commands::switch_history_clear,
             commands::system_info,
             commands::open_store_dir,
+            commands::open_external,
+            commands::export_data,
+            commands::export_all_data,
+            commands::auto_switch_status,
+            commands::auto_switch_set,
+            commands::auto_switch_logs,
+            commands::auto_switch_clear_logs,
+            commands::auto_switch_check,
         ])
         .setup(|app| {
             // 托盘菜单：快捷执行在上，退出压到最下面并与其他项分隔。
@@ -118,6 +128,13 @@ pub fn run() {
                 builder = builder.icon(icon.clone());
             }
             builder.build(app)?;
+
+            // 启动即给托盘一个真读数（而不是默认的「任务助手」）：
+            // 常驻用户多数时间不开窗，tooltip 就是他对余额的唯一感知。
+            tray::refresh(app.handle());
+
+            // 限流巡检：默认关闭，开启后每 2 分钟判定一次
+            commands::spawn_auto_switch(app.handle().clone());
 
             // 每日定时调度：常驻期间后台自转，到点自动跑「全部日常」
             scheduler::spawn(app.handle().clone());

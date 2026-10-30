@@ -135,6 +135,34 @@ const daily = computed(() => {
 
 const dailyMax = computed(() => daily.value.reduce((peak, point) => Math.max(peak, point.total), 0));
 
+/**
+ * 环比：近 7 天 vs 前 7 天。
+ *
+ * 不做「按今天倒推」，因为最近一次活动可能不是今天（周末不用就断档）；直接用
+ * 日序列末尾的 14 天，数据说什么就是什么。不足 14 天返回 null，不拿 3 天比 3 天。
+ */
+const weekOverWeek = computed(() => {
+  const rows = daily.value;
+  if (rows.length < 14) return null;
+  const recent = rows.slice(-7).reduce((sum, point) => sum + point.total, 0);
+  const previous = rows.slice(-14, -7).reduce((sum, point) => sum + point.total, 0);
+  if (previous <= 0) return null;
+  return ((recent - previous) / previous) * 100;
+});
+
+/** 用量涨了是要注意的事（红），降了是好消息（绿）——与股票口径无关，按风险着色。 */
+const wowLabel = computed(() => {
+  const pct = weekOverWeek.value;
+  if (pct === null) return "";
+  const arrow = pct >= 0 ? "▲" : "▼";
+  return `${arrow}${Math.abs(pct).toFixed(1)}%`;
+});
+const wowTone = computed(() => {
+  const pct = weekOverWeek.value;
+  if (pct === null) return "text-faint";
+  return pct >= 0 ? "text-hazard" : "text-success";
+});
+
 /** 模型分布：跨源合并，取前 8。 */
 const models = computed(() => {
   const merged = new Map<string, number>();
@@ -538,6 +566,9 @@ const cellColor = (level: number) =>
           <div class="bg-card px-3 py-2">
             <div class="lbl">{{ t("tk.avgDay") }}</div>
             <div class="readout mt-1 text-[14px] leading-none text-foreground">{{ compact(efficiency.avgDay) }}</div>
+            <div v-if="wowLabel" class="readout mt-0.5 text-[9px]" :class="wowTone" :title="t('tk.wowTitle')">
+              {{ wowLabel }} <span class="text-faint">{{ t("tk.wow") }}</span>
+            </div>
           </div>
           <div class="bg-card px-3 py-2">
             <div class="lbl">{{ t("tk.peakDay") }}</div>

@@ -17,8 +17,8 @@ use wb_switch_core::modules::credit_usage;
 use wb_switch_core::modules::growth_tasks;
 use wb_switch_core::modules::variant::WbVariant;
 use wb_switch_core::modules::{
-    account, auth_file, checkin, credits, error_log, export_import, limits, notifications, oauth,
-    process, refresh, switch, switch_history,
+    account, auth_file, checkin, credits, error_log, export_import, forecast, limits,
+    auto_switch, health, notifications, oauth, process, refresh, switch, switch_history,
 };
 
 use crate::executor;
@@ -491,6 +491,15 @@ pub fn account_set_note(account_id: String, note: String) -> Value {
     }
 }
 
+/// 用量预测：按账号返回「余额还能撑几天」。
+///
+/// 纯本地计算（积分快照 + 中位数/EWMA），不发请求；样本不足 3 天的账号会带
+/// `confidence=insufficient` 且 `daysLeft=null`，前端显示样本进度而不是瞎猜。
+#[tauri::command(rename_all = "camelCase")]
+pub fn account_forecast(window_days: Option<i64>) -> Value {
+    forecast::account_forecasts(window_days)
+}
+
 /// 一键刷新全部账号的 access token。
 ///
 /// 与 `refresh::run_keepalive_cycle` 的区别：保活只刷「临期」账号，用户手动点这个按钮
@@ -665,13 +674,12 @@ pub async fn switch_workbuddy_account(app: tauri::AppHandle, account_id: String)
     });
     let outcome = tauri::async_runtime::spawn_blocking(move || {
         // restart=true + replace_sessions=true：即原项目的「完全同步」切换。
-        switch::switch_account(Some(&progress), &account_id, true, false, &[], &[], true)
+        switch::switch_account_detailed(Some(&progress), &account_id, true, false, &[], &[], true)
     })
     .await;
 
     match outcome {
-        Ok(Ok(value)) => value,
-        Ok(Err(error)) => last_switch_failure(&error),
+        Ok((result, diagnostics)) => switch_payload(result, &diagnostics),
         Err(join_error) => json!({
             "ok": false,
             "error": format!("切换任务异常: {join_error}"),
@@ -680,39 +688,73 @@ pub async fn switch_workbuddy_account(app: tauri::AppHandle, account_id: String)
             "identity": "",
             "costMs": 0,
             "rolledBack": false,
+            "sessionsDirty": false,
         }),
     }
 }
 
-/// 失败时把刚写入的历史条目并进返回值。
+/// 把 core 的「结果 + 诊断」拼成前端唯一契约。
 ///
-/// 历史就在切换返回前写好（core 的 `switch_account` 外层保证），所以这里读到的一定是
-/// 本次那条。万一是并发切换或写入被跳过，就用保守默认值，不假装知道细节。
-fn last_switch_failure(error: &str) -> Value {
-    let entry = switch_history::load(1)
-        .get("entries")
-        .and_then(Value::as_array)
-        .and_then(|rows| rows.first().cloned())
-        .unwrap_or_else(|| json!({}));
-    let result = entry
-        .get("result")
-        .and_then(Value::as_str)
-        .unwrap_or("blocked")
-        .to_string();
-    json!({
-        "ok": false,
-        "error": error,
-        "result": result,
-        "stage": entry.get("stage").cloned().unwrap_or(json!("")),
-        "identity": entry.get("identity").cloned().unwrap_or(json!("")),
-        "costMs": entry.get("costMs").cloned().unwrap_or(json!(0)),
-        "rolledBack": result == "rolled_back",
-        "sessions": entry.get("sessions").cloned().unwrap_or(Value::Null),
+/// 诊断必须来自本次调用的返回值。早期实现是切换后回读历史里最新一条，历史写入失败
+/// 或被并发切换插队时会读到上一条，把这次的真实现场说错（最坏是把「没回滚」报成
+/// 「已回滚」）。`sessionsDirty` 专门区分「完全还原」与「认证还原了但会话已变」。
+fn switch_payload(result: Result<Value, String>, diagnostics: &switch::SwitchDiagnostics) -> Value {
+    let mut payload = match result {
+        Ok(value) if value.is_object() => value,
+        Ok(value) => json!({ "result": value }),
+        Err(error) => json!({ "ok": false, "error": error }),
+    };
+    if let Some(object) = payload.as_object_mut() {
+        object.insert("result".to_string(), json!(diagnostics.result));
+        object.insert("stage".to_string(), json!(diagnostics.stage));
+        object.insert("identity".to_string(), json!(diagnostics.identity_str()));
+        object.insert("costMs".to_string(), json!(diagnostics.cost_ms));
+        object.insert("rolledBack".to_string(), json!(diagnostics.rolled_back));
+        object.insert("sessionsDirty".to_string(), json!(diagnostics.sessions_dirty));
+        object.insert("sessions".to_string(), json!(diagnostics.sessions));
+        if !object.contains_key("ok") {
+            object.insert("ok".to_string(), json!(false));
+        }
+    }
+    payload
+}
+
+/// 由已取到的行数据派生健康分，不额外请求。
+///
+/// 本地 / 官方两个分支都要算，所以抽出来。本地口径没有资源包明细，
+/// 也就没有「即将到期」的输入——缺的输入当没有，不估。
+fn account_health_of(
+    row: &Value,
+    rate_limits: &[Value],
+    now: i64,
+    forecasts: &HashMap<String, Value>,
+) -> Value {
+    let rate_limited = rate_limits.iter().any(|entry| {
+        entry
+            .get("resetAt")
+            .and_then(Value::as_i64)
+            .map(|at| at > now)
+            .unwrap_or(false)
+    });
+    let account_id = row.get("accountId").and_then(Value::as_str).unwrap_or("");
+    let days_left = forecasts
+        .get(account_id)
+        .and_then(|entry| entry.get("daysLeft"))
+        .and_then(Value::as_f64);
+    health::account_health(&health::HealthInput {
+        remaining: row.get("remaining").and_then(Value::as_f64),
+        capacity: row.get("capacity").and_then(Value::as_f64),
+        expiring_soon_remaining: row
+            .get("expiringSoonRemaining")
+            .and_then(Value::as_f64),
+        rate_limited,
+        error: row.get("error").and_then(Value::as_str),
+        days_left,
     })
 }
 
 #[tauri::command]
-pub async fn account_overview(refresh: Option<bool>) -> Value {
+pub async fn account_overview(app: tauri::AppHandle, refresh: Option<bool>) -> Value {
     const CONCURRENCY: usize = 4;
     let refresh = refresh.unwrap_or(false);
     let collected_at = config::now_ms();
@@ -734,6 +776,19 @@ pub async fn account_overview(refresh: Option<bool>) -> Value {
             .unwrap_or_default(),
         Err(_) => HashMap::new(),
     };
+    // 预测只算一次（14 个账号各读一遍快照太浪费），按 accountId 索引。
+    let forecast_by_account: HashMap<String, Value> = forecast::account_forecasts(None)
+        .get("accounts")
+        .and_then(Value::as_array)
+        .map(|rows| {
+            rows.iter()
+                .filter_map(|row| {
+                    let id = row.get("accountId").and_then(Value::as_str)?.to_string();
+                    Some((id, row.clone()))
+                })
+                .collect::<HashMap<String, Value>>()
+        })
+        .unwrap_or_default();
     if accounts.is_empty() {
         return json!({
             "ok": true,
@@ -767,7 +822,7 @@ pub async fn account_overview(refresh: Option<bool>) -> Value {
                 let id = acc.get("id").and_then(Value::as_str).unwrap_or("");
                 let snap = latest.get(id);
                 let has_snapshot = snap.is_some();
-                json!({
+                let mut row = json!({
                     "accountId": id,
                     "label": account::account_display_name(acc),
                     "variant": account::variant_of(acc).as_str(),
@@ -781,9 +836,13 @@ pub async fn account_overview(refresh: Option<bool>) -> Value {
                     "expiringSoonRemaining": Value::Null,
                     "rateLimits": rate_by_account.get(id).cloned().unwrap_or(json!([])),
                     "error": if has_snapshot { Value::Null } else { json!("暂无本地快照") },
-                })
+                });
+                let limits: Vec<Value> = row["rateLimits"].as_array().cloned().unwrap_or_default();
+                row["health"] = account_health_of(&row, &limits, collected_at, &forecast_by_account);
+                row
             })
             .collect();
+        crate::tray::refresh(&app);
         return json!({
             "ok": true,
             "mode": "local",
@@ -859,7 +918,7 @@ pub async fn account_overview(refresh: Option<bool>) -> Value {
                 .and_then(Value::as_i64)
                 .unwrap_or(i64::MAX)
         });
-        rows.push(json!({
+        let mut row = json!({
             "accountId": meta["accountId"],
             "label": meta["label"],
             "variant": meta["variant"],
@@ -876,9 +935,14 @@ pub async fn account_overview(refresh: Option<bool>) -> Value {
                 .cloned()
                 .unwrap_or(json!([])),
             "error": res.get("error").cloned().unwrap_or(Value::Null),
-        }));
+        });
+        let limits: Vec<Value> = row["rateLimits"].as_array().cloned().unwrap_or_default();
+        row["health"] = account_health_of(&row, &limits, collected_at, &forecast_by_account);
+        rows.push(row);
     }
 
+    // 用户刚看过余额：顺手把托盘读数刷新到最新，不用等下一次启动。
+    crate::tray::refresh(&app);
     json!({
         "ok": true,
         "mode": "official",
@@ -1160,13 +1224,135 @@ pub fn switch_history_list(limit: Option<usize>) -> Value {
     switch_history::load(limit.unwrap_or(0))
 }
 
-/// 清空切换历史，返回删除条数。
+// 清空不单独开命令：统一走 `events_clear("switch")`，与其它三源同一入口。
+
+// ───────────────────────── 限流自动切换 ─────────────────────────
+
+/// 配置 + 最近一次决策 + 日志条数。
 #[tauri::command]
-pub fn switch_history_clear() -> Value {
-    match switch_history::clear() {
+pub fn auto_switch_status() -> Value {
+    auto_switch::status()
+}
+
+/// 局部更新配置（只传要改的字段）。
+#[tauri::command(rename_all = "camelCase")]
+pub fn auto_switch_set(patch: Value) -> Value {
+    match auto_switch::update_config(&patch) {
+        Ok(status) => json!({ "ok": true, "status": status }),
+        Err(error) => json!({ "ok": false, "error": error }),
+    }
+}
+
+#[tauri::command]
+pub fn auto_switch_logs(limit: Option<usize>) -> Value {
+    auto_switch::logs(limit.unwrap_or(100))
+}
+
+#[tauri::command]
+pub fn auto_switch_clear_logs() -> Value {
+    match auto_switch::clear_logs() {
         Ok(removed) => json!({ "ok": true, "removed": removed }),
         Err(error) => json!({ "ok": false, "error": error }),
     }
+}
+
+/// 手动跑一轮判定（不执行切换，只返回结论）。
+///
+/// 用于「装了但不知道它会不会误判」的场景：用户点一下就能看到当前会怎么判，
+/// 而不用等真的被限流。
+#[tauri::command]
+pub fn auto_switch_check() -> Value {
+    let cfg = auto_switch::load_config();
+    let current = auto_switch::current_account_id();
+    let now = config::now_ms();
+    let candidates = auto_switch::candidates(now);
+    let decision = auto_switch::decide(&cfg, &candidates, current.as_deref(), None, now);
+    json!({
+        "enabled": cfg.enabled,
+        "notifyOnly": cfg.notify_only,
+        "currentAccountId": current,
+        "decision": match decision {
+            auto_switch::Decision::Skip(reason) => json!({ "action": "skip", "reason": reason }),
+            auto_switch::Decision::Notify { target_id, reason } => json!({
+                "action": "notify", "targetId": target_id, "reason": reason
+            }),
+            auto_switch::Decision::Switch { target_id, reason } => json!({
+                "action": "switch", "targetId": target_id, "reason": reason
+            }),
+        },
+    })
+}
+
+/// 后台巡检：每 2 分钟判定一次（开关关闭时几乎零成本）。
+///
+/// 为什么是 2 分钟：限流恢复时刻的精度是分钟级，更密的轮询没有收益；
+/// 判定本身只读本地台账（`limits` 有 5 分钟缓存），不打接口。
+pub fn spawn_auto_switch(app: tauri::AppHandle) {
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(120)).await;
+            if !auto_switch::load_config().enabled {
+                continue;
+            }
+            let current = auto_switch::current_account_id();
+            let now = config::now_ms();
+            let cfg = auto_switch::load_config();
+            // 切换会关进程，必须在阻塞线程跑，别堵住 async runtime。
+            let payload = tokio::task::spawn_blocking(move || {
+                auto_switch::run_once(&cfg, current.as_deref(), now, |target| {
+                    // 自动切换只换认证并重启，**不动会话**：数据操作留给用户手动确认。
+                    switch::switch_account(None, target, true, false, &[], &[], false)
+                        .map(|_| ())
+                })
+            })
+            .await
+            .unwrap_or_else(|error| json!({ "action": "skip", "reason": error.to_string() }));
+            if payload.get("action").and_then(Value::as_str) != Some("skip") {
+                let _ = app.emit("auto-switch", payload);
+            }
+        }
+    });
+}
+
+// ───────────────────────── 外部链接 ─────────────────────────
+
+/// 用系统默认浏览器打开链接（设置页「开源地址」用）。
+///
+/// 只放行 http/https：这个命令接收前端传来的任意字符串，若不校验，
+/// 一个 `file://` 或自定义协议就可能被用来触发本机程序。
+#[tauri::command]
+pub fn open_external(url: String) -> Value {
+    let trimmed = url.trim();
+    if !(trimmed.starts_with("https://") || trimmed.starts_with("http://")) {
+        return json!({ "ok": false, "error": "只允许打开 http/https 链接" });
+    }
+    match open_in_browser(trimmed) {
+        Ok(()) => json!({ "ok": true }),
+        Err(error) => json!({ "ok": false, "error": error }),
+    }
+}
+
+// ───────────────────────── 数据导出 ─────────────────────────
+
+/// 导出一份 CSV 到用户选定的路径。`kind` ∈ accounts / tokensDaily / tokensModels / credits。
+///
+/// 后端直接写文件而不是把内容传回前端：CSV 可能有几 MB，过一次 IPC
+/// 再落盘没有意义。前端只负责用 save 对话框拿路径。
+#[tauri::command(rename_all = "camelCase")]
+pub fn export_data(kind: String, path: String) -> Value {
+    if path.trim().is_empty() {
+        return json!({ "ok": false, "error": "未选择保存位置" });
+    }
+    crate::export::export_one(&kind, &path)
+}
+
+/// 把全部 CSV 写进选定目录，逐份返回结果。
+#[tauri::command(rename_all = "camelCase")]
+pub fn export_all_data(dir: String) -> Value {
+    if dir.trim().is_empty() {
+        return json!({ "ok": false, "error": "未选择导出目录" });
+    }
+    crate::export::export_all(&dir)
 }
 
 // ───────────────────────── 系统设置 ─────────────────────────

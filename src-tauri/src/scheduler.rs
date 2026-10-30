@@ -132,7 +132,7 @@ async fn tick(app: &tauri::AppHandle) {
     if cfg["lastRunDate"].as_str() == Some(today.as_str()) {
         return;
     }
-    let now_minute = now.hour() as u32 * 60 + now.minute();
+    let now_minute = now.hour() * 60 + now.minute();
     let target_minute = hh * 60 + mm;
     if now_minute < target_minute {
         return;

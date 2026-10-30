@@ -420,7 +420,16 @@ export interface AccountOverviewRow {
   /** 即将到期的积分额度；> 0 时卡片显示「建议优先使用」。 */
   expiringSoonRemaining?: number | null;
   rateLimits?: AccountRateLimit[];
+  /** 健康分（core `health.rs` 聚合：余额 / 限流 / 预测 / 错误） */
+  health?: AccountHealth | null;
   error?: string | null;
+}
+
+/** 账号健康分：0-100，带可解释的原因码（前端翻成文案）。 */
+export interface AccountHealth {
+  score: number;
+  grade: "good" | "warn" | "critical";
+  reasons: string[];
 }
 
 /**
@@ -437,6 +446,39 @@ export interface AccountOverview {
 
 export const accountOverview = (refresh = false) =>
   invoke<AccountOverview>("account_overview", { refresh });
+
+/** ─────────────── 用量预测（余额还能撑几天） ─────────────── */
+
+export interface AccountForecastRow {
+  accountId: string;
+  accountName: string;
+  remaining: number;
+  /** 日均消耗（积分/天），中位数与 EWMA 取小 */
+  perDay: number;
+  /** 还能撑几天；样本不足或没有消耗时为 null */
+  daysLeft: number | null;
+  depleteAt: number | null;
+  /** ok | insufficient | flat */
+  confidence: "ok" | "insufficient" | "flat";
+  /** 参与计算的天数（有快照的天数） */
+  basisDays: number;
+  /** 近 3 天 vs 前 3 天的变化百分比 */
+  trendPct: number | null;
+  used: number;
+  /** 最近两条快照的余额差（正 = 消耗，负 = 领取/充值） */
+  lastDelta: number | null;
+  lastDeltaSecs: number | null;
+}
+
+export interface AccountForecastList {
+  generatedAt: number;
+  windowDays: number;
+  minBasisDays: number;
+  accounts: AccountForecastRow[];
+}
+
+export const accountForecast = (windowDays = 0) =>
+  invoke<AccountForecastList>("account_forecast", { windowDays });
 
 /** 一键刷新全部账号 token 的逐号结果。 */
 export interface TokenRefreshResult {
@@ -481,6 +523,8 @@ export interface SwitchResult {
   costMs?: number;
   /** 写后校验失败或写入失败时，是否已把认证文件还原 */
   rolledBack?: boolean;
+  /** 认证已还原，但目标账号的会话已被本次切换改写（还原不回来） */
+  sessionsDirty?: boolean;
   sessions?: {
     copied?: number;
     sourceTotal?: number;
@@ -541,8 +585,7 @@ export interface SwitchHistoryList {
 export const switchHistoryList = (limit = 0) =>
   invoke<SwitchHistoryList>("switch_history_list", { limit });
 
-export const switchHistoryClear = () =>
-  invoke<{ ok: boolean; removed?: number; error?: string }>("switch_history_clear");
+// 清空统一走 eventsClear("switch")：同一件事只留一个入口，避免「哪个按钮真的删了」的歧义。
 
 /** ─────────────── 运行日志（通知存档 / 自动日常 / 错误日志 / 切换历史） ─────────────── */
 
@@ -612,3 +655,91 @@ export const systemInfo = () => invoke<SystemInfo>("system_info");
 
 export const openStoreDir = () =>
   invoke<{ ok: boolean; path: string; error?: string }>("open_store_dir");
+
+/** 用系统浏览器打开链接（后端只放行 http/https）。 */
+export const openExternal = (url: string) =>
+  invoke<{ ok: boolean; error?: string }>("open_external", { url });
+
+/** ─────────────── 限流自动切换 ─────────────── */
+
+export interface AutoSwitchConfig {
+  enabled: boolean;
+  /** 只提示不执行（默认 true） */
+  notifyOnly: boolean;
+  cooldownMinutes: number;
+  excludedAccountIds: string[];
+  minRemaining: number;
+  requireSameVariant: boolean;
+}
+
+export interface AutoSwitchEvent {
+  action: "skip" | "notify" | "switch";
+  reason?: string;
+  targetId?: string;
+  targetLabel?: string;
+  ok?: boolean;
+  error?: string;
+  ts?: number;
+}
+
+export interface AutoSwitchStatus {
+  config: AutoSwitchConfig;
+  lastSwitchAt: number | null;
+  lastDecision: AutoSwitchEvent | null;
+  totalEvents: number;
+}
+
+export interface AutoSwitchCheck {
+  enabled: boolean;
+  notifyOnly: boolean;
+  currentAccountId: string | null;
+  decision: AutoSwitchEvent;
+}
+
+export const autoSwitchStatus = () => invoke<AutoSwitchStatus>("auto_switch_status");
+
+export const autoSwitchSet = (patch: Partial<AutoSwitchConfig>) =>
+  invoke<{ ok: boolean; status?: AutoSwitchStatus; error?: string }>("auto_switch_set", { patch });
+
+/** 手动判定一次：不执行切换，只告诉你会怎么判。 */
+export const autoSwitchCheck = () => invoke<AutoSwitchCheck>("auto_switch_check");
+
+export const autoSwitchLogs = (limit = 100) =>
+  invoke<{ total: number; items: AutoSwitchEvent[] }>("auto_switch_logs", { limit });
+
+export const autoSwitchClearLogs = () =>
+  invoke<{ ok: boolean; removed?: number; error?: string }>("auto_switch_clear_logs");
+
+/** ─────────────── 数据导出（CSV） ─────────────── */
+
+export type ExportKind = "accounts" | "tokensDaily" | "tokensModels" | "credits";
+
+export interface ExportResult {
+  ok: boolean;
+  kind?: string;
+  path?: string;
+  bytes?: number;
+  error?: string;
+}
+
+export interface ExportAllFile {
+  kind: string;
+  path?: string;
+  bytes?: number;
+  error?: string;
+}
+
+export interface ExportAllResult {
+  ok: boolean;
+  dir: string;
+  files: ExportAllFile[];
+  failed: number;
+}
+
+/** 导出一份 CSV 到指定路径（后端直接写盘，不回传内容）。 */
+export const exportData = (kind: ExportKind, path: string) =>
+  invoke<ExportResult>("export_data", { kind, path });
+
+/** 把四份 CSV 一起写进目录。 */
+export const exportAllData = (dir: string) =>
+  invoke<ExportAllResult>("export_all_data", { dir });
