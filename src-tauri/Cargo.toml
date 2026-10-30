@@ -1,0 +1,30 @@
+[package]
+name = "workbuddy-task-assistant"
+version = "0.1.0"
+description = "WorkBuddy 任务助手"
+edition = "2021"
+
+[lib]
+name = "task_assistant_lib"
+crate-type = ["staticlib", "cdylib", "rlib"]
+
+[build-dependencies]
+tauri-build = { version = "2", features = [] }
+
+[dependencies]
+# 并发查余额用信号量限流；Tauri 内部本就跑 tokio，这里只补 feature 不引入第二份运行时
+tokio = { version = "1", features = ["rt", "sync"] }
+# tray-icon：关闭窗口后常驻系统托盘
+# image-png：托盘菜单用 PNG 图标
+# protocol-asset：预留本地图标资源
+# webview-data-url：内置空页面兜底
+tauri = { version = "2", features = ["tray-icon", "image-png"] }
+# 导入/导出账号需要系统文件对话框
+tauri-plugin-dialog = "2"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+# 定时调度按本地日期 / 时刻判断（lastRunDate、HH:MM 到点）
+chrono = "0.4"
+# 直接复用已有工具的核心逻辑（账号库 / 签到 / 成长任务 / 旅行 / 令牌续期），
+# 不另起一份网络与存储实现。
+wb-switch-core = { path = "../../workbuddy-switch/crates/wb-switch-core" }

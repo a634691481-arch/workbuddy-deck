@@ -1,0 +1,172 @@
+@import "tailwindcss";
+@import "@fontsource/archivo-black";
+@import "@fontsource-variable/jetbrains-mono";
+
+/*
+ * 工业粗野主义 / 战术遥测（Tactical Telemetry & CRT）
+ * ---------------------------------------------------------------
+ * 纪律（来自 skill，不可违反）：
+ * 1. 深色基底唯一，不混浅色；圆角恒为 0。
+ * 2. 强调色只有「航空红」一种；磷光绿仅用于 READY 这一个状态位。
+ * 3. 不用渐变、不用柔光投影、不用半透明玻璃。层次靠 1px 实线分隔。
+ * 4. 数据一律等宽 + 大写 + 正字距，模拟终端矩阵。
+ */
+@theme {
+  /* 基底：停用的 CRT，不用纯黑 */
+  --color-background: #0a0a0a;
+  --color-card: #101010;
+  --color-panel: #0d0d0d;
+  --color-muted: #171716;
+  --color-foreground: #eaeaea;
+  --color-muted-foreground: #8a8a85;
+  --color-faint: #565651;
+
+  /* 分隔线：靠它划分隔间，不靠留白 */
+  --color-border: #2a2a28;
+  --color-border-strong: #454540;
+
+  /* 唯一强调色：航空 / 危险红 */
+  --color-hazard: #e61919;
+  --color-hazard-dim: #7a1010;
+  --color-hazard-soft: #1c0808;
+
+  /* 块状主按钮 = 白磷底黑字（工业风没有"品牌蓝"） */
+  --color-primary: #eaeaea;
+  --color-primary-soft: #1b1b19;
+  --color-primary-border: #454540;
+  --color-primary-foreground: #0a0a0a;
+
+  --color-titlebar: #050505;
+
+  /* 磷光绿：只允许出现在 READY 指示器上 */
+  --color-success: #4af626;
+  --color-success-soft: #0e1a08;
+  --color-success-border: #2d5c1c;
+  --color-danger: #e61919;
+  --color-danger-soft: #1c0808;
+  --color-danger-border: #6e1010;
+  --color-warning: #e61919;
+  --color-warning-soft: #1c0808;
+  --color-warning-border: #6e1010;
+
+  --radius: 0px;
+  --font-mono:
+    "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-display: "Archivo Black", "Arial Black", sans-serif;
+}
+
+html,
+body,
+#app {
+  height: 100%;
+  margin: 0;
+}
+
+body {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  font-variant-ligatures: none;
+  color: var(--color-foreground);
+  background: var(--color-background);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 全局直角：任何组件都不得有圆角 */
+* {
+  border-radius: 0 !important;
+  scrollbar-width: thin;
+  scrollbar-color: #454540 #0a0a0a;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-track {
+  background: #0a0a0a;
+  border-left: 1px solid #1c1c1a;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #34342f;
+  border: 1px solid #0a0a0a;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background: #4d4d46;
+}
+
+/* 微排版：所有 metadata 一律大写 + 正字距 */
+.lbl {
+  font-size: 10px;
+  line-height: 1;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--color-muted-foreground);
+}
+
+.lbl-ink {
+  color: var(--color-foreground);
+}
+
+/* 宏排版：块状重黑体，紧字距、压缩行高 */
+.display {
+  font-family: var(--font-display);
+  letter-spacing: -0.04em;
+  line-height: 0.9;
+  text-transform: uppercase;
+}
+
+/* 数据读数：等宽 + 大号 + 紧排 */
+.readout {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
+}
+
+/* 危险条纹：用于错误横幅与顶部告警带 */
+.hazard-stripes {
+  background-image: repeating-linear-gradient(
+    -45deg,
+    #e61919 0 6px,
+    #0a0a0a 6px 12px
+  );
+}
+
+/* CRT 扫描线：极淡，只造质感不伤可读 */
+.crt::before {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: repeating-linear-gradient(
+    0deg,
+    rgb(0 0 0 / 0.22) 0 1px,
+    transparent 1px 3px
+  );
+  opacity: 0.5;
+}
+
+/* 机械噪点：SVG 静态噪声，统一全局颗粒感 */
+.crt::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  z-index: 9998;
+  pointer-events: none;
+  opacity: 0.035;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+:focus-visible {
+  outline: 1px solid var(--color-hazard);
+  outline-offset: -1px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}

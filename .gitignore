@@ -1,0 +1,18 @@
+# 依赖与构建产物
+node_modules/
+dist/
+target*/
+src-tauri/target*/
+src-tauri/gen/
+
+# 本机个人数据（会话恢复备份 / 数据库快照，严禁入库）
+tasks/restore-backup/
+*.db
+*.db.bak
+*.bak
+
+# 运行与系统杂物
+*.log
+.DS_Store
+Thumbs.db
+.workbuddy/

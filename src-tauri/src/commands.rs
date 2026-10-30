@@ -1,0 +1,1251 @@
+//! 薄命令层：只做参数校验与转调，业务编排在 `executor` 与 `wb-switch-core`。
+//!
+//! 约定（见 AGENTS.md）：这里不写业务分支、不拼统计、不做重试；新增动作加一个薄包装即可。
+
+use std::collections::HashMap;
+use std::path::PathBuf;
+
+#[cfg(target_os = "windows")]
+use std::os::windows::process::CommandExt;
+
+use serde_json::{json, Value};
+
+use tauri::Emitter;
+
+use wb_switch_core::modules::config;
+use wb_switch_core::modules::credit_usage;
+use wb_switch_core::modules::growth_tasks;
+use wb_switch_core::modules::variant::WbVariant;
+use wb_switch_core::modules::{
+    account, auth_file, checkin, credits, error_log, export_import, limits, notifications, oauth,
+    process, refresh, switch, switch_history,
+};
+
+use crate::executor;
+use crate::scheduler;
+
+/// 账号摘要：只给界面需要的字段，令牌不出后端（AGENTS.md §5）。
+fn summary(acc: &Value) -> Value {
+    json!({
+        "id": acc.get("id").cloned().unwrap_or(Value::Null),
+        "label": account::account_display_name(acc),
+        "variant": account::variant_of(acc).as_str(),
+        "note": acc.get("note").cloned().unwrap_or(Value::Null),
+    })
+}
+
+async fn fresh(acc: Value) -> Value {
+    refresh::ensure_fresh_token(acc, &config::load_checkin_config()).await
+}
+
+#[tauri::command]
+pub fn list_accounts() -> Value {
+    let rows: Vec<Value> = account::load_accounts().iter().map(summary).collect();
+    json!({ "total": rows.len(), "accounts": rows })
+}
+
+/// 单账号详情：签到状态 + 成长任务清单（清单实时拉，不写死）。
+#[tauri::command]
+pub async fn account_detail(account_id: String) -> Result<Value, String> {
+    if account_id.trim().is_empty() {
+        return Err("缺少账号 id".to_string());
+    }
+    let acc = account::find_account(&account_id).ok_or_else(|| "账号不存在".to_string())?;
+    let variant = account::variant_of(&acc);
+    let acc = fresh(acc).await;
+
+    let checkin_status = checkin::get_checkin_status_for_display(&acc).await;
+    let growth = growth_tasks::growth_status(Some(variant)).await;
+    let row = growth
+        .get("accounts")
+        .and_then(Value::as_array)
+        .and_then(|rows| {
+            rows.iter().find(|row| {
+                row.get("accountId").and_then(Value::as_str) == Some(account_id.as_str())
+            })
+        })
+        .cloned()
+        .unwrap_or_else(|| json!({ "tasks": [] }));
+
+    Ok(json!({
+        "accountId": account_id,
+        "variant": variant.as_str(),
+        "checkin": checkin_status,
+        "growth": row,
+        "today": checkin::date_str(None),
+    }))
+}
+
+#[tauri::command]
+pub async fn checkin_now(account_id: String) -> Result<Value, String> {
+    if account_id.trim().is_empty() {
+        return Err("缺少账号 id".to_string());
+    }
+    let acc = account::find_account(&account_id).ok_or_else(|| "账号不存在".to_string())?;
+    Ok(checkin::checkin_account(&fresh(acc).await).await)
+}
+
+/// 用系统默认浏览器打开 URL。
+///
+/// Windows 上**不能用 `explorer.exe`**：它把参数当「要浏览的路径」，遇到完整的
+/// `https://…?state=…` 时经常落到「打开方式 / 选择文件」分支（用户看到的是文件选择框），
+/// 而不是启动默认浏览器。这里改走 `url.dll,FileProtocolHandler`（系统 URL 协议处理器），
+/// 它只认协议、不做文件路径解析；失败再退回 `cmd /C start`（空标题占位，否则 URL 里的
+/// `&` 会被当成命令分隔符）。macOS / Linux 交给各自的打开器。
+/// 失败不致命，调用方会把 URL 回传给界面供手动复制。
+fn open_in_browser(url: &str) -> Result<(), String> {
+    #[cfg(target_os = "windows")]
+    {
+        // CREATE_NO_WINDOW：不要为这次调用闪一个控制台窗口。
+        const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+        let launched = std::process::Command::new("rundll32.exe")
+            .arg("url.dll,FileProtocolHandler")
+            .arg(url)
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn();
+        if launched.is_ok() {
+            return Ok(());
+        }
+        let mut fallback = std::process::Command::new("cmd");
+        fallback
+            .raw_arg(format!("/C start \"\" \"{url}\""))
+            .creation_flags(CREATE_NO_WINDOW)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(target_os = "macos")]
+    {
+        std::process::Command::new("open")
+            .arg(url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+    #[cfg(all(unix, not(target_os = "macos")))]
+    {
+        std::process::Command::new("xdg-open")
+            .arg(url)
+            .spawn()
+            .map(|_| ())
+            .map_err(|e| e.to_string())
+    }
+}
+
+/// 发起浏览器登录：申请 state → 打开授权页 → 前端拿 loginId 轮询。
+///
+/// 不再拉起主程序：用户要的是「点一下就在浏览器登录」，多跳一步是多余动作。
+#[tauri::command]
+pub async fn start_login(variant: Option<String>) -> Value {
+    let variant = match variant.as_deref() {
+        Some("intl") | Some("ai") => WbVariant::Ai,
+        _ => WbVariant::Cn,
+    };
+    let res = match oauth::oauth_start(variant).await {
+        Ok(res) => res,
+        Err(error) => return json!({ "ok": false, "error": error }),
+    };
+    let url = res
+        .get("verificationUri")
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string();
+    if url.is_empty() {
+        return json!({ "ok": false, "error": "服务端未返回授权地址" });
+    }
+    let opened = open_in_browser(&url);
+    json!({
+        "ok": true,
+        "loginId": res.get("loginId").cloned().unwrap_or(Value::Null),
+        "url": url,
+        "expiresIn": res.get("expiresIn").cloned().unwrap_or(Value::Null),
+        "browserOpened": opened.is_ok(),
+        "browserError": opened.err(),
+    })
+}
+
+/// 轮询一次登录结果；成功后 core 已把账号写进账号库。
+#[tauri::command]
+pub async fn poll_login(login_id: String) -> Value {
+    if login_id.trim().is_empty() {
+        return json!({ "done": true, "error": "缺少 loginId" });
+    }
+    oauth::oauth_poll(&login_id).await
+}
+
+/// 全账号积分汇总：并发受限地逐个查余额，返回总额与逐号明细。
+///
+/// 为什么限制并发：每个账号在国内版要打 3 个资源接口，8 个号全并发等于 24 个请求，
+/// 容易被网关限流；这里固定 4 路上限，失败账号单独记，不拖垮整次汇总。
+#[tauri::command]
+pub async fn total_balance() -> Value {
+    const CONCURRENCY: usize = 4;
+
+    let all = account::load_accounts();
+    if all.is_empty() {
+        return json!({ "ok": true, "total": 0.0, "accounts": [], "failed": 0 });
+    }
+
+    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(CONCURRENCY));
+    let mut handles = Vec::with_capacity(all.len());
+    for acc in all {
+        let permit = semaphore.clone();
+        handles.push(tokio::spawn(async move {
+            let _guard = permit.acquire().await;
+            let id = acc.get("id").cloned().unwrap_or(Value::Null);
+            let label = account::account_display_name(&acc);
+            let res = credits::get_credit_expiry(&acc).await;
+            let ok = res.get("ok").and_then(Value::as_bool).unwrap_or(false);
+            json!({
+                "accountId": id,
+                "label": label,
+                "ok": ok,
+                "remaining": res.get("totalRemaining").cloned().unwrap_or(Value::Null),
+                "error": res.get("error").cloned().unwrap_or(Value::Null),
+            })
+        }));
+    }
+
+    let mut rows = Vec::with_capacity(handles.len());
+    for handle in handles {
+        if let Ok(row) = handle.await {
+            rows.push(row);
+        }
+    }
+
+    let total: f64 = rows
+        .iter()
+        .filter(|row| row.get("ok").and_then(Value::as_bool) == Some(true))
+        .filter_map(|row| row.get("remaining").and_then(Value::as_f64))
+        .sum();
+    let failed = rows
+        .iter()
+        .filter(|row| row.get("ok").and_then(Value::as_bool) != Some(true))
+        .count();
+
+    json!({ "ok": true, "total": total, "accounts": rows, "failed": failed })
+}
+
+/// 导出账号到指定路径。
+///
+/// 未指定 id 时**默认导出全部账号**（本工具的语义是「备份整库」，不需要先勾选；
+/// core 的 `select_export_records` 在空 id 时会报「请先选择」，故在这里补全）。
+///
+/// 安全提示必须回给界面：导出文件含**明文 access/refresh token**，
+/// 等同于把账号直接交出去，界面上必须显式告知（AGENTS.md §5）。
+#[tauri::command]
+pub fn export_accounts_file(path: String, account_ids: Option<Vec<String>>) -> Value {
+    if path.trim().is_empty() {
+        return json!({ "ok": false, "error": "缺少导出路径" });
+    }
+    let mut ids = account_ids.unwrap_or_default();
+    if ids.is_empty() {
+        ids = account::load_accounts()
+            .iter()
+            .filter_map(|acc| acc.get("id").and_then(Value::as_str).map(String::from))
+            .collect();
+    }
+    if ids.is_empty() {
+        return json!({ "ok": false, "error": "账号库为空，没有可导出的账号" });
+    }
+    let count = ids.len();
+    match export_import::export_accounts_to_path(&ids, &path) {
+        Ok(written) => json!({ "ok": true, "path": written, "count": count }),
+        Err(error) => json!({ "ok": false, "error": error }),
+    }
+}
+
+/// 预览待导入文件：只解析不入库，让用户先看到会导入几个账号。
+#[tauri::command]
+pub fn preview_import_file(path: String) -> Value {
+    if path.trim().is_empty() {
+        return json!({ "ok": false, "error": "缺少文件路径" });
+    }
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) => return json!({ "ok": false, "error": format!("读取文件失败：{error}") }),
+    };
+    match export_import::preview_accounts(&text) {
+        Ok(preview) => json!({ "ok": true, "preview": preview }),
+        Err(error) => json!({ "ok": false, "error": error }),
+    }
+}
+
+/// 执行导入：全部条目入库（core 内部按 uid 合并，不会产生重复账号）。
+#[tauri::command]
+pub fn import_accounts_file(path: String) -> Value {
+    if path.trim().is_empty() {
+        return json!({ "ok": false, "error": "缺少文件路径" });
+    }
+    let text = match std::fs::read_to_string(&path) {
+        Ok(text) => text,
+        Err(error) => return json!({ "ok": false, "error": format!("读取文件失败：{error}") }),
+    };
+    let preview = match export_import::preview_accounts(&text) {
+        Ok(preview) => preview,
+        Err(error) => return json!({ "ok": false, "error": error }),
+    };
+    let total = preview
+        .get("accounts")
+        .and_then(Value::as_array)
+        .map(|rows| rows.len())
+        .unwrap_or(0);
+    if total == 0 {
+        return json!({ "ok": false, "error": "文件里没有可用账号" });
+    }
+    let indexes: Vec<usize> = (0..total).collect();
+    match export_import::import_accounts(&text, &indexes) {
+        // ImportResult 未实现 Serialize，逐字段取出，避免为此改 core 的公共结构。
+        Ok(result) => json!({
+            "ok": true,
+            "imported": result.imported,
+            "skipped": result.skipped,
+            "overwritten": result.overwritten,
+        }),
+        Err(error) => json!({ "ok": false, "error": error }),
+    }
+}
+
+/// 积分余额：只取交付字段（剩余/总量），resources 明细不传前端（AGENTS.md §5 最小暴露）。
+#[tauri::command]
+pub async fn account_balance(account_id: String) -> Value {
+    if account_id.trim().is_empty() {
+        return json!({ "ok": false, "error": "缺少账号 id" });
+    }
+    let Some(acc) = account::find_account(&account_id) else {
+        return json!({ "ok": false, "error": "账号不存在" });
+    };
+    let res = credits::get_credit_expiry(&fresh(acc).await).await;
+    json!({
+        "ok": res.get("ok").and_then(Value::as_bool).unwrap_or(false),
+        "remaining": res.get("totalRemaining").cloned().unwrap_or(Value::Null),
+        "capacity": res.get("totalCapacity").cloned().unwrap_or(Value::Null),
+        "error": res.get("error").cloned().unwrap_or(Value::Null),
+    })
+}
+
+#[tauri::command]
+pub fn run_status() -> Value {
+    executor::status()
+}
+
+#[tauri::command]
+pub fn cancel_run() -> Value {
+    executor::cancel()
+}
+
+macro_rules! run_command {
+    ($name:ident, $action:literal) => {
+        #[tauri::command]
+        pub async fn $name(account_ids: Option<Vec<String>>) -> Value {
+            executor::execute($action, account_ids.unwrap_or_default()).await
+        }
+    };
+}
+
+run_command!(run_checkin, "checkin");
+run_command!(run_growth, "growth");
+run_command!(run_travel, "travel");
+run_command!(run_daily, "daily");
+
+/// 每日自动执行：读配置 + 最近日志一起返回，前端一次请求画完整面板。
+#[tauri::command]
+pub fn auto_daily_get() -> Value {
+    json!({ "config": scheduler::load_config(), "logs": scheduler::load_logs() })
+}
+
+/// 每日自动执行：改开关 / 时间。时间不合法拒绝落盘，避免静默失效。
+#[tauri::command]
+pub fn auto_daily_set(enabled: bool, time: String) -> Value {
+    if config::parse_clock(&time).is_none() {
+        return json!({ "ok": false, "error": "时间格式应为 HH:MM" });
+    }
+    let mut cfg = scheduler::load_config();
+    cfg["enabled"] = json!(enabled);
+    cfg["time"] = json!(time);
+    match scheduler::save_config(&cfg) {
+        Ok(()) => json!({ "ok": true, "config": cfg }),
+        Err(error) => json!({ "ok": false, "error": error.to_string() }),
+    }
+}
+
+/// 拉起主程序去添加账号：本工具不自己实现登录（AGENTS.md §5 白名单）。
+#[tauri::command]
+pub fn launch_main_app() -> Value {
+    let mut candidates: Vec<PathBuf> = Vec::new();
+    if let Ok(raw) = std::env::var("WB_SWITCH_EXE") {
+        if !raw.trim().is_empty() {
+            candidates.push(PathBuf::from(raw));
+        }
+    }
+    if let Ok(exe) = std::env::current_exe() {
+        if let Some(dir) = exe.parent() {
+            candidates.push(dir.join("wb-switch-rust.exe"));
+            candidates.push(dir.join("..").join("wb-switch-rust.exe"));
+            if let Ok(entries) = std::fs::read_dir(dir.join("..").join("dist-portable")) {
+                for entry in entries.flatten() {
+                    candidates.push(entry.path().join("wb-switch-rust.exe"));
+                }
+            }
+        }
+    }
+    for path in candidates {
+        if path.is_file() {
+            return match std::process::Command::new(&path).spawn() {
+                Ok(_) => json!({ "started": true, "path": path.to_string_lossy() }),
+                Err(error) => json!({ "started": false, "error": error.to_string() }),
+            };
+        }
+    }
+    json!({
+        "started": false,
+        "error": "未找到 workbuddy-switch 主程序（可用 WB_SWITCH_EXE 指定路径）",
+    })
+}
+
+// ─────────────────────────── 统计（积分 / Token） ───────────────────────────
+
+/// 积分统计：直接转调 core 的统计聚合（含官方用量，`refresh` 才走网络）。
+#[tauri::command]
+pub async fn credit_statistics(refresh: Option<bool>) -> Value {
+    wb_switch_core::modules::credit_usage::get_statistics(refresh.unwrap_or(false)).await
+}
+
+/// Token 统计：扫描本地会话 jsonl（同步重活，放阻塞线程避免卡 IPC）。
+#[tauri::command]
+pub async fn token_statistics(days: Option<i64>, refresh: Option<bool>) -> Value {
+    static CACHE: std::sync::Mutex<Option<(i64, Value, i64)>> = std::sync::Mutex::new(None);
+    const TTL_MS: i64 = 5 * 60 * 1000;
+
+    let days = days.unwrap_or(0);
+    let refresh = refresh.unwrap_or(false);
+
+    // 全盘扫描要读几百个会话文件（秒级耗时），重复进页面 / 切回来直接回缓存；
+    // 「重新扫描」按钮带 refresh=true 才强制重算。
+    if !refresh {
+        if let Ok(guard) = CACHE.lock() {
+            if let Some((cached_days, value, cached_at)) = guard.as_ref() {
+                if *cached_days == days && config::now_ms() - cached_at < TTL_MS {
+                    let mut cached = value.clone();
+                    cached["cached"] = json!(true);
+                    return cached;
+                }
+            }
+        }
+    }
+
+    let range = if days > 0 { Some(days) } else { None };
+    match tokio::task::spawn_blocking(move || {
+        wb_switch_core::modules::token_stats::get_statistics(range)
+    })
+    .await
+    {
+        Ok(value) => {
+            if value.get("error").is_none() {
+                if let Ok(mut guard) = CACHE.lock() {
+                    *guard = Some((days, value.clone(), config::now_ms()));
+                }
+            }
+            value
+        }
+        Err(error) => json!({ "error": error.to_string(), "sources": [] }),
+    }
+}
+
+// ─────────────────────────── 账号管理 ───────────────────────────
+
+/// 删除账号（写回 accounts.json，不动会话/磁盘其它数据）。
+#[tauri::command]
+pub fn account_delete(account_id: String) -> Value {
+    if account_id.trim().is_empty() {
+        return json!({ "ok": false, "error": "缺少账号 id" });
+    }
+    match account::delete_account(account_id.trim()) {
+        Ok(()) => json!({ "ok": true, "id": account_id }),
+        Err(error) => json!({ "ok": false, "error": error }),
+    }
+}
+
+/// 设置账号备注（页面展示名会优先用它，脱敏在前端做）。
+#[tauri::command]
+pub fn account_set_note(account_id: String, note: String) -> Value {
+    if account_id.trim().is_empty() {
+        return json!({ "ok": false, "error": "缺少账号 id" });
+    }
+    let mut accounts = account::load_accounts();
+    let Some(target) = accounts
+        .iter_mut()
+        .find(|acc| acc.get("id").and_then(Value::as_str) == Some(account_id.trim()))
+    else {
+        return json!({ "ok": false, "error": "账号不存在" });
+    };
+    let note = note.trim();
+    if note.is_empty() {
+        target.as_object_mut().map(|obj| obj.remove("note"));
+    } else {
+        target["note"] = json!(note);
+    }
+    match account::save_accounts(&accounts) {
+        Ok(()) => json!({ "ok": true }),
+        Err(error) => json!({ "ok": false, "error": error.to_string() }),
+    }
+}
+
+/// 一键刷新全部账号的 access token。
+///
+/// 与 `refresh::run_keepalive_cycle` 的区别：保活只刷「临期」账号，用户手动点这个按钮
+/// 要的是**全部重刷**，所以这里不做有效期判断，逐号强刷。并发上限 4，避免官方 auth
+/// 接口被同一 IP 连续打满；单号失败只记录，不影响其它账号（失败原因回给界面）。
+#[tauri::command]
+pub async fn refresh_all_tokens() -> Value {
+    const CONCURRENCY: usize = 4;
+    let started_at = config::now_ms();
+    let accounts = account::load_accounts();
+    if accounts.is_empty() {
+        return json!({
+            "ok": true,
+            "total": 0,
+            "refreshed": 0,
+            "failed": 0,
+            "results": [],
+            "startedAt": started_at,
+        });
+    }
+
+    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(CONCURRENCY));
+    let mut handles = Vec::with_capacity(accounts.len());
+    for acc in accounts {
+        let permit = semaphore.clone();
+        handles.push(tokio::spawn(async move {
+            let _guard = permit.acquire().await;
+            let label = account::account_display_name(&acc);
+            // 缺 refresh token 的账号刷不动，直接给出可读原因，别空跑一次请求。
+            let has_rt = !acc
+                .get("refresh_token")
+                .and_then(Value::as_str)
+                .unwrap_or("")
+                .is_empty();
+            if !has_rt {
+                return json!({
+                    "label": label,
+                    "ok": false,
+                    "error": "缺少 refresh token，需重新登录",
+                });
+            }
+            let fresh = refresh::refresh_account_token(acc).await;
+            let needs_relogin = fresh.get("needs_relogin").and_then(Value::as_bool) == Some(true);
+            json!({
+                "label": label,
+                "ok": !needs_relogin,
+                "error": if needs_relogin {
+                    fresh.get("needs_relogin_reason").and_then(Value::as_str).map(str::to_string)
+                } else {
+                    None
+                },
+            })
+        }));
+    }
+
+    let mut results = Vec::with_capacity(handles.len());
+    for handle in handles {
+        match handle.await {
+            Ok(value) => results.push(value),
+            Err(error) => results.push(json!({
+                "label": "unknown",
+                "ok": false,
+                "error": error.to_string(),
+            })),
+        }
+    }
+    let total = results.len();
+    let refreshed = results
+        .iter()
+        .filter(|row| row.get("ok").and_then(Value::as_bool) == Some(true))
+        .count();
+    json!({
+        "ok": refreshed == total,
+        "total": total,
+        "refreshed": refreshed,
+        "failed": total - refreshed,
+        "results": results,
+        "startedAt": started_at,
+    })
+}
+
+/// 账号卡片总览：
+/// - `refresh=false`：读本地采集快照，离线秒回（余额为上次采集值）；
+/// - `refresh=true`：并发（4 路）拉官方积分资源包，带积分包明细与近期到期。
+/// 只读命令；`get_credit_expiry` 内部会照常落采集快照，与积分统计共用一份。
+/// WorkBuddy 运行状态 + 当前登录账号（读 auth 文件，与账号库按 uid/email 匹配）。
+///
+/// 判定口径与 workbuddy-switch 一致：auth 里的 uid 命中账号的 id/uid，或 email 相等。
+/// 两个档位（cn/ai）都查，命中的 accountId 全部返回（同一人可能双档位登录）。
+#[tauri::command]
+pub async fn workbuddy_status() -> Value {
+    tauri::async_runtime::spawn_blocking(move || {
+        let accounts = account::load_accounts();
+        let mut current_ids: Vec<String> = Vec::new();
+        let mut current: Option<Value> = None;
+        for variant in WbVariant::ALL {
+            let Some(auth) = auth_file::read_auth_file(variant) else {
+                continue;
+            };
+            let acct = auth.get("account").cloned().unwrap_or_else(|| json!({}));
+            // display_value 返回 Value：uid 可能是数字，统一转成字符串再比对。
+            let text = |value: &Value| match value {
+                Value::String(text) => text.clone(),
+                Value::Number(number) => number.to_string(),
+                Value::Bool(flag) => flag.to_string(),
+                _ => String::new(),
+            };
+            let uid = text(&account::display_value(&acct, "uid"));
+            let email = text(&account::display_value(&acct, "email"));
+            let nickname = account::display_value(&acct, "nickname");
+            if current.is_none() && (!uid.is_empty() || !email.is_empty()) {
+                current = Some(json!({
+                    "uid": uid,
+                    "email": email,
+                    "nickname": nickname,
+                    "variant": variant.as_str(),
+                }));
+            }
+            if uid.is_empty() && email.is_empty() {
+                continue;
+            }
+            for acc in &accounts {
+                let acc_uid = acc.get("uid").and_then(Value::as_str).unwrap_or("");
+                let acc_email = acc.get("email").and_then(Value::as_str).unwrap_or("");
+                let acc_id = acc.get("id").and_then(Value::as_str).unwrap_or("");
+                let hit = (!uid.is_empty() && (acc_uid == uid || acc_id == uid))
+                    || (!email.is_empty() && !acc_email.is_empty() && acc_email == email);
+                if hit {
+                    if let Some(id) = acc.get("id").and_then(Value::as_str) {
+                        if !current_ids.iter().any(|known| known == id) {
+                            current_ids.push(id.to_string());
+                        }
+                    }
+                }
+            }
+        }
+        json!({
+            "running": process::is_workbuddy_running(WbVariant::Cn)
+                || process::is_workbuddy_running(WbVariant::Ai),
+            "currentAccountIds": current_ids,
+            "current": current,
+        })
+    })
+    .await
+    .unwrap_or_else(|_| json!({ "running": false, "currentAccountIds": [], "current": null }))
+}
+
+/// 设为 WorkBuddy 当前账号（完全同步模式）。
+///
+/// 复用 core 的 `switch::switch_account`：备份 → 关 WorkBuddy → 以当前登录账号为准
+/// 全量替换目标账号的会话 → 写认证 → 写后身份校验 → 重启。可能阻塞数十秒，走
+/// blocking 线程；进度经 `switch-progress` 事件推给前端。
+///
+/// **不抛 Err**：失败也返回 `{ ok:false, ... }`，把「停在哪一步 / 是否已回滚」变成
+/// 结构化字段。原先靠 catch 中文文案判断，前端无法区分「没写认证」和「已回滚」，
+/// 只能一律报「切换失败」——这正是两次事故里用户看不懂现场的原因。
+#[tauri::command(rename_all = "camelCase")]
+pub async fn switch_workbuddy_account(app: tauri::AppHandle, account_id: String) -> Value {
+    if account_id.trim().is_empty() {
+        return json!({
+            "ok": false,
+            "error": "缺少 accountId",
+            "result": "blocked",
+            "stage": "",
+            "identity": "",
+            "costMs": 0,
+            "rolledBack": false,
+        });
+    }
+    let progress: switch::ProgressFn = Box::new(move |message| {
+        let _ = app.emit("switch-progress", json!({ "message": message }));
+    });
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
+        // restart=true + replace_sessions=true：即原项目的「完全同步」切换。
+        switch::switch_account(Some(&progress), &account_id, true, false, &[], &[], true)
+    })
+    .await;
+
+    match outcome {
+        Ok(Ok(value)) => value,
+        Ok(Err(error)) => last_switch_failure(&error),
+        Err(join_error) => json!({
+            "ok": false,
+            "error": format!("切换任务异常: {join_error}"),
+            "result": "blocked",
+            "stage": "",
+            "identity": "",
+            "costMs": 0,
+            "rolledBack": false,
+        }),
+    }
+}
+
+/// 失败时把刚写入的历史条目并进返回值。
+///
+/// 历史就在切换返回前写好（core 的 `switch_account` 外层保证），所以这里读到的一定是
+/// 本次那条。万一是并发切换或写入被跳过，就用保守默认值，不假装知道细节。
+fn last_switch_failure(error: &str) -> Value {
+    let entry = switch_history::load(1)
+        .get("entries")
+        .and_then(Value::as_array)
+        .and_then(|rows| rows.first().cloned())
+        .unwrap_or_else(|| json!({}));
+    let result = entry
+        .get("result")
+        .and_then(Value::as_str)
+        .unwrap_or("blocked")
+        .to_string();
+    json!({
+        "ok": false,
+        "error": error,
+        "result": result,
+        "stage": entry.get("stage").cloned().unwrap_or(json!("")),
+        "identity": entry.get("identity").cloned().unwrap_or(json!("")),
+        "costMs": entry.get("costMs").cloned().unwrap_or(json!(0)),
+        "rolledBack": result == "rolled_back",
+        "sessions": entry.get("sessions").cloned().unwrap_or(Value::Null),
+    })
+}
+
+#[tauri::command]
+pub async fn account_overview(refresh: Option<bool>) -> Value {
+    const CONCURRENCY: usize = 4;
+    let refresh = refresh.unwrap_or(false);
+    let collected_at = config::now_ms();
+    let accounts = account::load_accounts();
+    // 模型限流台账（扫本机日志 + hook 事件，内置 5 分钟缓存）：跟余额无关，
+    // 两种口径都要展示，所以在这里取一次，按账号拆开。
+    let rate_by_account = match tokio::task::spawn_blocking(limits::get_rate_limits).await {
+        Ok(payload) => payload
+            .get("accounts")
+            .and_then(Value::as_array)
+            .map(|rows| {
+                rows.iter()
+                    .filter_map(|row| {
+                        let id = row.get("accountId").and_then(Value::as_str)?.to_string();
+                        Some((id, row.get("limited").cloned().unwrap_or(json!([]))))
+                    })
+                    .collect::<HashMap<String, Value>>()
+            })
+            .unwrap_or_default(),
+        Err(_) => HashMap::new(),
+    };
+    if accounts.is_empty() {
+        return json!({
+            "ok": true,
+            "mode": if refresh { "official" } else { "local" },
+            "accounts": [],
+            "failed": 0,
+            "collectedAt": collected_at,
+        });
+    }
+
+    if !refresh {
+        // 本地口径：每账号取时间戳最新的一条快照，不发任何网络请求。
+        let snapshots = credit_usage::load_snapshots();
+        let mut latest: HashMap<String, &Value> = HashMap::new();
+        for snap in &snapshots {
+            let Some(id) = snap.get("accountId").and_then(Value::as_str) else {
+                continue;
+            };
+            let ts = snap.get("ts").and_then(Value::as_i64).unwrap_or(0);
+            let newer = match latest.get(id) {
+                Some(old) => ts > old.get("ts").and_then(Value::as_i64).unwrap_or(0),
+                None => true,
+            };
+            if newer {
+                latest.insert(id.to_string(), snap);
+            }
+        }
+        let rows: Vec<Value> = accounts
+            .iter()
+            .map(|acc| {
+                let id = acc.get("id").and_then(Value::as_str).unwrap_or("");
+                let snap = latest.get(id);
+                let has_snapshot = snap.is_some();
+                json!({
+                    "accountId": id,
+                    "label": account::account_display_name(acc),
+                    "variant": account::variant_of(acc).as_str(),
+                    "note": acc.get("note").cloned().unwrap_or(Value::Null),
+                    "ok": has_snapshot,
+                    "remaining": snap.map(|s| s.get("remaining").cloned().unwrap_or(Value::Null)).unwrap_or(Value::Null),
+                    "capacity": snap.map(|s| s.get("total").cloned().unwrap_or(Value::Null)).unwrap_or(Value::Null),
+                    "updatedAt": snap.map(|s| s.get("ts").cloned().unwrap_or(Value::Null)).unwrap_or(Value::Null),
+                    "packages": 0,
+                    "resources": [],
+                    "expiringSoonRemaining": Value::Null,
+                    "rateLimits": rate_by_account.get(id).cloned().unwrap_or(json!([])),
+                    "error": if has_snapshot { Value::Null } else { json!("暂无本地快照") },
+                })
+            })
+            .collect();
+        return json!({
+            "ok": true,
+            "mode": "local",
+            "accounts": rows,
+            "failed": 0,
+            "collectedAt": collected_at,
+        });
+    }
+
+    // 官方口径：并发拉取积分资源包。
+    let semaphore = std::sync::Arc::new(tokio::sync::Semaphore::new(CONCURRENCY));
+    let mut handles = Vec::with_capacity(accounts.len());
+    for acc in accounts {
+        let meta = json!({
+            "accountId": acc.get("id").cloned().unwrap_or(Value::Null),
+            "label": account::account_display_name(&acc),
+            "variant": account::variant_of(&acc).as_str(),
+            "note": acc.get("note").cloned().unwrap_or(Value::Null),
+        });
+        let permit = semaphore.clone();
+        handles.push(tokio::spawn(async move {
+            let _guard = permit.acquire().await;
+            let res = credits::get_credit_expiry(&acc).await;
+            // 成功的余额顺手写进本地快照：否则新登录的账号在「本地口径」下
+            // 永远是暂无快照，只有官方口径才有数（离线秒开也就无从谈起）。
+            if res.get("ok").and_then(Value::as_bool).unwrap_or(false) {
+                if let (Some(total), Some(remaining)) = (
+                    res.get("totalCapacity").and_then(Value::as_f64),
+                    res.get("totalRemaining").and_then(Value::as_f64),
+                ) {
+                    credit_usage::record_snapshot(
+                        meta["accountId"].as_str().unwrap_or(""),
+                        meta["label"].as_str().unwrap_or(""),
+                        total,
+                        remaining,
+                        WbVariant::parse(Some(meta["variant"].as_str().unwrap_or("cn"))),
+                    );
+                }
+            }
+            (meta, res)
+        }));
+    }
+
+    let mut rows = Vec::with_capacity(handles.len());
+    let mut failed = 0usize;
+    for handle in handles {
+        let Ok((meta, res)) = handle.await else {
+            failed += 1;
+            continue;
+        };
+        let ok = res.get("ok").and_then(Value::as_bool).unwrap_or(false);
+        if !ok {
+            failed += 1;
+        }
+        // 近期到期：只保留仍有剩余的包，按到期时间升序（前端展示前 2 条，其余进弹框）。
+        let mut packages: Vec<Value> = res
+            .get("resources")
+            .and_then(Value::as_array)
+            .cloned()
+            .unwrap_or_default()
+            .into_iter()
+            .filter(|resource| {
+                resource
+                    .get("remaining")
+                    .and_then(Value::as_f64)
+                    .unwrap_or(0.0)
+                    > 0.0
+            })
+            .collect();
+        packages.sort_by_key(|resource| {
+            resource
+                .get("expireAt")
+                .and_then(Value::as_i64)
+                .unwrap_or(i64::MAX)
+        });
+        rows.push(json!({
+            "accountId": meta["accountId"],
+            "label": meta["label"],
+            "variant": meta["variant"],
+            "note": meta["note"],
+            "ok": ok,
+            "remaining": res.get("totalRemaining").cloned().unwrap_or(Value::Null),
+            "capacity": res.get("totalCapacity").cloned().unwrap_or(Value::Null),
+            "updatedAt": res.get("updatedAt").cloned().unwrap_or(Value::Null),
+            "packages": packages.len(),
+            "resources": packages,
+            "expiringSoonRemaining": res.get("expiringSoonRemaining").cloned().unwrap_or(Value::Null),
+            "rateLimits": rate_by_account
+                .get(meta["accountId"].as_str().unwrap_or(""))
+                .cloned()
+                .unwrap_or(json!([])),
+            "error": res.get("error").cloned().unwrap_or(Value::Null),
+        }));
+    }
+
+    json!({
+        "ok": true,
+        "mode": "official",
+        "accounts": rows,
+        "failed": failed,
+        "collectedAt": collected_at,
+    })
+}
+
+// ───────────────────────── 运行日志（三源合并） ─────────────────────────
+
+/// core 的 `utc_iso()` 是 `2026-10-30T09-00-00Z`（时间用 `-` 分隔），按此解析成毫秒。
+fn parse_utc_iso_ms(text: &str) -> i64 {
+    chrono::NaiveDateTime::parse_from_str(text.trim_end_matches('Z'), "%Y-%m-%dT%H-%M-%S")
+        .map(|dt| dt.and_utc().timestamp_millis())
+        .unwrap_or(0)
+}
+
+/// 自动日常的 status 转成人话标题（前端只负责显示）。
+fn auto_status_label(status: &str) -> String {
+    match status {
+        "ok" | "success" | "completed" => "自动日常 · 全部成功".to_string(),
+        "partial" => "自动日常 · 部分成功".to_string(),
+        "busy" => "自动日常 · 跳过（任务进行中）".to_string(),
+        "error" | "failed" => "自动日常 · 失败".to_string(),
+        other => format!("自动日常 · {other}"),
+    }
+}
+
+fn auto_status_level(status: &str) -> &'static str {
+    match status {
+        "ok" | "success" | "completed" => "success",
+        "partial" | "busy" => "warning",
+        "error" | "failed" => "error",
+        _ => "info",
+    }
+}
+
+/// 切换历史 → 运行日志条目：一次切换一行，级别由结果决定。
+///
+/// 与另外三源的分工：三源只有一句提示（「切号失败」），这里带结构化前后对照
+/// （谁→谁、复制几条、耗时多久、身份校验结论），出事时能直接定位停在哪一步。
+fn switch_history_events() -> (Vec<Value>, usize) {
+    let payload = switch_history::load(0);
+    let Some(rows) = payload.get("entries").and_then(Value::as_array) else {
+        return (Vec::new(), 0);
+    };
+    let text = |row: &Value, key: &str| -> String {
+        row.get(key)
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string()
+    };
+    let mut items = Vec::with_capacity(rows.len());
+    for row in rows {
+        let result = text(row, "result");
+        let level = match result.as_str() {
+            "ok" => "success",
+            "rolled_back" => "warning",
+            _ => "error",
+        };
+        let named = |label: &str, uid: &str| -> String {
+            if label.is_empty() {
+                uid.to_string()
+            } else {
+                label.to_string()
+            }
+        };
+        let from = named(&text(row, "fromLabel"), &text(row, "fromUid"));
+        let to = named(&text(row, "toLabel"), &text(row, "toUid"));
+        let target = if from.is_empty() {
+            to
+        } else {
+            format!("{from} → {to}")
+        };
+        let title = match result.as_str() {
+            "ok" => format!("切换成功 {target}"),
+            "rolled_back" => format!("切换已回滚 {target}"),
+            _ => format!("切换中止 {target}"),
+        };
+
+        let mut parts: Vec<String> = Vec::new();
+        let mode = text(row, "mode");
+        if !mode.is_empty() {
+            parts.push(mode);
+        }
+        if let Some(sessions) = row.get("sessions").filter(|value| value.is_object()) {
+            let copied = sessions.get("copied").and_then(Value::as_i64).unwrap_or(0);
+            let total = sessions
+                .get("sourceTotal")
+                .and_then(Value::as_i64)
+                .unwrap_or(0);
+            let failed = sessions.get("failed").and_then(Value::as_i64).unwrap_or(0);
+            parts.push(format!("复制 {copied}/{total}"));
+            if failed > 0 {
+                parts.push(format!("失败 {failed}"));
+            }
+            if sessions.get("replaced").and_then(Value::as_bool) == Some(true) {
+                parts.push("已替换".to_string());
+            }
+        }
+        let identity = text(row, "identity");
+        if !identity.is_empty() && identity != "effective" {
+            parts.push(identity);
+        }
+        let cost = row.get("costMs").and_then(Value::as_i64).unwrap_or(0);
+        if cost > 0 {
+            parts.push(format!("耗时 {:.1}s", cost as f64 / 1000.0));
+        }
+        let error = text(row, "error");
+        if !error.is_empty() {
+            parts.push(error);
+        }
+        items.push(json!({
+            "at": row.get("ts").and_then(Value::as_i64).unwrap_or(0),
+            "source": "switch",
+            "level": level,
+            "title": title,
+            "detail": parts.join(" · "),
+        }));
+    }
+    (items, rows.len())
+}
+
+/// 运行日志：通知存档 + 自动日常记录 + 错误日志 + 切换历史，合并成一条时间轴（新→旧）。
+#[tauri::command]
+pub fn events_list(limit: Option<usize>) -> Value {
+    let limit = limit.unwrap_or(300).clamp(20, 1000);
+    let mut items: Vec<Value> = Vec::new();
+    let mut notify_count = 0usize;
+    let mut error_count = 0usize;
+    let mut load_errors: Vec<String> = Vec::new();
+
+    // 1) 通知存档：签到 / 成长 / 切换 / 扫码采集等一次性提示的回看
+    match notifications::list() {
+        Ok(rows) => {
+            notify_count = rows.len();
+            for row in rows {
+                items.push(json!({
+                    "at": row.at,
+                    "source": "notify",
+                    "level": row.level,
+                    "title": row.title,
+                    "detail": row.description,
+                }));
+            }
+        }
+        Err(error) => load_errors.push(format!("通知存档：{error}")),
+    }
+
+    // 2) 自动日常：每条记录一次到点执行
+    let auto_logs = scheduler::load_logs();
+    let auto_count = auto_logs.len();
+    for row in auto_logs {
+        let status = row.get("status").and_then(Value::as_str).unwrap_or("unknown");
+        let total = row.get("total").and_then(Value::as_i64).unwrap_or(0);
+        let ok = row.get("ok").and_then(Value::as_i64).unwrap_or(0);
+        let other = row.get("other").and_then(Value::as_i64).unwrap_or(0);
+        let clock = row.get("time").and_then(Value::as_str).unwrap_or("-");
+        let at = row
+            .get("ts")
+            .and_then(Value::as_str)
+            .map(parse_utc_iso_ms)
+            .unwrap_or(0);
+        items.push(json!({
+            "at": at,
+            "source": "auto",
+            "level": auto_status_level(status),
+            "title": auto_status_label(status),
+            "detail": format!("计划 {clock} · 共 {total} 个账号 · 成功 {ok} · 其它 {other}"),
+        }));
+    }
+
+    // 3) 错误日志：JSON Lines，一行一条
+    let error_path = error_log::error_log_path();
+    let error_text = std::fs::read_to_string(&error_path).unwrap_or_default();
+    for line in error_text.lines().filter(|line| !line.trim().is_empty()) {
+        let Ok(row) = serde_json::from_str::<Value>(line) else {
+            continue;
+        };
+        error_count += 1;
+        let kind = row.get("kind").and_then(Value::as_str).unwrap_or("backend");
+        let message = row.get("message").and_then(Value::as_str).unwrap_or("（无标题）");
+        let detail = row.get("detail").and_then(Value::as_str).unwrap_or("");
+        items.push(json!({
+            "at": row.get("ts").and_then(Value::as_i64).unwrap_or(0),
+            "source": "error",
+            "level": "error",
+            "title": message,
+            "detail": if detail.is_empty() { kind.to_string() } else { format!("{kind} · {detail}") },
+        }));
+    }
+
+    // 4) 切换历史：结构化前后对照（谁→谁 / 复制几条 / 耗时 / 身份校验）
+    let (switch_items, switch_count) = switch_history_events();
+    items.extend(switch_items);
+
+    // 新→旧
+    items.sort_by(|left, right| {
+        right
+            .get("at")
+            .and_then(Value::as_i64)
+            .unwrap_or(0)
+            .cmp(&left.get("at").and_then(Value::as_i64).unwrap_or(0))
+    });
+
+    let total = items.len();
+    let today_start = {
+        use chrono::TimeZone;
+        let now = chrono::Local::now();
+        now.date_naive()
+            .and_hms_opt(0, 0, 0)
+            .and_then(|naive| chrono::Local.from_local_datetime(&naive).single())
+            .map(|dt| dt.timestamp_millis())
+            .unwrap_or(0)
+    };
+    let today = items
+        .iter()
+        .filter(|row| row.get("at").and_then(Value::as_i64).unwrap_or(0) >= today_start)
+        .count();
+    let warning = items
+        .iter()
+        .filter(|row| row.get("level").and_then(Value::as_str) == Some("warning"))
+        .count();
+    let error_level = items
+        .iter()
+        .filter(|row| row.get("level").and_then(Value::as_str) == Some("error"))
+        .count();
+
+    items.truncate(limit);
+
+    json!({
+        "ok": true,
+        "items": items,
+        "truncated": total > limit,
+        "stats": {
+            "total": total,
+            "today": today,
+            "warning": warning,
+            "error": error_level,
+            "notify": notify_count,
+            "auto": auto_count,
+            "errlog": error_count,
+            "switch": switch_count,
+        },
+        "loadErrors": load_errors,
+        "generatedAt": config::now_ms(),
+    })
+}
+
+/// 清空某一源的日志：notify / auto / error / switch。只删本机存档，不动账号库。
+#[tauri::command]
+pub fn events_clear(source: String) -> Value {
+    let outcome = match source.as_str() {
+        "notify" => notifications::clear(),
+        "auto" => scheduler::clear_logs().map_err(|error| error.to_string()),
+        "error" => {
+            let path = error_log::error_log_path();
+            std::fs::write(&path, "").map_err(|error| error.to_string())
+        }
+        // 切换历史是结构化存档：清空 = 重置为空列表，保留文件与版本号。
+        "switch" => switch_history::clear().map(|_| ()),
+        other => return json!({ "ok": false, "error": format!("未知来源：{other}") }),
+    };
+    match outcome {
+        Ok(()) => json!({ "ok": true }),
+        Err(error) => json!({ "ok": false, "error": error }),
+    }
+}
+
+// ───────────────────────── 切换历史 ─────────────────────────
+
+/// 切换历史列表：`limit` 为 0 或缺省返回全量（上限 500 条，新→旧）。
+///
+/// 与 `events_list` 的 `switch` 源同数据，但这里是**原始结构**：带 uid、模式、
+/// 身份校验结论、会话摘要，供「切换记录」面板做筛选与详情展开。
+#[tauri::command]
+pub fn switch_history_list(limit: Option<usize>) -> Value {
+    switch_history::load(limit.unwrap_or(0))
+}
+
+/// 清空切换历史，返回删除条数。
+#[tauri::command]
+pub fn switch_history_clear() -> Value {
+    match switch_history::clear() {
+        Ok(removed) => json!({ "ok": true, "removed": removed }),
+        Err(error) => json!({ "ok": false, "error": error }),
+    }
+}
+
+// ───────────────────────── 系统设置 ─────────────────────────
+
+/// 字节数转人类可读（后端只给原始字节 + 展示串，前端不用再算）。
+fn human_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 4] = ["B", "KB", "MB", "GB"];
+    let mut value = bytes as f64;
+    let mut unit = 0usize;
+    while value >= 1024.0 && unit < UNITS.len() - 1 {
+        value /= 1024.0;
+        unit += 1;
+    }
+    if unit == 0 {
+        format!("{}{}", bytes, UNITS[unit])
+    } else {
+        format!("{value:.1}{}", UNITS[unit])
+    }
+}
+
+/// 系统信息：版本 / 数据目录 / 各存档体积与条数 / 调度摘要。
+#[tauri::command]
+pub fn system_info() -> Value {
+    let store = config::store_dir();
+    let accounts = account::load_accounts();
+    let notify_count = notifications::list().map(|rows| rows.len()).unwrap_or(0);
+    let auto_logs = scheduler::load_logs().len();
+    let error_lines = std::fs::read_to_string(error_log::error_log_path())
+        .map(|text| text.lines().filter(|line| !line.trim().is_empty()).count())
+        .unwrap_or(0);
+    let switch_count = switch_history::load(0)
+        .get("total")
+        .and_then(Value::as_u64)
+        .unwrap_or(0) as usize;
+
+    let file_stat = |name: &str| {
+        let path = store.join(name);
+        let bytes = std::fs::metadata(&path).map(|meta| meta.len()).unwrap_or(0);
+        json!({ "exists": path.exists(), "bytes": bytes, "human": human_bytes(bytes) })
+    };
+
+    json!({
+        "ok": true,
+        "version": wb_switch_core::modules::update::APP_VERSION,
+        "os": std::env::consts::OS,
+        "arch": std::env::consts::ARCH,
+        "storeDir": store.display().to_string(),
+        "accountCount": accounts.len(),
+        "counts": {
+            "notify": notify_count,
+            "autoLogs": auto_logs,
+            "errorLines": error_lines,
+            "switchHistory": switch_count,
+        },
+        "files": {
+            "accounts": file_stat("accounts.json"),
+            "autoLogs": file_stat("auto_daily_logs.json"),
+            "notifications": file_stat("notifications.json"),
+            "errorLog": file_stat("error.log"),
+            "switchHistory": file_stat("switch_history.json"),
+        },
+        "schedule": scheduler::load_config(),
+    })
+}
+
+/// 打开数据目录（资源管理器 / Finder / xdg-open）。
+#[tauri::command]
+pub fn open_store_dir() -> Value {
+    let dir = config::store_dir();
+    let _ = std::fs::create_dir_all(&dir);
+    let target = dir.display().to_string();
+    #[cfg(target_os = "windows")]
+    let spawned = std::process::Command::new("explorer").arg(&target).spawn();
+    #[cfg(target_os = "macos")]
+    let spawned = std::process::Command::new("open").arg(&target).spawn();
+    #[cfg(all(unix, not(target_os = "macos")))]
+    let spawned = std::process::Command::new("xdg-open").arg(&target).spawn();
+    match spawned {
+        Ok(_) => json!({ "ok": true, "path": target }),
+        Err(error) => json!({ "ok": false, "path": target, "error": error.to_string() }),
+    }
+}

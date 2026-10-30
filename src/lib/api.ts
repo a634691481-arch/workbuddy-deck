@@ -1,0 +1,614 @@
+import { invoke } from "@tauri-apps/api/core";
+
+/** 账号摘要（不含任何令牌字段）。 */
+export interface AccountSummary {
+  id: string;
+  label: string;
+  variant: string;
+  note?: string | null;
+}
+
+export interface AccountList {
+  total: number;
+  accounts: AccountSummary[];
+}
+
+/** 官方任务清单条目（字段名来自服务端，保持原样透传）。 */
+export interface GrowthTask {
+  task_code: string;
+  title?: string;
+  task_desc?: string;
+  accept_status?: string;
+  progress?: { current?: number; target?: number } | null;
+  reward_credit?: number;
+  reward_energy?: number;
+}
+
+export interface GrowthRow {
+  accountId?: string;
+  email?: string;
+  total?: number;
+  done?: number;
+  claimable?: string[];
+  tasks?: GrowthTask[];
+}
+
+/** 签到状态：`raw` 是服务端原始字段，放到「原始响应」页展示。 */
+export interface CheckinStatus {
+  ok?: boolean;
+  todayCheckedIn?: boolean;
+  statusUnsupported?: boolean;
+  error?: string;
+  raw?: Record<string, unknown>;
+}
+
+export interface AccountDetail {
+  accountId: string;
+  variant: string;
+  checkin: CheckinStatus;
+  growth: GrowthRow;
+  today: string;
+}
+
+/** 积分余额（只保留交付字段）。 */
+export interface Balance {
+  ok: boolean;
+  remaining?: number | null;
+  capacity?: number | null;
+  error?: string | null;
+}
+
+/** 全账号积分汇总。 */
+export interface TotalBalance {
+  ok: boolean;
+  total: number;
+  failed: number;
+  accounts: {
+    accountId: string;
+    label: string;
+    ok: boolean;
+    remaining?: number | null;
+    error?: string | null;
+  }[];
+}
+
+/** 浏览器登录发起结果。 */
+export interface LoginStart {
+  ok: boolean;
+  loginId?: string;
+  url?: string;
+  expiresIn?: number;
+  browserOpened?: boolean;
+  browserError?: string;
+  error?: string;
+}
+
+/** 登录轮询结果。done=false 表示还没授权完；result 是入库后的账号 meta（含昵称）。 */
+export interface LoginPoll {
+  done: boolean;
+  result?: {
+    id?: string;
+    uid?: string | null;
+    nickname?: string | null;
+    email?: string | null;
+    enterpriseName?: string | null;
+    variant?: string | null;
+  } | null;
+  error?: string | null;
+}
+
+export interface RunRow {
+  accountId?: string | null;
+  label?: string;
+  result?: string;
+  reason?: string;
+  error?: string;
+  claimed?: unknown[];
+  claimedCount?: number;
+  checkin?: string;
+  travel?: string;
+}
+
+/** 批量执行的可观察进度（界面轮询 run_status）。 */
+export interface RunStatus {
+  running: boolean;
+  cancelled: boolean;
+  action: string;
+  total: number;
+  done: number;
+  ok: number;
+  fail: number;
+  skip: number;
+  current: string;
+}
+
+export interface RunResult {
+  /** done | cancelled | busy | unsupported */
+  status?: string;
+  accounts: RunRow[];
+}
+
+export const listAccounts = () => invoke<AccountList>("list_accounts");
+
+export const runStatus = () => invoke<RunStatus>("run_status");
+
+export const cancelRun = () => invoke<{ cancelled: boolean }>("cancel_run");
+
+export const launchMainApp = () =>
+  invoke<{ started: boolean; path?: string; error?: string }>("launch_main_app");
+
+export const accountDetail = (accountId: string) =>
+  invoke<AccountDetail>("account_detail", { accountId });
+
+export const totalBalance = () => invoke<TotalBalance>("total_balance");
+
+export const startLogin = (variant?: string) =>
+  invoke<LoginStart>("start_login", variant ? { variant } : {});
+
+export const pollLogin = (loginId: string) => invoke<LoginPoll>("poll_login", { loginId });
+
+export interface ExportResult {
+  ok: boolean;
+  path?: string;
+  count?: number;
+  error?: string;
+}
+
+export interface ImportResult {
+  ok: boolean;
+  imported?: number;
+  skipped?: number;
+  overwritten?: number;
+  error?: string;
+}
+
+export const exportAccountsFile = (path: string, accountIds: string[] = []) =>
+  invoke<ExportResult>("export_accounts_file", { path, accountIds });
+
+export const previewImportFile = (path: string) =>
+  invoke<{ ok: boolean; preview?: unknown; error?: string }>("preview_import_file", { path });
+
+export const importAccountsFile = (path: string) =>
+  invoke<ImportResult>("import_accounts_file", { path });
+
+export const accountBalance = (accountId: string) =>
+  invoke<Balance>("account_balance", { accountId });
+
+export const checkinNow = (accountId: string) =>
+  invoke<RunRow>("checkin_now", { accountId });
+
+/** 空数组 = 全部账号。 */
+export const runCheckin = (accountIds: string[] = []) =>
+  invoke<RunResult>("run_checkin", { accountIds });
+
+export const runGrowth = (accountIds: string[] = []) =>
+  invoke<RunResult>("run_growth", { accountIds });
+
+export const runTravel = (accountIds: string[] = []) =>
+  invoke<RunResult>("run_travel", { accountIds });
+
+export const runDaily = (accountIds: string[] = []) =>
+  invoke<RunResult>("run_daily", { accountIds });
+
+/** 每日自动执行配置（存后端，跨会话生效）。 */
+export interface AutoDailyConfig {
+  enabled: boolean;
+  time: string;
+  lastRunDate: string;
+}
+
+/** 自动执行日志行（后端裁剪：500 条 / 30 天）。 */
+export interface AutoDailyLog {
+  ts: string;
+  date: string;
+  time?: string;
+  status?: string;
+  total?: number;
+  ok?: number;
+  other?: number;
+}
+
+export const autoDailyGet = () =>
+  invoke<{ config: AutoDailyConfig; logs: AutoDailyLog[] }>("auto_daily_get");
+
+export const autoDailySet = (enabled: boolean, time: string) =>
+  invoke<{ ok: boolean; config?: AutoDailyConfig; error?: string }>("auto_daily_set", {
+    enabled,
+    time,
+  });
+
+// ─────────────────────────── 统计（积分 / Token） ───────────────────────────
+
+export interface CreditDailyPoint {
+  date: string;
+  usage: number;
+}
+
+export interface CreditAccountRow {
+  accountId: string;
+  accountName?: string | null;
+  variant?: string | null;
+  isCurrent?: boolean;
+  currentRemaining?: number | null;
+  totalCapacity?: number | null;
+  usageToday: number;
+  usage7Days: number;
+  usageThisMonth: number;
+  checkinStatusToday?: string | null;
+  lastSnapshotAt?: number | null;
+  daily?: CreditDailyPoint[];
+}
+
+/** 官方用量里的模型聚合：credit 为消耗积分，requestCount 为调用次数。 */
+export interface CreditOfficialModel {
+  model: string;
+  requestCount: number;
+  credit: number;
+}
+
+export interface CreditOfficialDailyPoint extends CreditDailyPoint {
+  models?: CreditOfficialModel[];
+}
+
+/** 官方请求流水的一条记录；字段来自官方只读接口，不含提示词正文。 */
+export interface CreditOfficialRequest {
+  accountId: string;
+  accountName: string;
+  requestId: string;
+  credit: number;
+  model: string;
+  client: string;
+  requestTime: string;
+}
+
+export interface CreditOfficialAccount {
+  accountId: string;
+  accountName: string;
+  ok: boolean;
+  requestCount: number;
+  reportedTotal?: number | null;
+  detailTruncated?: boolean;
+  usageToday?: number | null;
+  usage7Days?: number | null;
+  usageThisMonth?: number | null;
+  models?: CreditOfficialModel[];
+  daily?: CreditOfficialDailyPoint[];
+  error?: string | null;
+}
+
+/**
+ * 官方积分用量。`status` 决定前端能否使用：
+ * - complete / partial：可用（partial 表示部分账号失败，失败账号的数值为 null）
+ * - unavailable：不可用，页面回退到本地快照口径
+ */
+export interface CreditOfficialUsage {
+  status: "complete" | "partial" | "unavailable";
+  rangeStart: string;
+  rangeEnd: string;
+  collectedAt: number;
+  summary: { usageToday: number; usage7Days: number; usageThisMonth: number };
+  daily: CreditOfficialDailyPoint[];
+  accounts: CreditOfficialAccount[];
+  requests: CreditOfficialRequest[];
+  models: CreditOfficialModel[];
+  detailLimitPerAccount: number;
+  errors: { accountId: string; accountName: string; error: string }[];
+}
+
+export interface CreditStatistics {
+  generatedAt: number;
+  coverageStartAt?: number | null;
+  summary: {
+    currentRemaining: number;
+    currentCapacity: number;
+    usageToday: number;
+    usage7Days: number;
+    usageThisMonth: number;
+    todayCheckedInAccounts: number;
+    todaySuccess: number;
+    todayAlready: number;
+    todayFailed: number;
+  };
+  daily: CreditDailyPoint[];
+  accounts: CreditAccountRow[];
+  events?: unknown[];
+  /** 官方用量不一定存在（旧后端 / 演示模式）；前端按 status 判断可用性。 */
+  officialUsage?: CreditOfficialUsage;
+}
+
+export const creditStatistics = (refresh = false) =>
+  invoke<CreditStatistics>("credit_statistics", { refresh });
+
+export interface TokenTotals {
+  total: number;
+  input: number;
+  output: number;
+  cacheRead: number;
+  cacheWrite: number;
+  uncachedInput: number;
+  records: number;
+  cacheHitRate?: number | null;
+}
+
+export interface TokenGroup extends TokenTotals {
+  key: string;
+}
+
+export interface TokenSession extends TokenTotals {
+  key: string;
+  title?: string | null;
+  project?: string | null;
+  sessionId?: string | null;
+}
+
+/** 单次模型调用的明细行（仅 detail 数据源返回，已脱敏：无正文/绝对路径）。 */
+export interface TokenRequest extends TokenTotals {
+  timestamp: number;
+  model: string;
+  project: string;
+  sessionId: string;
+  title?: string | null;
+  thinking: number;
+}
+
+export interface TokenSource {
+  source: string;
+  summary: TokenTotals;
+  models: TokenGroup[];
+  projects: TokenGroup[];
+  sessions: TokenSession[];
+  daily: TokenGroup[];
+  dailyByModel?: Record<string, TokenGroup[]>;
+  hours: TokenGroup[];
+  requests?: TokenRequest[];
+  filesScanned: number;
+  parseErrors?: number;
+  coverageStartAt?: number | null;
+  coverageEndAt?: number | null;
+}
+
+export interface TokenStatistics {
+  generatedAt: number;
+  rangeDays?: number | null;
+  sources: TokenSource[];
+  /** 后端 5 分钟缓存命中时为 true（秒回）；「重新扫描」强制重算则为 false。 */
+  cached?: boolean;
+  error?: string;
+}
+
+/** days: 0 = 全部时间；7 / 30 / 90 为窗口。refresh=true 跳过缓存强制重扫。 */
+export const tokenStatistics = (days = 0, refresh = false) =>
+  invoke<TokenStatistics>("token_statistics", { days, refresh });
+
+export const accountDelete = (accountId: string) =>
+  invoke<{ ok: boolean; error?: string }>("account_delete", { accountId });
+
+export const accountSetNote = (accountId: string, note: string) =>
+  invoke<{ ok: boolean; error?: string }>("account_set_note", { accountId, note });
+
+/** 单个积分包（官方资源包口径，字段与 core 的 credits 模块一致）。 */
+export interface AccountPackage {
+  packageCode?: string | null;
+  packageName?: string | null;
+  total: number;
+  remaining: number;
+  used: number;
+  expireAt: number | null;
+  expired: boolean;
+  expiringSoon: boolean;
+}
+
+/** 该账号当前被限额的模型（来自本机日志台账 + hook 事件，官方恢复时刻）。 */
+export interface AccountRateLimit {
+  model: string | null;
+  resetAt: number;
+  firstSeenAt?: number | null;
+  hitCount?: number | null;
+}
+
+export interface AccountOverviewRow {
+  accountId: string;
+  label: string;
+  variant: string;
+  note?: string | null;
+  ok: boolean;
+  remaining: number | null;
+  capacity: number | null;
+  updatedAt: number | null;
+  packages: number;
+  resources: AccountPackage[];
+  /** 即将到期的积分额度；> 0 时卡片显示「建议优先使用」。 */
+  expiringSoonRemaining?: number | null;
+  rateLimits?: AccountRateLimit[];
+  error?: string | null;
+}
+
+/**
+ * 账号卡片总览。mode=local 时余额来自本地采集快照（离线秒开）；
+ * mode=official 时为官方实时口径，resources 带积分包明细（按到期升序，最多 6 个）。
+ */
+export interface AccountOverview {
+  ok: boolean;
+  mode: "local" | "official";
+  accounts: AccountOverviewRow[];
+  failed: number;
+  collectedAt: number;
+}
+
+export const accountOverview = (refresh = false) =>
+  invoke<AccountOverview>("account_overview", { refresh });
+
+/** 一键刷新全部账号 token 的逐号结果。 */
+export interface TokenRefreshResult {
+  ok: boolean;
+  total: number;
+  refreshed: number;
+  failed: number;
+  results: { label: string; ok: boolean; error?: string | null }[];
+  startedAt: number;
+}
+
+export const refreshAllTokens = () => invoke<TokenRefreshResult>("refresh_all_tokens");
+
+/** WorkBuddy 运行状态 + 当前登录账号（auth 文件与账号库匹配的结果）。 */
+export interface WorkbuddyStatus {
+  running: boolean;
+  currentAccountIds: string[];
+  current: {
+    uid: string | null;
+    email: string | null;
+    nickname: string | null;
+    variant: string | null;
+  } | null;
+}
+
+export const workbuddyStatus = () => invoke<WorkbuddyStatus>("workbuddy_status");
+
+/** 设为 WorkBuddy 当前账号（完全同步：替换目标账号会话并重启 WorkBuddy）。 */
+export interface SwitchResult {
+  /**
+   * 是否成功。失败时后端**不拦截**，而是把错误一起返回，
+   * 因此 `ok` 必须显式判断，不能靠 try/catch。
+   */
+  ok: boolean;
+  error?: string;
+  /** ok | rolled_back | blocked */
+  result?: "ok" | "rolled_back" | "blocked";
+  /** done | session | auth_write | verify | launch */
+  stage?: string;
+  /** effective | identity-mismatch | identity-unverified */
+  identity?: string;
+  costMs?: number;
+  /** 写后校验失败或写入失败时，是否已把认证文件还原 */
+  rolledBack?: boolean;
+  sessions?: {
+    copied?: number;
+    sourceTotal?: number;
+    failed?: number;
+    replaced?: boolean;
+  } | null;
+  backup?: string | null;
+  sessionReplace?: {
+    replaced?: boolean;
+    copied?: number;
+    failed?: number;
+    sourceTotal?: number;
+    reason?: string;
+    delete?: { deleted?: string[] };
+    error?: string;
+  } | null;
+  [key: string]: unknown;
+}
+
+export const switchWorkbuddyAccount = (accountId: string) =>
+  invoke<SwitchResult>("switch_workbuddy_account", { accountId });
+
+/** 切换历史（结构化，非日志文案）。 */
+export interface SwitchHistorySessions {
+  copied: number;
+  sourceTotal: number;
+  failed: number;
+  replaced: boolean;
+}
+
+export interface SwitchHistoryEntry {
+  ts: number;
+  result: "ok" | "rolled_back" | "blocked";
+  stage: string;
+  accountId: string;
+  toUid: string;
+  toLabel: string;
+  fromUid: string;
+  fromLabel: string;
+  variant: string;
+  mode: "plain" | "copy" | "sync" | "replace";
+  identity: string;
+  costMs: number;
+  sessions?: SwitchHistorySessions | null;
+  error?: string | null;
+}
+
+export interface SwitchHistoryList {
+  ok: boolean;
+  version?: number;
+  total: number;
+  limit?: number;
+  entries: SwitchHistoryEntry[];
+  error?: string;
+}
+
+/** `limit` 为 0 返回全量（上限 500）。 */
+export const switchHistoryList = (limit = 0) =>
+  invoke<SwitchHistoryList>("switch_history_list", { limit });
+
+export const switchHistoryClear = () =>
+  invoke<{ ok: boolean; removed?: number; error?: string }>("switch_history_clear");
+
+/** ─────────────── 运行日志（通知存档 / 自动日常 / 错误日志 / 切换历史） ─────────────── */
+
+export type EventSource = "notify" | "auto" | "error" | "switch";
+export type EventLevel = "success" | "info" | "warning" | "error";
+
+export interface RunEvent {
+  at: number;
+  source: EventSource;
+  level: EventLevel;
+  title: string;
+  detail?: string | null;
+}
+
+export interface EventStatistics {
+  total: number;
+  today: number;
+  warning: number;
+  error: number;
+  notify: number;
+  auto: number;
+  errlog: number;
+  switch: number;
+}
+
+export interface EventList {
+  ok: boolean;
+  items: RunEvent[];
+  truncated: boolean;
+  stats: EventStatistics;
+  loadErrors: string[];
+  generatedAt: number;
+}
+
+export const eventsList = (limit = 300) => invoke<EventList>("events_list", { limit });
+
+export const eventsClear = (source: EventSource) =>
+  invoke<{ ok: boolean; error?: string }>("events_clear", { source });
+
+/** ─────────────── 系统信息 ─────────────── */
+
+export interface FileStat {
+  exists: boolean;
+  bytes: number;
+  human: string;
+}
+
+export interface SystemInfo {
+  ok: boolean;
+  version: string;
+  os: string;
+  arch: string;
+  storeDir: string;
+  accountCount: number;
+  counts: { notify: number; autoLogs: number; errorLines: number; switchHistory: number };
+  files: {
+    accounts: FileStat;
+    autoLogs: FileStat;
+    notifications: FileStat;
+    errorLog: FileStat;
+    switchHistory: FileStat;
+  };
+  schedule: { enabled?: boolean; time?: string; lastRunDate?: string };
+}
+
+export const systemInfo = () => invoke<SystemInfo>("system_info");
+
+export const openStoreDir = () =>
+  invoke<{ ok: boolean; path: string; error?: string }>("open_store_dir");
