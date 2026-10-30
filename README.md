@@ -14,6 +14,11 @@ Built for people running several WorkBuddy accounts who click through check-in a
 </p>
 
 <p align="center">
+  <a href="https://a634691481-arch.github.io/workbuddy-deck/"><b>Landing page</b></a> ·
+  <a href="https://github.com/a634691481-arch/workbuddy-deck/releases/latest">Download</a>
+</p>
+
+<p align="center">
   <a href="https://github.com/a634691481-arch/workbuddy-deck/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/a634691481-arch/workbuddy-deck?style=flat&label=stars"></a>
   <a href="https://github.com/a634691481-arch/workbuddy-deck/issues"><img alt="Issues" src="https://img.shields.io/github/issues/a634691481-arch/workbuddy-deck?style=flat"></a>
   <a href="https://github.com/a634691481-arch/workbuddy-deck/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/a634691481-arch/workbuddy-deck?style=flat"></a>
