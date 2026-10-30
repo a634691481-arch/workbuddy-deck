@@ -27,9 +27,6 @@ jobs:
             bundles: appimage,deb
           - os: macos-latest
             bundles: app,dmg
-          # Intel Mac 用 macos-15-intel：macos-13 标签已下线，任务会永远卡在 queued
-          - os: macos-15-intel
-            bundles: app,dmg
 
     runs-on: ${{ matrix.os }}
     permissions:
@@ -76,6 +73,70 @@ jobs:
           prerelease: false
           includeUpdaterJson: true
           args: --bundles ${{ matrix.bundles }}
+
+      # 免安装版：Windows 只有一个裸 exe 可直接跑（Win10/11 自带 WebView2），
+      # 打成 zip 挂到同一个 Release。Linux 的 AppImage、macOS 的 .app.tar.gz 本身就免安装。
+      - name: Package portable zip
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+        run: |
+          $ver = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          New-Item -ItemType Directory -Force -Path portable | Out-Null
+          Copy-Item "src-tauri/target/release/workbuddy-task-assistant.exe" "portable/WorkBuddyDeck.exe"
+          @"
+          WorkBuddy Deck v$ver - 免安装版
+          ================================
+          双击 WorkBuddyDeck.exe 即可运行，不写注册表、不建开始菜单。
+          数据仍存在 %USERPROFILE%\.wb-switch，与安装版共用；卸载安装版不会删数据。
+          前置：Windows 10/11 自带 WebView2 运行时（缺了系统会提示安装）。
+
+          注意：免安装版不支持自动更新，升级请重新下载 zip。
+          "@ | Set-Content -Encoding UTF8 portable/README.txt
+          $zip = "WorkBuddy.Deck_${ver}_x64-portable.zip"
+          Compress-Archive -Path "portable/*" -DestinationPath $zip -Force
+          Write-Output "uploading $zip"
+          gh release upload $env:TAG $zip --clobber
+
+  # Intel Mac 单独跑，且不阻塞发布：
+  # macos-15-intel 属于较新的标签，若拿不到机器会一直 queued（45 分钟后被丢弃），
+  # 放进主矩阵会让 verify 永远等不到。这里失败/排队都不影响 App Store 之外的发布。
+  build-intel-mac:
+    continue-on-error: true
+    runs-on: macos-15-intel
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+          key: macos-intel
+
+      - run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+          releaseName: "WorkBuddy Deck ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}"
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+          args: --bundles app,dmg
 
   # 闸门：所有平台构建完再验一次 latest.json，缺了就让整条流水线红。
   # 曾在中文 productName 时静默跳过（GitHub 换掉非 ASCII 文件名，.sig 对不上）。
