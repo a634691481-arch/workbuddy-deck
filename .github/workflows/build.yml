@@ -1,0 +1,67 @@
+name: build
+
+# 每次 push 到 main 都自动构建，产物挂在 Actions 的 Artifact 里（不进 Releases）。
+# 为什么不直接发 Release：版本号没变就重发会让「latest 指向谁」变得不可解释，
+# 客户端也无法区分。Release 只由 tag 触发（见 release.yml）。
+on:
+  push:
+    branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+  pull_request:
+  workflow_dispatch:
+
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      # 主分支：出安装包（需要私钥签名，secrets 只在自家仓库可见）
+      - name: Build installer
+        if: github.event_name != 'pull_request'
+        run: npm run tauri build -- --bundles nsis
+        env:
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+
+      # PR（含 fork）：只出 exe，不签名，避免拿不到 secrets 时整条流水线红
+      - name: Build exe only
+        if: github.event_name == 'pull_request'
+        run: npm run tauri build -- --no-bundle
+
+      - name: Upload installer
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbuddy-deck-installer-${{ github.sha }}
+          path: |
+            src-tauri/target/release/bundle/nsis/*.exe
+            src-tauri/target/release/bundle/nsis/*.sig
+          retention-days: 14
+
+      - name: Upload portable exe
+        if: github.event_name == 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: workbuddy-deck-exe-${{ github.sha }}
+          path: src-tauri/target/release/workbuddy-task-assistant.exe
+          retention-days: 7
