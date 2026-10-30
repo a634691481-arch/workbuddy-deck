@@ -130,6 +130,16 @@ pub fn run() {
                 let _ = window.hide();
             }
         })
+        // 调试/截图辅助：WB_START_NAV=tasks 等让窗口直达指定分区。
+        // 前端监听 hashchange，这里只改 hash，不 reload（幂等比较防重复触发）。
+        .on_page_load(|webview, _payload| {
+            if let Ok(nav) = std::env::var("WB_START_NAV") {
+                let _ = webview.eval(format!(
+                    "if (window.location.hash !== '#{n}') window.location.hash = '#{n}';",
+                    n = nav
+                ));
+            }
+        })
         .run(tauri::generate_context!())
         .expect("启动 WorkBuddy 任务助手失败");
 }

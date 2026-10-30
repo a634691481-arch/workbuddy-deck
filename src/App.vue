@@ -19,11 +19,19 @@ import type { NavKey } from "@/lib/nav";
 
 const { accountCount, running, nav } = useShell();
 
-// hash 直达分区（浏览器预览调试用）：#tasks / #credits / #tokens / #accounts / #logs / #settings
+// hash 直达分区（浏览器预览与 WB_START_NAV 深链共用）：#tasks / #credits / #tokens / #accounts / #logs / #settings
 const NAV_KEYS: NavKey[] = ["accounts", "tasks", "credits", "tokens", "logs", "settings"];
+function navFromHash(): NavKey | null {
+  const key = window.location.hash.replace("#", "") as NavKey;
+  return NAV_KEYS.includes(key) ? key : null;
+}
 {
-  const fromHash = window.location.hash.replace("#", "") as NavKey;
-  if (NAV_KEYS.includes(fromHash)) nav.value = fromHash;
+  const fromHash = navFromHash();
+  if (fromHash) nav.value = fromHash;
+  window.addEventListener("hashchange", () => {
+    const key = navFromHash();
+    if (key) nav.value = key;
+  });
 }
 
 const views = {
