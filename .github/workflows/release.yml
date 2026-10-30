@@ -27,8 +27,8 @@ jobs:
             bundles: appimage,deb
           - os: macos-latest
             bundles: app,dmg
-          # Intel Mac 单独跑：latest.json 的 darwin-x86_64 条目必须有产出
-          - os: macos-13
+          # Intel Mac 用 macos-15-intel：macos-13 标签已下线，任务会永远卡在 queued
+          - os: macos-15-intel
             bundles: app,dmg
 
     runs-on: ${{ matrix.os }}
