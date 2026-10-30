@@ -91,22 +91,257 @@ src/
 ## 目标（闭环验收口径）
 一次切换必须做到：**要么全部生效，要么完全还原**，且事后可查。
 
-- [ ] core `auth_file`：新增身份三态校验 `Effective / Mismatch / Unverified`
-- [ ] core `switch`：写后校验身份，不符自动回滚到切换前认证文件
-- [ ] core `switch`：替换式同步 `replaced=false` 时**不再写认证**（fail-closed，带数字报错）
-- [ ] core 新模块 `switch_history`：500 条滚动，含 from/to/模式/原因/结果/耗时/前后余额
-- [ ] core `mod.rs` 注册
-- [ ] `commands.rs`：`switch_workbuddy_account` 返回结构化 report；新增 `switch_history_list` / `switch_history_clear`
-- [ ] `lib.rs` 注册两条新命令
-- [ ] `api.ts`：ROUTES + 类型 + 包装（字段与后端一一对应）
-- [ ] `AccountsView.vue`：失败/回滚显式提示带数字；成功提示带耗时
-- [ ] `LogsView.vue`：切换来源作为第四源 TAB，可单独清空
-- [ ] i18n zh/en 全量补齐，无裸 key
-- [ ] 验证：`cargo check` + `cargo clippy -D warnings` + `vue-tsc` + `vite build`
-- [ ] AGENTS.md / README 能力表同步
+- [x] core `auth_file`：新增身份三态校验 `Effective / Mismatch / Unverified`
+- [x] core `switch`：写后校验身份，不符自动回滚到切换前认证文件
+- [x] core `switch`：替换式同步 `replaced=false` 时**不再写认证**（fail-closed，带数字报错）
+- [x] core 新模块 `switch_history`：500 条滚动，含 from/to/模式/原因/结果/耗时/前后余额
+- [x] core `mod.rs` 注册
+- [x] `commands.rs`：`switch_workbuddy_account` 返回结构化 report；新增 `switch_history_list` / `switch_history_clear`
+- [x] `lib.rs` 注册两条新命令
+- [x] `api.ts`：ROUTES + 类型 + 包装（字段与后端一一对应）
+- [x] `AccountsView.vue`：失败/回滚显式提示带数字；成功提示带耗时
+- [x] `LogsView.vue`：切换来源作为第四源 TAB，可单独清空
+- [x] i18n zh/en 全量补齐，无裸 key
+- [x] 验证：`cargo check` + `cargo clippy -D warnings` + `vue-tsc` + `vite build`
+- [x] AGENTS.md / README 能力表同步
 
 ## 设计要点
 - 回滚用「切换前备份文件内容」而非备份路径，避免备份目录被清理后无法还原
 - 身份校验读**写后的文件**，不读内存值：校验的就是磁盘真相
 - 未定价/未验证一律不假装成功（三态里 `Unverified` 只在文件读不回来时出现，视为失败）
 - 历史记录写失败不得阻断切换本身（降级为 eprintln）
+
+## 回顾（2026-10-30 22:20 完成）
+
+**改了什么**
+| 层 | 文件 | 内容 |
+| --- | --- | --- |
+| core | `auth_file.rs` | `IdentityState` 三态 + `auth_identity_at` / `verify_identity` / `snapshot_auth_file` / `restore_auth_file`；写入函数内联 uid 校验 |
+| core | `switch_history.rs`（新） | 500 条滚动台账，`record` / `load` / `clear`，损坏与版本不符拒绝覆盖 |
+| core | `switch.rs` | 拆 `switch_account`（外层：快照+记历史）与 `_inner`（编排）；`SwitchTrace` 记录 stage；替换不完整 fail-closed；写后校验失败自动回滚 |
+| core | `mod.rs` | 注册 `switch_history` |
+| 命令 | `commands.rs` | 切换命令改为返回结构化（不抛 Err）；`switch_history_list` / `switch_history_clear`；`events_list` 加第四源；`system_info` 加台账统计 |
+| 注册 | `lib.rs` | 两条新命令 |
+| 前端 | `api.ts` | `SwitchResult` 扩字段；`SwitchHistory*` 类型 + 两个包装；`EventSource` 加 `switch` |
+| 前端 | `AccountsView.vue` | 失败现场留弹框（阶段/身份/原文 + 跳日志）；成功带耗时与身份提示 |
+| 前端 | `LogsView.vue` | 切换 TAB + 台账 4 格 + 分布条 |
+| 前端 | `SettingsView.vue` | 数据规模加切换历史行、维护区加清空 |
+| 文案 | `i18n.ts` | zh/en 各 18 个新 key |
+
+**验证证据**
+- `cargo check -p wb-switch-core` 通过
+- `cargo test -p wb-switch-core --lib`：825 passed / 4 failed，失败项全是 `process::tests::windows_registry_probe_*`（需 `reg.exe`，被本机安全策略拦截，与本次改动无关）
+- 新增单测 11 条：`switch_history` 7 条 + `auth_file` 4 条，全通过
+- `cargo clippy -- -D warnings`（task-assistant）通过（顺手修掉 `scheduler.rs` 一处冗余 cast）
+- `vue-tsc --noEmit` 通过；`vite build` 通过（`index-*.js` 279.28 kB）
+
+**测试抓到的真 bug**：`switch_history::record_at` 原本用 `load_at().unwrap_or_default()`，
+存档损坏时会把损坏文件覆盖成「只剩一条」。已改为 `load_at(root)?` 拒绝写入。
+
+**未做（明确留给下一批）**：P0-2 用量预测、P0-3 成本折算。
+
+---
+
+# 第 2 批：用量预测 + Token 环比（2026-10-30 22:5x）
+
+## 做了什么
+
+| 层 | 文件 | 内容 |
+| --- | --- | --- |
+| core | `modules/forecast.rs`（新） | `AccountForecast` + `account_forecasts`；中位数与 EWMA 取小；只算余额下降；跨天归一；样本 <3 天给 `insufficient`；`lastDelta` 兜冷启动 |
+| core | `modules/mod.rs` | 注册 `forecast` |
+| 命令 | `commands.rs` | `account_forecast(windowDays)` |
+| 注册 | `lib.rs` | 一行 |
+| 前端 | `api.ts` | `AccountForecastRow` / `AccountForecastList` / `accountForecast` |
+| 前端 | `AccountsView.vue` | 余额行追加 `≈2.4 天`（不占高度）；三态文案；hover 详情（日均/窗口/耗尽日/上次变动） |
+| 前端 | `TokensView.vue` | 日均格加环比 `▲12.3% 较前 7 天`，<14 天不显示 |
+| 文案 | `i18n.ts` | zh/en 各 9 key |
+
+## 关键决策（都写进 AGENTS.md 了）
+
+1. **不做 ¥ 成本折算**：WorkBuddy 模型别名（`deepseek-v4-flash` / `glm-5.3` / `kimi-k3`…）
+   没有公开单价，照抄竞品价目表只能编数据。改为「积分/天 + 样本天数」，全部可实测。
+2. **样本不足不预测**：真实数据当前 `basisDays=1`，全部 `insufficient`。这正确——
+   给「还能撑 0.4 天」比如实说「样本 1/3 天」更糟。冷启动靠 `lastDelta` 顶上。
+3. **取小不取大**：`min(median, ewma)` 偏保守，宁可早预警。
+
+## 验证
+
+- `cargo test -p wb-switch-core --lib forecast::` → 5 passed
+- `cargo clippy -- -D warnings`（两端）通过
+- `vue-tsc --noEmit` 通过；`vite build` 通过（282.83 kB）
+- 真实快照跑通：14 个账号全部 `insufficient`（basisDays=1），`lastDelta` 有值
+
+## 未做
+
+- 配额窗口建模（5h/7d/包/限流四窗口分开）——下一批
+- 账号健康评分、导出 CSV、托盘读数
+
+---
+
+# 第 3 批：账号健康分（2026-10-30 23:0x）
+
+## 做了什么
+
+| 层 | 文件 | 内容 |
+| --- | --- | --- |
+| core | `modules/health.rs`（新） | `HealthInput` + `account_health`：0-100 分 + `good/warn/critical` + 原因码 |
+| core | `modules/forecast.rs` | `forecast_account` → `forecast_from(snapshots, ...)`：一批账号共用一次快照读取，避免 O(N) 次磁盘 IO |
+| 命令 | `commands.rs` | `account_health_of(row, rateLimits, now, forecasts)`，本地/官方两分支都挂 `health` |
+| 前端 | `api.ts` | `AccountHealth` + `AccountOverviewRow.health` |
+| 前端 | `AccountsView.vue` | 名称前 1.5px 健康点（绿/灰白/红），hover 显示分数与原因 |
+| 文案 | `i18n.ts` | zh/en 各 7 个原因码文案 |
+
+## 主动砍掉的东西（重要）
+
+原计划做「配额窗口统一建模 `QuotaWindow`」。写完之后核实：
+- WorkBuddy **不提供** 5h / 7d 窗口字段，只能做「包到期 + 企业周期 + 限流恢复」三类；
+- 这三类在卡片上**已经都有 UI**（到期时间、企业配额当普通包、限流徽标 + `28m 后恢复`）；
+- 再抽一层窗口模型 = 把同一批数据换个形状，前端还得拼回去。
+
+结论：`quota.rs` 写完后自我删除，只保留 `health.rs`。教训写进 AGENTS.md，
+避免下一轮又提「配额窗口」。
+
+## 验证
+
+- `cargo test -p wb-switch-core --lib` → 837 passed / 4 failed（`windows_registry_probe_*`，需 `reg.exe`，被本机黑名单拦，与本次改动无关）
+- 新增 `health` 单测 4 条全通过；`forecast` 重构后 5 条仍通过
+- `cargo clippy -- -D warnings`（core + 应用）通过；`vue-tsc` / `vite build` 通过
+- 单测抓到：余额剩 5% 只扣 20 分 → 80 分仍判 good（等于没报警）→ 改扣 30
+
+## 下一批
+
+- 导出 CSV / JSON（Token + 积分 + 账号三份）
+- 托盘配额读数
+- 限流驱动自动切换（高风险，需 opt-in）
+
+---
+
+# 第 4 批：数据导出 + 托盘读数（2026-10-30 23:0x）
+
+## 做了什么
+
+| 层 | 文件 | 内容 |
+| --- | --- | --- |
+| 后端 | `src-tauri/src/export.rs`（新） | 四份 CSV：accounts / tokensDaily / tokensModels / credits；BOM、CSV 转义、后端直写 |
+| 后端 | `src-tauri/src/tray.rs`（新） | tooltip「账号数 · 合计余额 · 最紧账号 ≈N 天」；`group_thousands` |
+| 命令 | `commands.rs` | `export_data(kind, path)` / `export_all_data(dir)`；`account_overview` 加 `app` 参数并在末尾刷托盘 |
+| 启动 | `lib.rs` | 托盘 build 后立刻刷一次读数 |
+| 前端 | `api.ts` | `ExportKind` / `ExportResult` / `ExportAllResult` / `exportData` / `exportAllData` |
+| 前端 | `SettingsView.vue` | 「数据导出」区：4 个单份按钮 + 「全部到目录」+ 结果行（成功绿/失败红） |
+| 文案 | `i18n.ts` | zh/en 各 10 key |
+
+## 验收（真实数据）
+
+`cargo test --lib manual_export_smoke -- --ignored --nocapture`：
+
+| 文件 | 行数 | 抽样 |
+| --- | --- | --- |
+| accounts.csv | 9（8 账号） | `...,181****6649,cn,,4671.83,6715,30.4,100,good,,208.3,22.4,2026-11-22 09:10:45` |
+| tokensDaily.csv | 70 | `2026-05-18,689077,636733,3839,0,48505,12` |
+| tokensModels.csv | 22 | `deepseek-v4.1-flash,4472708312,...,79.24` |
+| credits.csv | 5001 | `2026-10-27 18:15:46,2026-10-27,...,6044,5022.89,` |
+
+## 更正上一批的一个错误结论
+
+第 2 批结尾我写「14 个账号全部 insufficient（basisDays=1）」——**这是错的**。
+当时用 `tail -60` 看预测输出，只截到了最后几个新账号就下了全局结论。
+本次导出证明：老账号快照跨多天，`daysLeft` 已能给出 22.4 / 254.9 天等真值。
+
+**教训：用被截断的样本下全局判断，比不下判断更糟。** 涉及"全体"的结论必须统计全量计数。
+
+## 验证
+
+- 应用 `cargo test` → 5 passed（export 4 + tray 1）
+- `cargo clippy -D warnings` 通过（顺手把 `% 3 == 0` 改成 `is_multiple_of(3)`）
+- `vue-tsc --noEmit` 通过；`vite build` 通过（287.35 kB）
+
+## 未做
+
+- 限流驱动自动切换（高风险，需 opt-in + 冷却 + 会话续接，单独一批）
+
+---
+
+# 第 5 批：限流自动切换（2026-10-30 23:1x）
+
+## 做了什么
+
+| 层 | 文件 | 内容 |
+| --- | --- | --- |
+| core | `modules/auto_switch.rs`（新） | 配置/日志/状态三份存档；`decide` 纯函数；`run_once` 注入式执行 |
+| 命令 | `commands.rs` | `auto_switch_status/set/logs/clear_logs/check` + `spawn_auto_switch`（2 分钟巡检） |
+| 启动 | `lib.rs` | 注册 5 条命令 + 启动巡检 |
+| 前端 | `api.ts` | 5 个类型 + 5 个包装 |
+| 前端 | `SettingsView.vue` | 「限流自动切换」区块：开关 / 仅提示-自动执行 / 冷却 / 最低余额 / 立即检查 / 最近判定 |
+| 文案 | `i18n.ts` | zh/en 各 15 key |
+
+## 三条安全默认（写进 AGENTS.md）
+
+1. `enabled = false`：装了就开等于给自己埋雷。
+2. `notify_only = true`：自动切换会**关闭并重启 WorkBuddy**，正在编辑的内容可能丢；先让用户看到「想切、切到哪」。
+3. 冷却 30 分钟：多个模型连续限流时防止连环切换。
+
+另外自动执行走 **plain 切换**（`replace_sessions=false`）：自动流程绝不碰会话数据，搬会话留给用户手动确认。
+
+## 判定顺序（不可调换）
+
+开关 → 当前账号是否真被限流（唯一触发条件）→ 冷却 → 候选筛选（同档位/未限流/余额达标/不在排除列表）→ 模式。
+
+拿不到当前账号一律 Skip：宁可不动，也不能把用户刚切好的号又换掉。
+
+## 真实数据验证
+
+临时 example 跑本机：
+
+```
+enabled=false notifyOnly=true cooldown=30m
+current = Some("12cc6919-...")          // 与 auth 文件匹配上的 181****6649
+8 个候选，余额 1914 ~ 5102，均无限流
+decision(forced-on) = Skip("当前账号未被限流")
+```
+
+## 验证
+
+- core `cargo test --lib` → 848 passed / 4 failed（`reg.exe` 被黑名单拦，与改动无关）
+- 新增 `auto_switch` 单测 11 条全通过（禁用/未限流/选最富/仅提示/跳过受限目标/跨档位/低余额/排除/冷却/未知当前账号/配置缺字段兜底）
+- `cargo clippy -D warnings` 两端通过；`vue-tsc` / `vite build` 通过（292.86 kB）
+
+
+---
+
+# 第 6 批：设置页开源地址 + 双语 README（2026-10-30 23:3x）
+
+## 设置页开源地址
+
+| 层 | 改动 |
+| --- | --- |
+| 后端 | `commands.rs::open_external(url)`：**只放行 http/https**（命令收前端任意字符串，不校验等于把 file:// 交给页面） |
+| 注册 | `lib.rs` 一行 |
+| 前端 | `api.ts::openExternal`；设置页「应用信息」新增「开源地址」行，显示 `a634691481-arch/workbuddy-deck`，点击用系统浏览器打开 |
+
+按用户要求**只展示本仓库**，不展示核心库地址。
+
+## 双语 README
+
+| 文件 | 行数 | 说明 |
+| --- | --- | --- |
+| `README.md` | 158 | 中文，引用中文界面截图 |
+| `README_EN.md` | 158 | 英文（重写非直译），引用英文界面截图 `-en.png` |
+
+新增/更新内容：
+- 「六个分区」表补上预测、健康点、7 日环比、切换台账、数据导出；
+- 「真正不同的六点」替换原四点：切号硬门槛（含写后 uid 校验）、天数预测（样本不足不猜）、限流归因台账、健康分扣分表、CSV 导出、托盘读数；
+- 架构图补 `export.rs` / `tray.rs` / 领域能力 crate；
+- 已知限制补「预测需 3 天快照」；License 段维持「无 LICENSE 不承诺」口径。
+
+## 截图
+
+用户提供的 12 张实拍（1680x1170）转 PNG：
+- 中文：`01-accounts` / `02-tasks` / `03-credits` / `04-tokens` / `05-logs` / `06-settings`
+- 英文：同名 `-en` 后缀
+- 旧图（1178x837 与脚本抓的）已全部覆盖
+
+## 校验
+
+`validate_readme_pair.py` 的语言互链、同步标记、代码围栏、关键 Token 全部通过；
+唯一 FAIL 是「两侧图片 target 集合不一致」——中英各用本语言界面截图，属有意设计，已写进 AGENTS.md。

@@ -6,11 +6,11 @@
 
 <h1 align="center">workbuddy-deck</h1>
 
-<p align="center"><b>A desktop control deck for running multiple WorkBuddy accounts: account switching, daily check-in, growth tasks, credits, token usage and logs in one screen.</b><br/>
-Built for people who keep several WorkBuddy accounts alive and click through check-in plus growth rewards by hand every day.</p>
+<p align="center"><b>A control deck for multiple WorkBuddy accounts: switching, check-in, daily tasks, credits, tokens and rate limits on one screen.</b><br/>
+Built for people running several WorkBuddy accounts who click through check-in and growth tasks by hand every day.</p>
 
 <p align="center">
-  If this saves you the daily clicking, consider a <a href="https://github.com/a634691481-arch/workbuddy-deck/stargazers"><b>star</b></a> — it keeps the project findable for others with the same chore.
+  If it saves you those ten minutes a day, a <a href="https://github.com/a634691481-arch/workbuddy-deck/stargazers"><b>star</b></a> helps you find it again — and helps the next person with the same chore find it too.
 </p>
 
 <p align="center">
@@ -24,60 +24,71 @@ Built for people who keep several WorkBuddy accounts alive and click through che
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/01-accounts.png" alt="Accounts: balances, credit packages, expiry warnings and rate-limit markers" width="900">
+  <img src="docs/screenshots/01-accounts-en.png" alt="Accounts: balance, days-remaining forecast, health dot, package expiry and rate-limit markers" width="900">
 </p>
 
-## The daily chore it replaces
+## The manual version, every day
 
-Open the client → switch account → check in → open the growth center for rewards → switch back → repeat for every account → then hunt through each account again just to see how much quota is left.
+Open the client → switch to account 1 → check in → claim growth rewards → switch to account 2 → repeat. Want to know how much credit is left today? Walk the whole list again.
 
-Tolerable with three accounts. With eight it is ten-plus minutes of mechanical clicking — and **switching itself is the risky part**: if a switch replaces the wrong session set, you lose chat history, not a log line.
+At three accounts this is tolerable. At eight it is fifteen minutes of mechanical work — and **switching is the risky part**: if the session swap overwrites the previous account's records, what you lose is chat history, not a log line.
 
-This app folds that loop into one desktop window: check-in and daily tasks run serially across all accounts with results classified as success / failed / skipped; quota, credit-package expiry and model rate limits sit on one screen; every run writes a notification record you can look up later.
+This app puts that loop in one desktop window: accounts run in sequence, results are grouped into success / failure / skipped, balances and expiries and rate limits sit on one screen, and every run leaves an archived record you can look up later.
 
-## Six sections
+## Six panes
 
-| Section | What it is for |
+| Pane | What it handles |
 |---|---|
-| 01 Accounts | QR login, import/export, balances and credit packages, expiry reminders, rate-limit markers, set-as-current |
-| 02 Tasks | Pick accounts → check-in / growth / travel / full daily run, live progress and failure rollup |
-| 03 Credits | Daily spend, per-account balances, model / client / account breakdowns; official usage first, local snapshot fallback |
-| 04 Tokens | Multi-source totals, top sessions, per-call detail, week × hour heatmap |
-| 05 Logs | Notification archive + auto-daily log + error log merged on one timeline, clearable per source |
-| 06 Settings | Version, data directory, data size, display preferences, schedule summary, per-source log cleanup |
+| 01 Accounts | QR login / import-export, balance and credit packages, **days-remaining forecast**, **health dot**, per-model rate limits, one-click "make current" |
+| 02 Tasks | Pick accounts → check-in / growth / travel / full daily run, live progress and failure aggregation |
+| 03 Credits | Daily spend, per-account balance, model / client / account breakdowns; official numbers first, local snapshots as fallback |
+| 04 Tokens | Multi-source totals, top sessions, request detail, week × hour heatmap, **7-day comparison** |
+| 05 Logs | Notification archive + daily runs + error log + **switch ledger**, four sources in one timeline, clearable per source |
+| 06 Settings | Version, source link, data directory, data size, display prefs, **CSV export**, rate-limit auto-switch, per-source cleanup |
 
 <p align="center">
-  <img src="docs/screenshots/02-tasks.png" alt="Task panel: account list, telemetry strip, task table, action bar and log panel" width="900"><br/>
-  <sub>Task panel: account selection on the left, telemetry readouts and task table in the middle, log panel always visible</sub>
+  <img src="docs/screenshots/02-tasks-en.png" alt="Task pane: account selection, telemetry readouts, task table, action bar and log panel" width="900"><br/>
+  <sub>Task pane: accounts on the left, telemetry and task table in the middle, action bar at the bottom, log panel always visible</sub>
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/03-credits.png" alt="Credit statistics: metrics, daily bars, account balances, breakdowns and detail table" width="900">
-  <img src="docs/screenshots/04-tokens.png" alt="Token statistics: eight metrics, composition, sources, daily bars, project distribution" width="900">
+  <img src="docs/screenshots/03-credits-en.png" alt="Credits: remaining balance, daily spend chart, per-account balances and model breakdown" width="900"><br/>
+  <sub>Credits: official usage when available, local snapshots as the fallback</sub>
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/05-logs.png" alt="Run log: merged three-source timeline with source distribution" width="900">
-  <img src="docs/screenshots/06-settings.png" alt="Settings: app info, data size, display preferences, schedule summary, maintenance" width="900">
+  <img src="docs/screenshots/04-tokens-en.png" alt="Tokens: metrics, composition, sources, daily bars, project distribution and efficiency" width="900"><br/>
+  <sub>Tokens: metrics → composition → sources → daily → projects → sessions / request detail</sub>
+</p>
+
+<p align="center">
+  <img src="docs/screenshots/05-logs-en.png" alt="Logs: four sources merged into one timeline with source breakdown" width="900">
+  <img src="docs/screenshots/06-settings-en.png" alt="Settings: app info and source link, data size, display prefs, CSV export, maintenance" width="900">
 </p>
 
 ## What is actually different
 
-1. **Switching is gated on real writes, not on "it looks fine"**
-   A replace-style sync must genuinely copy everything first: copied count equals source session count and failures equal zero, only then is the target account's old session set deleted. Otherwise the operation fails closed, keeps the old data, and explains why in the result. The rule came out of two real data-loss incidents documented in `tasks/lessons.md`, with regression tests in the `wb-switch-core` session module.
+**1. Switching has a hard gate instead of "looks successful"**
+Replace-mode sync must have *actually written* the data first: copied rows must equal source rows and failures must be zero before the target account's old sessions may be deleted. Otherwise it fails closed, keeps the old data, and says why in the result. This rule came from two real data-loss incidents (recorded in `tasks/lessons.md`) and has regression tests in the session module. After writing, the auth file is **read back and the uid verified**; a mismatch triggers a rollback.
 
-2. **Rate limits get a ledger**
-   Not just "429 happened": it records which account, which model, and the reset time reported by the service, then surfaces that on the account card so you schedule around the free one.
+**2. The balance line also tells you how long it lasts**
+An account card no longer stops at `3,539 / 4,000`; it adds `≈21.0 days`. The estimate takes the smaller of a median and an EWMA (early warning beats optimism) and only counts **balance decreases** as usage — a check-in or reward that raises the balance is not negative consumption. With fewer than three days of snapshots it shows "sample 2/3 days" instead of inventing a number.
 
-3. **Runs are not forgotten**
-   Every run writes a notification record (`notifications.json`), merged with the auto-daily log and error log into one timeline. Close the window, restart the app — it is still there.
+**3. Rate limits are attributed, not just reported**
+Not "you got a 429", but which account, which model, the official reset time, and how many times it hit. It shows on the account card so you can pick an unrestricted account first — and there is an optional auto-switch (off by default, notify-only by default).
 
-4. **Works offline**
-   Account cards read a local snapshot first (instant paint), official credit packages fill in afterwards; a failed official call never rolls back local numbers. Offline, you still know yesterday's balance.
+**4. Twenty accounts, one glance to find the dying one**
+A health dot (green / grey / red) before each account name, from a deductive table you can read: rate-limited −35, zero balance −50, under 10% −30, fetch failure −20, forecast under 3 days −25, mostly-expiring credit −10. Hover shows the actual reasons; it is not a black-box score.
+
+**5. The data leaves with you**
+Four CSVs from Settings: accounts (with health and forecast), tokens by day, tokens by model (with share), and credit snapshots (with per-row deltas). UTF-8 with BOM, so Excel opens them without mojibake.
+
+**6. It is still there when the window is closed**
+The tray tooltip shows account count, total balance, and the tightest account's remaining days. Every run writes an archived notification that survives a restart and appears in pane 05.
 
 ## Quick start
 
-Source only for now; a packaged build is planned for Releases.
+Source only for now.
 
 ```bash
 git clone https://github.com/a634691481-arch/workbuddy-deck.git
@@ -86,68 +97,62 @@ npm install
 npm run tauri build -- --no-bundle
 ```
 
-The binary lands in `src-tauri/target/release/workbuddy-task-assistant.exe`. Prerequisites: Node.js 18+, a stable Rust toolchain, Windows 10/11 with the WebView2 runtime.
+The binary lands at `src-tauri/target/release/workbuddy-task-assistant.exe`. Requirements: Node.js 18+, stable Rust, Windows 10/11 with the WebView2 runtime.
 
-> ⚠️ **One build dependency is not published yet**: `src-tauri/Cargo.toml` references `wb-switch-core` via a `path` dependency (accounts, check-in, growth tasks, travel, tokens, switching). A fresh clone needs that crate supplied locally before it compiles. Publishing it separately is in progress — this is currently the only hard build blocker.
+> ⚠️ **The domain crate is not published with this repo yet.** `src-tauri/Cargo.toml` references it by `path` (accounts, check-in, growth tasks, travel, tokens, switching). A fresh clone needs that crate supplied before it compiles — the only hard build blocker here. Packaging it separately is in progress.
 
-UI-only preview (no data, no IPC):
+To work on the UI only (no data):
 
 ```bash
 npx vite --port 1421
 ```
 
-Open `http://localhost:1421/`; hash deep links: `#accounts` / `#tasks` / `#credits` / `#tokens` / `#logs` / `#settings`.
+Open `http://localhost:1421/`; hashes jump straight to a pane: `#accounts` / `#tasks` / `#credits` / `#tokens` / `#logs` / `#settings`.
 
 ## Architecture
 
 ```text
 frontend  src/components/ui/*      presentational atoms
-          src/components/*         feature components (props / emit only)
-          src/composables/*        state and side effects (the only layer allowed to call lib/api)
-          src/views/*              six sections, each owning its data and actions
-          src/lib/api.ts           the entire IPC contract (types + invoke wrappers)
-backend   src-tauri/src/commands.rs  thin command layer: validate + delegate
-          src-tauri/src/executor.rs  batch runner: mutex, progress snapshot, cancel, result classification
-          src-tauri/src/scheduler.rs daily timer: fire on time, write receipt, catch up if missed
-          wb-switch-core           domain logic (accounts / check-in / growth / travel / tokens / switching)
+          src/components/*         business components (props / emit only)
+          src/composables/*        state and side effects (the only layer calling lib/api)
+          src/views/*              six panes, each fetching and acting on its own
+          src/lib/api.ts           the whole IPC contract (types + invoke wrappers)
+backend   src-tauri/src/commands.rs thin command layer: validate then delegate
+          src-tauri/src/executor.rs batch runner: mutex, progress snapshots, cancel, grouping
+          src-tauri/src/scheduler.rs daily schedule: fire, receipt, run-on-miss
+          src-tauri/src/export.rs  four CSV writers (BOM, escaping, write straight to disk)
+          src-tauri/src/tray.rs    tray readout
+          domain crate             accounts / check-in / growth / travel / tokens / switching / forecast / health
 ```
 
-Design decisions worth knowing:
+Design choices worth knowing:
 
-- **One account at a time**, no parallel API calls; cancellation applies at account boundaries so a single account's step is never torn apart.
-- **Mutex over queue**: only one run at a time, a duplicate trigger returns `busy` instead of piling up.
-- **Tokens never leave the backend**: command payloads carry label / variant / note only; phone numbers and emails are masked in UI and logs.
-- **A single accent color** (aviation red), separation by 1px rules and monospaced digits — telemetry styling, no gradients, no rounded corners.
+- **One account at a time**, never parallel API calls; cancellation only lands on account boundaries so a single account's actions are never torn in half.
+- **Mutex before queue**: one run at a time; a second trigger returns `busy` immediately.
+- **Tokens never leave the backend**: returned account structures carry label / variant / note only; phone numbers and emails are masked in the UI and logs.
+- **Forecasts read local snapshots only**: rate-limit and consumption decisions make no network calls, so a limited account does not have to wait for another round trip.
+- **One accent colour** (aviation red); state is carried by 1px rules and monospaced numbers rather than gradients or rounded corners — telemetry styling that stays readable over long sessions.
 
 ## Data and privacy
 
-- Everything stays on your machine under `~/.wb-switch/` (account store, check-in config, notification archive, auto-daily config, error log). Nothing is uploaded.
-- The app only reads and writes those local files and calls the official endpoints for check-in / tasks / token refresh. It is not a proxy or a gateway, and it does not export your conversations.
-- The one destructive action is "set as current account": it closes WorkBuddy, replaces session files, writes credentials and restarts the app. It is behind an explicit confirmation with progress reporting.
-
-## Relationship to workbuddy-switch
-
-This is not a from-scratch project. Domain capabilities come from [`workbuddy-switch`](https://github.com/changexbc/workbuddy-switch) (account switching / check-in / credit stats). The desktop layer is a rewrite:
-
-- six-section console layout and telemetry visual system;
-- a batch runner with progress snapshots, cancellation, result classification and a notification-archive loop;
-- a fix for replace-style switching deleting old sessions when copying had not actually completed, plus regression tests and a fail-closed gate;
-- account card grid, rate-limit markers, credit / token breakdowns, three-source log timeline, settings and tray residency.
-
-If you only need CLI-style switching and check-in, the upstream project is lighter. If you live across several accounts daily, this is that workflow turned into a dashboard.
+- Everything stays in `~/.wb-switch/` on your machine (accounts, check-in config, notification archive, auto-run config, auto-switch config and logs, error log). Nothing is uploaded.
+- The app reads and writes those local files and calls the official endpoints for check-in, tasks and token renewal. It does not proxy traffic, run a gateway, or export your conversations.
+- The one outward-facing action is "make current": it closes WorkBuddy, replaces session files, writes the auth file and restarts. That is **destructive**, so it sits behind a confirmation with visible progress.
+- Rate-limit auto-switch ships **off** and **notify-only**: actually switching closes and restarts WorkBuddy, which can lose unsaved work, so the app does not press that button for you by default.
 
 ## Known limitations
 
 - Windows only (WebView2).
-- No auto-update; upgrades mean rebuild or replace the exe.
-- `wb-switch-core` is not published with this repo, so building from source needs it supplied (see above).
+- No auto-update; upgrade by rebuilding or replacing the exe.
+- The domain crate is not published with this repo, so source builds need it supplied (see above).
 - No CI or automated test pipeline yet; type checking and clippy run locally via `npm run verify`.
-- UI copy is primarily Chinese; i18n ships a zh/en toggle but English strings are still being completed.
+- UI copy is Chinese-first. i18n with an English switch is built in, but English strings are still being filled in.
+- The usage forecast needs at least three days of snapshots per account; on a fresh install it only shows sample progress.
 
 ## License
 
-There is **no LICENSE file** in this repository yet, so no license is granted here. Until one is added, treat it as all rights reserved: reading and learning are fine, but commercial use or redistribution should start with an Issue to the author. This section and the repository About will be updated together once a license is chosen.
+There is **no LICENSE file** in this repository, so no licence is granted here. Until one is added, assume "all rights reserved": reading and learning are fine, but ask in an issue before commercial use or redistribution. When a licence is chosen it will be added here and to the repository's About section together.
 
 ## Finally
 
-If it gives you back those ten minutes a day, a **star** is appreciated. For broken runs, failed check-ins or wrong statistics, open an [Issue](https://github.com/a634691481-arch/workbuddy-deck/issues) with account count, action and the raw error — that is far more actionable than "doesn't work".
+If it saves you those minutes, a **star** is welcome. If a run fails, a check-in breaks, or a number looks wrong, open an [issue](https://github.com/a634691481-arch/workbuddy-deck/issues) with your account count, the action you ran, and the raw error — that is far more useful than "doesn't work".

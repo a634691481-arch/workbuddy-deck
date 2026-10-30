@@ -55,9 +55,12 @@ StatusBar   24px  ● READY · 最近刷新 · 账号数 · 日志数
                  右侧副卡 = 互补维度（左列是客户端时看模型，其余看客户端）
 04 TokensView    TOKEN 统计：8 指标（两行）→ 消耗构成条 → 数据源 → 每日柱+模型
                  → 项目分布+周×时热力 → 5 格效率指标 → TAB（会话 TOP / 调用明细）
-05 LogsView      运行日志（i18n 前缀 rl.*，lg.* 归任务页 LogPanel）：三源合一（notifications.json / auto_daily_logs.json / error.log）
-                 4 指标（总/今日/告警/错误）→ 来源分布条 + 24H 分布 → 来源 TAB + 关键词搜索
-                 → 时间轴表（时间·来源·级别·标题·详情）；清空按源，不提供「全部清空」
+05 LogsView      运行日志（i18n 前缀 rl.*，lg.* 归任务页 LogPanel）：四源合一
+                 （notifications.json / auto_daily_logs.json / switch_history.json / error.log）
+                 4 指标（总/今日/告警/错误）→ 来源分布条 + 24H 分布
+                 → [切换源] 台账 4 格（次数/成功/已回滚/已中止 + 均耗）
+                 → 来源 TAB + 关键词搜索 → 时间轴表（时间·来源·级别·标题·详情）
+                 清空按源，不提供「全部清空」
 06 SettingsView  系统设置：应用信息（版本/平台/数据目录+打开）/ 数据规模（行数·体积·存在性）
                  / 显示偏好（脱敏·语言）/ 自动化摘要（开关·时间·上次执行·跳任务面板）
                  / 维护（按源清空日志）
@@ -70,9 +73,11 @@ StatusBar   24px  ● READY · 最近刷新 · 账号数 · 日志数
 - **不新增全宽横条**：要加信息，先并进 `AppToolbar` 或 `TelemetryBar` 的格子。
 - 同一信息只出现一次（签到态在单元条，余额在遥测带，不重复）。
 - 浏览器预览可用 hash 直达分区：`#tasks` / `#credits` / `#tokens` / `#accounts` / `#logs` / `#settings`。
-- **运行日志三源**：`events_list` 合并通知存档 + 自动日常日志 + 错误日志（时间倒序，默认 300 条）；
+- **运行日志四源**：`events_list` 合并通知存档 + 自动日常日志 + **切换历史** + 错误日志（时间倒序，默认 300 条）；
   `events_clear(source)` 只删单源。任务执行结束时由 executor 写一条通知存档，
   保证「跑完 → 日志里能查到」闭环（原来只弹 toast，关掉即失忆）。
+  切换源带结构化前后对照（谁→谁 / 复制几条 / 耗时 / 身份校验），是其余三源缺的那层；
+  `filter === "switch"` 时另拉 `switch_history_list` 显示台账（总/成功/回滚/中止 + 均耗）。
 - **i18n 前缀占用表**：`lg.*` 归任务页 LogPanel（历史），运行日志用 `rl.*`；新增页面前先 grep 前缀。
 - 跨分区跳转统一走 `useShell().go(key)`（`nav` ref 由外壳持有）；组件不要自己改 hash。
 - **账号的增 / 删 / 导入 / 导出只有账号管理页有入口**；其它页只做「带路」，不重复放按钮。
@@ -81,8 +86,51 @@ StatusBar   24px  ● READY · 最近刷新 · 账号数 · 日志数
 - **当前 WorkBuddy 账号**：`workbuddy_status` 读 auth 文件（cn/ai 两档位）与账号库按
   uid/email 匹配，返回 `currentAccountIds`；命中卡片红色描边 + 「当前账号」徽标。
 - **切换账号 = `switch_workbuddy_account`**：完全同步模式（replace_sessions=true），
-  复用 core `switch::switch_account`（备份→关 WB→替换会话→写认证→重启）；
+  复用 core `switch::switch_account`（备份→关 WB→替换会话→写认证→**写后身份校验**→重启）；
   进度经 `switch-progress` 事件推送，确认弹框复刻原项目警示结构（物理删除不可恢复）。
+  **该命令不抛 Err**：失败返回 `{ ok:false, result, stage, identity, rolledBack, error }`，
+  前端必须显式判 `ok`。三态语义：`blocked`（未动认证）/ `rolled_back`（已还原认证）/ `ok`。
+  失败现场留在弹框里（阶段 + 身份校验 + 原文），不跟 toast 一起消失。
+- **切换的硬约束（勿删）**：① 会话替换 `replaced !== true` 时 fail-closed，不写认证；
+  ② 写后读磁盘校验 uid，`identity-mismatch` 必须回滚；③ 历史写入失败不得影响切换结果。
+- **用量预测 = `account_forecast`**（core `modules/forecast.rs`，纯本地、不发请求）：
+  卡片余额后跟 `≈2.4 天`，<3 天红、<7 天高亮正文色。三条口径都别改：
+  ① 只把**余额下降**算消耗——签到/领奖会让余额上升，那不是负消耗；
+  ② 快照间隔 >1 天要**按天归一**，不能把 3 天的量记在最后一天；
+  ③ 样本 <3 天返回 `confidence=insufficient` + `daysLeft=null`，UI 显示「样本 1/3 天」，
+  **不许猜**。冷启动期用 `lastDelta`（最近两条快照差）顶上，它只要 2 条就能显示。
+- **Token 页环比**：近 7 天 vs 前 7 天，基于 `daily` 末尾 14 天；不足 14 天不显示，
+  不拿短的比长的。用量上涨按风险着色（hazard 红），不是按股票口径。
+- **账号健康分 = core `modules/health.rs`**：`account_overview` 两个分支都会算，
+  挂 `row.health = { score, grade, reasons[] }`，卡片名称前一个 1.5px 圆点
+  （good 绿 / warn 灰白 / critical 红），hover 看分数与全部原因。
+  扣分表：限流 −35、余额为 0 −50、余额 <10% −30、拉取失败 −20、预测 <3 天 −25、
+  快到期额度占多数 −10。**原因码由前端翻（`ac.hz*`），后端不返回中文。**
+  改扣分标准前先想清楚：剩 5% 只掉到 80 分会被判成 good，等于没报警。
+- **打开外部链接 = `open_external(url)`**：设置页「开源地址」用。**只放行 http/https**——
+  这个命令接收前端传来的任意字符串，不校验就等于把 `file://`、自定义协议都交给页面。
+- **README 截图按语言分开**：`docs/screenshots/NN-xxx.png` 是中文界面，
+  `NN-xxx-en.png` 是英文界面；`README.md` 引前者，`README_EN.md` 引后者。
+  `validate_readme_pair.py` 会因此报一条「图片 target 不一致」的 FAIL，属有意设计。
+- **数据导出 = `export_data` / `export_all_data`**（`src-tauri/src/export.rs`）：
+  四份 CSV —— `accounts` / `tokensDaily` / `tokensModels` / `credits`。三条约定：
+  ① **后端直接写盘**，CSV 不回传前端（几 MB 过 IPC 没意义），前端只负责 `save`/`open` 拿路径；
+  ② **写 UTF-8 BOM**，否则 Excel 双击打开中文乱码；
+  ③ 只导出已有数据，**导出不触发官方刷新**（导出是快照动作）。
+  字段全是原始数值（不写 `1.2万`），时间统一 `YYYY-MM-DD HH:MM:SS` 本地时区。
+- **托盘读数 = `src-tauri/src/tray.rs`**：tooltip 显示「账号数 · 合计余额 · 最紧账号 ≈N 天」，
+  启动时刷一次 + 每次 `account_overview` 后刷一次。预测样本不足时显示「预测样本不足」，
+  **不编一个天数**。
+- **限流自动切换 = core `modules/auto_switch.rs`**（与 `rotate.rs` 分工不同：rotate 按
+  「积分到期紧迫度」主动轮换、要拉官方接口；这里按「限流事件」被动响应、**只读本地台账**）：
+  每 2 分钟巡检，当前账号被限流 → 切到同档位、未限流、余额 ≥ `minRemaining` 的最富账号。
+  **三个安全默认不能改**：`enabled=false`、`notify_only=true`（自动切换会关进程打断用户）、
+  冷却 30 分钟。自动执行时的切换是 **plain**（`replace_sessions=false`）——自动流程绝不碰会话数据。
+  拿不到当前账号一律 Skip，宁可不动也不能瞎切。
+- **额度窗口没有独立模型**（2026-10-30 核实后放弃）：WorkBuddy 官方**不提供** 5h / 7d
+  这类窗口字段；积分包到期（含企业配额周期）走 `resources[].expireAt`，限流恢复走
+  `rateLimits[].resetAt`，卡片上已分别有到期时间与「28m 后恢复」倒计时。
+  再抽一层 `QuotaWindow` 只是把同一批数据换个形状，属于重复建模，别再提。
 
 **硬规则**：依赖只能向下。`ui/*` 不得 import `lib/api`；`components/*` 不得直接 `invoke`；
 所有 IPC 只能经由 `composables/*` → `lib/api.ts`，一个关注点一个 composable（`useAssistant` / `useBalance`）。
