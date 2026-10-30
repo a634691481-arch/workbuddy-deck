@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WorkBuddy Deck — 多账号运营控制台</title>
+<meta name="description" content="WorkBuddy 多账号运营控制台：切号、日常任务、积分、TOKEN、日志一屏管完。Tauri 2 + Rust，Windows / Linux / macOS。">
+<style>
+  /* 视觉体系与桌面端一致：0 圆角、单一航空红强调色、磷光绿只用于 READY */
+  :root{
+    --bg:#08080A;
+    --panel:#101013;
+    --panel-2:#15151A;
+    --line:#232329;
+    --line-2:#33333C;
+    --fg:#E9E9EC;
+    --muted:#8A8A95;
+    --faint:#5A5A66;
+    --hazard:#E1372B;
+    --hazard-soft:#2A0F0C;
+    --ready:#8DE04F;
+    --mono:"JetBrains Mono",ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --sans:-apple-system,BlinkMacSystemFont,"Segoe UI","PingFang SC","Hiragino Sans GB","Microsoft YaHei",sans-serif;
+  }
+  *{border-radius:0!important;box-sizing:border-box}
+  html{scroll-behavior:smooth}
+  body{
+    margin:0;background:var(--bg);color:var(--fg);font-family:var(--sans);
+    -webkit-font-smoothing:antialiased;text-rendering:optimizeLegibility;
+    /* 极淡网格：让空白有“仪表台”的底，不抢内容 */
+    background-image:
+      linear-gradient(to right,rgba(255,255,255,.022) 1px,transparent 1px),
+      linear-gradient(to bottom,rgba(255,255,255,.022) 1px,transparent 1px);
+    background-size:64px 64px;
+  }
+  a{color:inherit;text-decoration:none}
+  ::selection{background:var(--hazard);color:#fff}
+
+  .wrap{max-width:1180px;margin:0 auto;padding:0 28px}
+  .mono{font-family:var(--mono);font-variant-numeric:tabular-nums}
+  .lbl{font-family:var(--mono);font-size:10px;letter-spacing:.18em;text-transform:uppercase;color:var(--faint)}
+
+  /* ── 顶栏 ── */
+  header.top{
+    position:sticky;top:0;z-index:50;background:rgba(8,8,10,.82);
+    backdrop-filter:blur(10px);border-bottom:2px solid var(--hazard);
+  }
+  .top-in{display:flex;align-items:center;justify-content:space-between;height:44px}
+  .brand{display:flex;align-items:baseline;gap:12px}
+  .brand b{font-size:15px;letter-spacing:.02em}
+  .brand span{font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:var(--faint);text-transform:uppercase}
+  .top-actions{display:flex;align-items:center;gap:0;height:100%}
+  .top-actions a{
+    display:flex;align-items:center;height:100%;padding:0 14px;border-left:1px solid var(--line);
+    font-family:var(--mono);font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--muted);
+    transition:color .15s,background .15s;
+  }
+  .top-actions a:hover{color:var(--fg);background:var(--panel-2)}
+  .top-actions a.cta{background:var(--hazard);color:#fff;border-left-color:var(--hazard)}
+  .top-actions a.cta:hover{background:#F44A3D}
+
+  /* ── Hero ── */
+  .hero{padding:76px 0 40px;display:grid;grid-template-columns:1.02fr .98fr;gap:44px;align-items:center}
+  .hero h1{
+    margin:0;font-size:clamp(30px,3.6vw,50px);line-height:1.14;letter-spacing:-.015em;font-weight:800;
+    text-wrap:pretty;
+  }
+  .hero h1 em{font-style:normal;color:var(--hazard)}
+  .hero p.lead{margin:20px 0 0;color:var(--muted);font-size:15px;line-height:1.75;max-width:44ch}
+  .hero .cta-row{display:flex;gap:10px;margin-top:26px;flex-wrap:wrap}
+  .btn{
+    display:inline-flex;align-items:center;gap:8px;padding:11px 18px;
+    font-family:var(--mono);font-size:12px;letter-spacing:.08em;text-transform:uppercase;
+    border:1px solid var(--line-2);color:var(--fg);transition:.15s;
+  }
+  .btn:hover{border-color:var(--fg)}
+  .btn.solid{background:var(--hazard);border-color:var(--hazard);color:#fff}
+  .btn.solid:hover{background:#F44A3D;border-color:#F44A3D}
+  .meta{margin-top:24px;display:flex;gap:22px;flex-wrap:wrap}
+  .meta div{display:flex;flex-direction:column;gap:3px}
+  .meta b{font-family:var(--mono);font-size:19px;font-weight:600;letter-spacing:-.01em}
+  .meta span{font-family:var(--mono);font-size:9.5px;letter-spacing:.16em;text-transform:uppercase;color:var(--faint)}
+
+  /* 截图框：1px 描边 + 顶部危险红 + 扫描线 */
+  .shot{position:relative;border:1px solid var(--line-2);background:var(--panel);overflow:hidden}
+  .shot::before{content:"";position:absolute;inset:0 0 auto;height:2px;background:var(--hazard);z-index:3}
+  .shot img{display:block;width:100%;height:auto;filter:saturate(.92) contrast(1.03)}
+  .shot .scan{
+    position:absolute;left:0;right:0;height:120px;pointer-events:none;z-index:2;
+    background:linear-gradient(to bottom,transparent,rgba(225,55,43,.07) 60%,rgba(225,55,43,.16));
+    animation:scan 7s linear infinite;
+  }
+  @keyframes scan{0%{transform:translateY(-130px)}100%{transform:translateY(560px)}}
+  .ticks i{position:absolute;width:7px;height:7px;border:1px solid var(--hazard);z-index:4}
+  .ticks i:nth-child(1){top:-1px;left:-1px;border-right:0;border-bottom:0}
+  .ticks i:nth-child(2){top:-1px;right:-1px;border-left:0;border-bottom:0}
+  .ticks i:nth-child(3){bottom:-1px;left:-1px;border-right:0;border-top:0}
+  .ticks i:nth-child(4){bottom:-1px;right:-1px;border-left:0;border-top:0}
+
+  /* ── 滚动读数条 ── */
+  .ticker{border-top:1px solid var(--line);border-bottom:1px solid var(--line);background:var(--panel);overflow:hidden}
+  .ticker-in{display:flex;gap:0;width:max-content;animation:slide 42s linear infinite}
+  .ticker:hover .ticker-in{animation-play-state:paused}
+  .ticker b{
+    display:flex;align-items:center;gap:14px;padding:9px 22px;border-right:1px solid var(--line);
+    font-family:var(--mono);font-size:10.5px;letter-spacing:.14em;text-transform:uppercase;color:var(--muted);font-weight:400;
+  }
+  .ticker b u{color:var(--fg);text-decoration:none}
+  .ticker b s{color:var(--hazard);text-decoration:none}
+  @keyframes slide{from{transform:translateX(0)}to{transform:translateX(-50%)}}
+
+  /* ── 通用分节 ── */
+  section{padding:68px 0}
+  .sec-head{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:28px;flex-wrap:wrap}
+  .sec-head h2{margin:8px 0 0;font-size:clamp(22px,2.4vw,30px);letter-spacing:-.01em;font-weight:800}
+  .sec-head p{margin:6px 0 0;color:var(--muted);font-size:13.5px;line-height:1.6;max-width:52ch}
+
+  /* ── 分区切换 ── */
+  .panes{display:grid;grid-template-columns:250px 1fr;gap:0;border:1px solid var(--line)}
+  .pane-list{border-right:1px solid var(--line);background:var(--panel)}
+  .pane-list button{
+    display:grid;grid-template-columns:34px 1fr;align-items:center;gap:2px;width:100%;
+    padding:14px 16px;background:none;border:0;border-bottom:1px solid var(--line);
+    color:var(--muted);text-align:left;cursor:pointer;transition:.15s;position:relative;
+  }
+  .pane-list button:last-child{border-bottom:0}
+  .pane-list button:hover{color:var(--fg);background:var(--panel-2)}
+  .pane-list button .no{font-family:var(--mono);font-size:10px;letter-spacing:.1em;color:var(--faint)}
+  .pane-list button .nm{font-size:13px}
+  .pane-list button .ds{grid-column:2;font-family:var(--mono);font-size:9.5px;letter-spacing:.1em;color:var(--faint);text-transform:uppercase}
+  .pane-list button[aria-selected="true"]{color:var(--fg);background:var(--panel-2)}
+  .pane-list button[aria-selected="true"]::before{content:"";position:absolute;left:0;top:0;bottom:0;width:3px;background:var(--hazard)}
+  .pane-list button[aria-selected="true"] .no{color:var(--hazard)}
+  .pane-view{position:relative;background:var(--panel-2);min-height:320px}
+  .pane-view img{display:block;width:100%;height:auto;opacity:0;position:absolute;inset:0;transition:opacity .35s ease}
+  .pane-view img.on{opacity:1;position:relative}
+  .pane-view .cap{position:absolute;left:0;bottom:0;padding:7px 12px;background:rgba(8,8,10,.86);border-top:1px solid var(--line);border-right:1px solid var(--line);font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--muted)}
+
+  /* ── 差异化卡片 ── */
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line)}
+  .card{background:var(--panel);padding:22px;transition:background .18s;position:relative}
+  .card:hover{background:var(--panel-2)}
+  .card::after{content:"";position:absolute;left:0;top:0;height:2px;width:0;background:var(--hazard);transition:width .3s ease}
+  .card:hover::after{width:100%}
+  .card .n{font-family:var(--mono);font-size:10px;letter-spacing:.16em;color:var(--hazard)}
+  .card h3{margin:12px 0 8px;font-size:15px;font-weight:700;letter-spacing:-.005em}
+  .card p{margin:0;color:var(--muted);font-size:12.5px;line-height:1.7}
+  .card code{font-family:var(--mono);font-size:11px;color:var(--fg);background:var(--panel-2);padding:1px 5px;border:1px solid var(--line)}
+
+  /* ── 更新闭环 ── */
+  .loop{border:1px solid var(--line);background:var(--panel);padding:26px}
+  .steps{display:grid;grid-template-columns:repeat(6,1fr);gap:1px;background:var(--line);margin-bottom:22px}
+  .step{background:var(--panel);padding:14px 12px;position:relative}
+  .step .k{font-family:var(--mono);font-size:9.5px;letter-spacing:.14em;color:var(--faint)}
+  .step .t{margin-top:6px;font-size:12px;line-height:1.45}
+  .step .bar{position:absolute;left:0;bottom:0;height:2px;width:0;background:var(--hazard);transition:width .8s cubic-bezier(.16,1,.3,1)}
+  .loop.in .step .bar{width:100%}
+  .loop.in .step:nth-child(2) .bar{transition-delay:.12s}
+  .loop.in .step:nth-child(3) .bar{transition-delay:.24s}
+  .loop.in .step:nth-child(4) .bar{transition-delay:.36s}
+  .loop.in .step:nth-child(5) .bar{transition-delay:.48s}
+  .loop.in .step:nth-child(6) .bar{transition-delay:.6s}
+  pre{
+    margin:0;border:1px solid var(--line);background:var(--bg);padding:14px 16px;overflow:auto;
+    font-family:var(--mono);font-size:12px;line-height:1.75;color:var(--muted);
+  }
+  pre b{color:var(--fg);font-weight:500}
+  pre i{color:var(--hazard);font-style:normal}
+
+  /* ── 平台 ── */
+  .plats{display:grid;grid-template-columns:repeat(3,1fr);gap:1px;background:var(--line);border:1px solid var(--line)}
+  .plat{background:var(--panel);padding:20px}
+  .plat .os{display:flex;align-items:center;justify-content:space-between}
+  .plat .os b{font-family:var(--mono);font-size:12px;letter-spacing:.1em}
+  .plat .os span{font-family:var(--mono);font-size:9px;letter-spacing:.14em;color:var(--ready)}
+  .plat ul{margin:14px 0 0;padding:0;list-style:none;display:flex;flex-direction:column;gap:7px}
+  .plat li{font-family:var(--mono);font-size:11px;color:var(--muted);padding-left:12px;position:relative;word-break:break-all}
+  .plat li::before{content:"";position:absolute;left:0;top:8px;width:5px;height:1px;background:var(--hazard)}
+
+  /* ── 结尾 ── */
+  .end{border-top:1px solid var(--line);margin-top:20px;padding:56px 0 40px;text-align:center}
+  .end h2{margin:0;font-size:clamp(24px,3vw,38px);font-weight:800;letter-spacing:-.015em}
+  .end p{margin:14px auto 26px;color:var(--muted);font-size:13.5px;max-width:46ch;line-height:1.7}
+  footer{border-top:1px solid var(--line);padding:18px 0;display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}
+  footer span{font-family:var(--mono);font-size:10px;letter-spacing:.12em;text-transform:uppercase;color:var(--faint)}
+  footer a:hover{color:var(--fg)}
+
+  /* ── 入场动效 ── */
+  .reveal{opacity:0;transform:translateY(16px);transition:opacity .7s cubic-bezier(.16,1,.3,1),transform .7s cubic-bezier(.16,1,.3,1)}
+  .reveal.in{opacity:1;transform:none}
+  .reveal.d1{transition-delay:.08s}
+  .reveal.d2{transition-delay:.16s}
+  .reveal.d3{transition-delay:.24s}
+
+  @media (max-width:940px){
+    .hero{grid-template-columns:1fr;gap:30px;padding-top:52px}
+    .panes{grid-template-columns:1fr}
+    .pane-list{border-right:0;border-bottom:1px solid var(--line);display:grid;grid-template-columns:repeat(3,1fr)}
+    .pane-list button{border-bottom:1px solid var(--line)}
+    .grid3{grid-template-columns:1fr 1fr}
+    .plats{grid-template-columns:1fr}
+    .steps{grid-template-columns:1fr 1fr}
+  }
+  @media (max-width:620px){
+    .grid3{grid-template-columns:1fr}
+    .pane-list{grid-template-columns:1fr 1fr}
+  }
+  @media (prefers-reduced-motion:reduce){
+    *{animation:none!important;transition:none!important}
+    .reveal{opacity:1;transform:none}
+    html{scroll-behavior:auto}
+  }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div class="wrap top-in">
+    <div class="brand">
+      <b>WorkBuddy Deck</b>
+      <span>REV 0.1.1</span>
+    </div>
+    <nav class="top-actions">
+      <a href="#panes">分区</a>
+      <a href="#diff">差异</a>
+      <a href="#update">更新</a>
+      <a href="https://github.com/a634691481-arch/workbuddy-deck" target="_blank" rel="noopener">GitHub</a>
+      <a class="cta" href="https://github.com/a634691481-arch/workbuddy-deck/releases/latest" target="_blank" rel="noopener">下载</a>
+    </nav>
+  </div>
+</header>
+
+<main class="wrap">
+
+  <section class="hero" style="padding-bottom:26px">
+    <div class="reveal">
+      <div class="lbl">Multi-account console / Tauri 2 + Rust</div>
+      <h1>把多个 WorkBuddy 账号，<br>当成<em>一台机器</em>来开。</h1>
+      <p class="lead">
+        切号、签到、日常任务、积分、TOKEN、运行日志——六个分区一屏管完。
+        切换前先校验真实写入，失败自动回滚；用量预测按余额下降推天数，样本不足就说不足。
+      </p>
+      <div class="cta-row">
+        <a class="btn solid" href="https://github.com/a634691481-arch/workbuddy-deck/releases/latest" target="_blank" rel="noopener">Windows 安装包</a>
+        <a class="btn" href="https://github.com/a634691481-arch/workbuddy-deck/releases/latest" target="_blank" rel="noopener">免安装 zip</a>
+        <a class="btn" href="#panes">看六个分区 ↓</a>
+      </div>
+      <div class="meta">
+        <div><b data-count="6">0</b><span>账号槽位</span></div>
+        <div><b data-count="6">0</b><span>功能分区</span></div>
+        <div><b data-count="3">0</b><span>支持平台</span></div>
+        <div><b>0<span style="color:var(--hazard)">s</span></b><span>本地读写</span></div>
+      </div>
+    </div>
+
+    <div class="shot reveal d1">
+      <div class="ticks"><i></i><i></i><i></i><i></i></div>
+      <div class="scan"></div>
+      <img src="assets/01-accounts.png" alt="账号管理分区：卡片流展示余额、额度与用量预测">
+    </div>
+  </section>
+
+  <div class="ticker" aria-hidden="true">
+    <div class="ticker-in">
+      <b>ACCTS <u>06</u></b><b>BALANCE <u>12,480</u></b><b>RATE LIMIT <s>2 MODELS</s></b><b>NEXT RESET <u>28M</u></b>
+      <b>HEALTH <u>GOOD</u></b><b>FORECAST <u>2.4D</u></b><b>SWITCHES <u>37</u></b><b>ROLLED BACK <u>0</u></b>
+      <b>TOKENS 7D <u>1.82M</u></b><b>READY <u>●</u></b>
+      <b>ACCTS <u>06</u></b><b>BALANCE <u>12,480</u></b><b>RATE LIMIT <s>2 MODELS</s></b><b>NEXT RESET <u>28M</u></b>
+      <b>HEALTH <u>GOOD</u></b><b>FORECAST <u>2.4D</u></b><b>SWITCHES <u>37</u></b><b>ROLLED BACK <u>0</u></b>
+      <b>TOKENS 7D <u>1.82M</u></b><b>READY <u>●</u></b>
+    </div>
+  </div>
+
+  <section id="panes">
+    <div class="sec-head reveal">
+      <div>
+        <div class="lbl">01 — 06 / six panes</div>
+        <h2>六个分区，各管一件事</h2>
+        <p>不给同一份数据做两处呈现。签到态在单元条，余额在遥测带，日志四源合一——同一信息只出现一次。</p>
+      </div>
+      <div class="lbl">点击左侧切换 →</div>
+    </div>
+
+    <div class="panes reveal">
+      <div class="pane-list" role="tablist" aria-label="功能分区">
+        <button role="tab" aria-selected="true" data-i="0"><span class="no">01</span><span class="nm">账号</span><span class="ds">accounts</span></button>
+        <button role="tab" aria-selected="false" data-i="1"><span class="no">02</span><span class="nm">任务</span><span class="ds">tasks</span></button>
+        <button role="tab" aria-selected="false" data-i="2"><span class="no">03</span><span class="nm">积分</span><span class="ds">credits</span></button>
+        <button role="tab" aria-selected="false" data-i="3"><span class="no">04</span><span class="nm">TOKEN</span><span class="ds">tokens</span></button>
+        <button role="tab" aria-selected="false" data-i="4"><span class="no">05</span><span class="nm">日志</span><span class="ds">logs</span></button>
+      </div>
+      <div class="pane-view">
+        <img class="on" src="assets/01-accounts.png" alt="账号管理">
+        <img src="assets/02-tasks.png" alt="任务执行">
+        <img src="assets/03-credits.png" alt="积分统计">
+        <img src="assets/04-tokens.png" alt="TOKEN 统计">
+        <img src="assets/05-logs.png" alt="运行日志">
+        <div class="cap mono" id="pane-cap">01 / ACCOUNTS — 卡片流 · 余额 · 额度到期</div>
+      </div>
+    </div>
+  </section>
+
+  <section id="diff">
+    <div class="sec-head reveal">
+      <div>
+        <div class="lbl">what is actually different</div>
+        <h2>六件别家没有做的事</h2>
+        <p>切换本身是红海。真正省事的是切换前后的那几步：先验证、能回滚、算得清、查得到。</p>
+      </div>
+    </div>
+
+    <div class="grid3 reveal">
+      <div class="card">
+        <div class="n">01</div>
+        <h3>切号有三道硬门槛</h3>
+        <p>会话替换不足数直接 fail-closed，不写认证；写完回读磁盘校验 uid，不一致立刻回滚。宁可切不过去，不留半个坏状态。</p>
+      </div>
+      <div class="card">
+        <div class="n">02</div>
+        <h3>用量天数，样本不够就不猜</h3>
+        <p>只把<strong>余额下降</strong>算消耗，签到上涨不算负消耗；快照跨天按天归一。少于 3 天就显示「样本 1/3 天」，不给假天数。</p>
+      </div>
+      <div class="card">
+        <div class="n">03</div>
+        <h3>限流有台账，不是一句“被限了”</h3>
+        <p>次数 / 成功 / 已回滚 / 已中止 + 平均耗时，切换源单独一页。出问题先看这里，不用翻终端。</p>
+      </div>
+      <div class="card">
+        <div class="n">04</div>
+        <h3>健康分给出的是理由</h3>
+        <p>限流 −35、余额为 0 −50、余额不足 10% −30…… 卡片上一个圆点，悬停看到全部扣分项，不是黑箱评分。</p>
+      </div>
+      <div class="card">
+        <div class="n">05</div>
+        <h3>数据能带走</h3>
+        <p>四份 CSV 直接写盘：<code>accounts</code> <code>tokensDaily</code> <code>tokensModels</code> <code>credits</code>。带 BOM，Excel 双击不乱码。</p>
+      </div>
+      <div class="card">
+        <div class="n">06</div>
+        <h3>托盘就是读数</h3>
+        <p>不开窗也知道「账号数 · 合计余额 · 最紧账号 ≈N 天」。预测样本不足时写「样本不足」，不编数字。</p>
+      </div>
+    </div>
+  </section>
+
+  <section id="update">
+    <div class="sec-head reveal">
+      <div>
+        <div class="lbl">release loop</div>
+        <h2>发版到升级，一条闭环</h2>
+        <p>推 tag 触发 CI，三平台并行构建并签名；客户端读同一个清单，验签通过才安装。中间没有手工上传。</p>
+      </div>
+      <div class="lbl">GitHub Actions / minisign</div>
+    </div>
+
+    <div class="loop reveal" id="loop">
+      <div class="steps">
+        <div class="step"><div class="k">STEP 01</div><div class="t">改版本号<br>三处同步</div><div class="bar"></div></div>
+        <div class="step"><div class="k">STEP 02</div><div class="t">打 tag<br>触发 CI</div><div class="bar"></div></div>
+        <div class="step"><div class="k">STEP 03</div><div class="t">三平台<br>并行构建</div><div class="bar"></div></div>
+        <div class="step"><div class="k">STEP 04</div><div class="t">私钥签名<br>合并清单</div><div class="bar"></div></div>
+        <div class="step"><div class="k">STEP 05</div><div class="t">客户端检查<br>下载验签</div><div class="bar"></div></div>
+        <div class="step"><div class="k">STEP 06</div><div class="t">静默覆盖<br>自动重启</div><div class="bar"></div></div>
+      </div>
+      <pre><b>npm run bump</b> 0.1.2 <i>--tag</i>   <span style="color:var(--faint)"># 版本号 → commit → tag → push，CI 接手</span>
+<span style="color:var(--faint)"># 客户端：启动 8s 首查，之后每 6h；读 release 资产 latest.json（不走 API，无 60 次限流）</span></pre>
+    </div>
+  </section>
+
+  <section>
+    <div class="sec-head reveal">
+      <div>
+        <div class="lbl">build matrix</div>
+        <h2>三个平台，同一份代码</h2>
+        <p>Windows 安装包与免安装 zip、Linux 的 AppImage / deb、macOS 的 dmg 与 app 包，全部由 CI 产出并签名。</p>
+      </div>
+      <div class="lbl">v0.1.1 released</div>
+    </div>
+
+    <div class="plats reveal">
+      <div class="plat">
+        <div class="os"><b>WINDOWS</b><span>● READY</span></div>
+        <ul>
+          <li>WorkBuddy.Deck_x64-setup.exe</li>
+          <li>WorkBuddy.Deck_x64-portable.zip</li>
+          <li>.sig 签名随包发布</li>
+        </ul>
+      </div>
+      <div class="plat">
+        <div class="os"><b>LINUX</b><span>● READY</span></div>
+        <ul>
+          <li>WorkBuddy.Deck_amd64.AppImage</li>
+          <li>WorkBuddy.Deck_amd64.deb</li>
+          <li>WebKitGTK 4.1 运行时</li>
+        </ul>
+      </div>
+      <div class="plat">
+        <div class="os"><b>MACOS</b><span>● READY</span></div>
+        <ul>
+          <li>WorkBuddy.Deck_aarch64.dmg</li>
+          <li>WorkBuddy.Deck_aarch64.app.tar.gz</li>
+          <li>未签名，首次需右键打开</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <div class="end reveal">
+    <h2>现在就把账号池接上</h2>
+    <p>下载安装包，或拿走免安装 zip。数据全部留在本机 <span class="mono">~/.wb-switch</span>，不上传任何服务器。</p>
+    <div class="cta-row" style="justify-content:center;display:flex;gap:10px;flex-wrap:wrap">
+      <a class="btn solid" href="https://github.com/a634691481-arch/workbuddy-deck/releases/latest" target="_blank" rel="noopener">下载最新版</a>
+      <a class="btn" href="https://github.com/a634691481-arch/workbuddy-deck" target="_blank" rel="noopener">看源码</a>
+    </div>
+  </div>
+
+  <footer>
+    <span>WorkBuddy Deck · Tauri 2 + Rust + Vue 3</span>
+    <span><a href="https://github.com/a634691481-arch/workbuddy-deck" target="_blank" rel="noopener">github.com/a634691481-arch/workbuddy-deck</a></span>
+  </footer>
+</main>
+
+<script>
+(function(){
+  var reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+  // 入场：只做一次，避免滚动来回抖动
+  var io = new IntersectionObserver(function(entries){
+    entries.forEach(function(e){
+      if (e.isIntersecting){
+        e.target.classList.add('in');
+        if (e.target.id === 'loop') e.target.classList.add('in');
+        io.unobserve(e.target);
+      }
+    });
+  }, {threshold:.16, rootMargin:'0px 0px -8% 0px'});
+  document.querySelectorAll('.reveal, .loop').forEach(function(el){ io.observe(el); });
+
+  // 数字滚动：Hero 的三个读数从 0 数到目标
+  document.querySelectorAll('[data-count]').forEach(function(el){
+    var target = +el.dataset.count;
+    if (reduce){ el.textContent = String(target).padStart(2,'0'); return; }
+    var start = performance.now(), dur = 900;
+    requestAnimationFrame(function tick(now){
+      var p = Math.min(1, (now - start) / dur);
+      var eased = 1 - Math.pow(1 - p, 3);
+      el.textContent = String(Math.round(target * eased)).padStart(2,'0');
+      if (p < 1) requestAnimationFrame(tick);
+    });
+  });
+
+  // 分区切换：图片交叉淡入 + 底部读数跟随
+  var tabs = [].slice.call(document.querySelectorAll('.pane-list button'));
+  var imgs = [].slice.call(document.querySelectorAll('.pane-view img'));
+  var cap  = document.getElementById('pane-cap');
+  var labels = ['01 / ACCOUNTS — 卡片流 · 余额 · 额度到期',
+                '02 / TASKS — 任务表 · 进度 · 失败聚合',
+                '03 / CREDITS — 每日柱 · 分类维度 · 积分流水',
+                '04 / TOKENS — 周环比 · 模型构成 · 会话 TOP',
+                '05 / LOGS — 四源合一 · 切换台账 · 关键词检索'];
+  tabs.forEach(function(btn){
+    btn.addEventListener('click', function(){
+      var i = +btn.dataset.i;
+      tabs.forEach(function(b){ b.setAttribute('aria-selected', String(b === btn)); });
+      imgs.forEach(function(img, k){ img.classList.toggle('on', k === i); });
+      cap.textContent = labels[i];
+    });
+  });
+})();
+</script>
+</body>
+</html>
