@@ -1,13 +1,21 @@
 <script setup lang="ts">
 // 窗口控制依赖 Tauri 宿主；浏览器预览时 win 为 null，按钮照常渲染但不生效（不白屏）。
+import { onMounted } from "vue";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Eye, EyeOff, Minus, Square, X } from "lucide-vue-next";
 
 import { locale, setLocale, t } from "@/lib/i18n";
 import { isTauri } from "@/lib/tauri-env";
 import { maskAll, setMaskAll } from "@/lib/task-meta";
+import { useShell } from "@/composables/useShell";
+import { useUpdate } from "@/composables/useUpdate";
 
 const win = isTauri() ? getCurrentWindow() : null;
+const { go } = useShell();
+const { current: rev, hasUpdate, loadConfig } = useUpdate();
+
+// 标题栏先拿到本机版本号（设置页没打开过也要显示对），不额外发检查请求。
+onMounted(() => void loadConfig());
 </script>
 
 <template>
@@ -19,7 +27,16 @@ const win = isTauri() ? getCurrentWindow() : null;
     <div data-tauri-drag-region class="flex min-w-0 items-baseline gap-3">
       <span class="display text-[15px] text-foreground">WorkBuddy</span>
       <span class="lbl tracking-[0.18em] text-muted-foreground">{{ t("app.subtitle") }}</span>
-      <span class="lbl text-faint">REV 0.1.62</span>
+      <span class="lbl text-faint">REV {{ rev || "0.1.0" }}</span>
+      <!-- 有新版本：一个红方块，点进设置页（唯一能安装更新的地方） -->
+      <button
+        v-if="hasUpdate"
+        class="flex items-center gap-1 border border-hazard bg-hazard-soft px-1 text-[9px] uppercase tracking-[0.1em] text-hazard"
+        :title="t('up.newBadge')"
+        @click="go('settings')"
+      >
+        {{ t("up.newBadge") }}
+      </button>
     </div>
 
     <div class="flex items-stretch self-stretch">

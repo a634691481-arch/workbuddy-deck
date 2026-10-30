@@ -10,6 +10,7 @@ mod executor;
 mod export;
 mod scheduler;
 mod tray;
+mod update;
 
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -28,6 +29,8 @@ fn show_main(app: &AppHandle) {
 pub fn run() {
     tauri::Builder::default()
         .plugin(tauri_plugin_dialog::init())
+        // 自动更新：签名校验 + NSIS 覆盖安装由插件负责，这里只提供清单与入口
+        .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             commands::list_accounts,
             commands::account_detail,
@@ -70,6 +73,10 @@ pub fn run() {
             commands::auto_switch_logs,
             commands::auto_switch_clear_logs,
             commands::auto_switch_check,
+            commands::update_check,
+            commands::update_install,
+            commands::update_config_get,
+            commands::update_config_set,
         ])
         .setup(|app| {
             // 托盘菜单：快捷执行在上，退出压到最下面并与其他项分隔。
@@ -77,12 +84,13 @@ pub fn run() {
             let checkin = MenuItem::with_id(app, "checkin", "一键签到（全部账号）", true, None::<&str>)?;
             let daily = MenuItem::with_id(app, "daily", "执行全部日常", true, None::<&str>)?;
             let refresh = MenuItem::with_id(app, "refresh", "刷新窗口数据", true, None::<&str>)?;
+            let update = MenuItem::with_id(app, "update", "检查更新", true, None::<&str>)?;
             let quit = MenuItem::with_id(app, "quit", "退出程序", true, None::<&str>)?;
             let sep_a = PredefinedMenuItem::separator(app)?;
             let sep_b = PredefinedMenuItem::separator(app)?;
             let menu = Menu::with_items(
                 app,
-                &[&show, &sep_a, &checkin, &daily, &refresh, &sep_b, &quit],
+                &[&show, &sep_a, &checkin, &daily, &refresh, &update, &sep_b, &quit],
             )?;
 
             let mut builder = TrayIconBuilder::with_id("main-tray")
@@ -109,6 +117,15 @@ pub fn run() {
                     "refresh" => {
                         // 前端监听后重新拉账号与详情
                         let _ = app.emit("tray://refresh", ());
+                    }
+                    "update" => {
+                        // 托盘手动检查：结果走事件，前端据此点亮标题栏更新标记
+                        let app = app.clone();
+                        tauri::async_runtime::spawn(async move {
+                            let status = update::check(true).await;
+                            let _ = app.emit("update://checked", status);
+                            show_main(&app);
+                        });
                     }
                     "quit" => app.exit(0),
                     _ => {}
@@ -138,6 +155,9 @@ pub fn run() {
 
             // 每日定时调度：常驻期间后台自转，到点自动跑「全部日常」
             scheduler::spawn(app.handle().clone());
+
+            // 自动更新轮询：启动 8s 后首查，之后每 6 小时（可在设置里关闭）
+            update::spawn_poller(app.handle().clone());
             Ok(())
         })
         // 关闭即隐藏：保留后台执行与托盘，不销毁 WebView（下次显示无需重建）

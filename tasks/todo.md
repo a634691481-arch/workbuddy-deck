@@ -345,3 +345,70 @@ decision(forced-on) = Skip("当前账号未被限流")
 
 `validate_readme_pair.py` 的语言互链、同步标记、代码围栏、关键 Token 全部通过；
 唯一 FAIL 是「两侧图片 target 集合不一致」——中英各用本语言界面截图，属有意设计，已写进 AGENTS.md。
+
+---
+
+# 任务：自动更新闭环（GitHub Releases + Tauri Updater）
+
+## 状态：✅ 已实现（2026-10-31 00:10）
+
+## 目标
+`发版 → CI 构建签名 → Release → 客户端检查 → 下载校验 → 覆盖安装 → 重启 → 留痕` 全自动，
+失败路径可解释、不阻断启动、不静默放行。
+
+## 闭环六段
+
+| 段 | 触发 | 实现 | 失败兜底 |
+| --- | --- | --- | --- |
+| 1 发版 | 本地 `npm run bump 0.1.1` + `git tag v0.1.1 && git push --tags` | `scripts/bump.mjs` 同步 package.json / Cargo.toml / tauri.conf.json | 版本不一致时脚本报错退出 |
+| 2 CI | tag `v*` / 手动 dispatch | `.github/workflows/release.yml`：windows-latest → npm ci → tauri build --bundles nsis → 签名 → latest.json → Release | 构建失败不发 Release（draft 保留） |
+| 3 检查 | 启动后 8s、每 6h、设置页手动、托盘菜单 | `update.rs`：GET `releases/latest/download/latest.json`（不走 API，无限流）；支持镜像前缀 | 3 端点依次退让 → 6h 缓存 → 错误码上屏，不阻断启动 |
+| 4 比对 | 拿到 manifest | semver 逐段比较，`latest > current` 才算有更新 | 本地版本口径统一 `env!("CARGO_PKG_VERSION")` |
+| 5 安装 | 用户点「下载并安装」 | `tauri-plugin-updater` `download_and_install` + 进度事件 | 签名校验失败即中止；下载失败可重试 |
+| 6 留痕 | 检查/安装结果 | `notifications::record` → 日志页「通知存档」 | 写入失败不影响更新结果 |
+
+## 必须同时修的既有缺陷
+`commands.rs:1399` `system_info` 返回 `wb_switch_core::...::APP_VERSION` = core 的 **0.1.62**，
+而本应用 `tauri.conf.json` 是 **0.1.0**。更新比对若用这个值会永远认为自己最新（或被误判）。
+改为本应用 `env!("CARGO_PKG_VERSION")`，并让 core 只提供工具函数。
+
+## 改动清单（8 项）
+
+1. `crates/wb-switch-core/` — vendored（2.8MB / 34 文件），`Cargo.toml` 改 `path = "crates/wb-switch-core"`。
+   **CI 能编译的前提**：现在依赖 `../../workbuddy-switch/...`，GitHub runner 上不存在。
+2. `src-tauri/Cargo.toml` — `+ tauri-plugin-updater = "2"`。
+3. `src-tauri/tauri.conf.json` — `bundle.createUpdaterArtifacts: true`；`plugins.updater` 三件：
+   `pubkey`、`endpoints: [releases/latest/download/latest.json]`、`windows.installMode: passive`。
+4. `src-tauri/src/update.rs`（新，≤300 行）— `update_check(force)` / `update_install()` /
+   manifest 解析 / semver 比较 / 镜像前缀 / 6h 缓存 / 进度事件 `update://progress`。
+5. `src-tauri/src/lib.rs` — 注册 plugin、两个 command、启动延迟检查、托盘「检查更新」项。
+6. `src-tauri/src/commands.rs` — `system_info` 版本修正；新增 `update_config_get/set`（镜像、自动检查开关）。
+7. 前端 — `lib/api.ts` 类型、`composables/useUpdate.ts`、`SettingsView.vue` 更新卡
+   （当前版本 / 最新版本 / 检查按钮 / 下载进度 / 重启安装）、`TitleBar.vue` 有新版本小圆点、i18n（`up.*`）。
+8. `.github/workflows/release.yml`、`scripts/bump.mjs`、README 增加「自动更新」段与发版步骤。
+
+## 验收（逐条可验）
+- [x] 版本口径统一：`system_info` 改本应用版本；标题栏 `REV` 由硬编码 0.1.62 改为 `update_config_get` 返回值
+- [x] `npm run verify` 全绿（vue-tsc 0 错误 / clippy 0 警告）
+- [x] 单测 4 条通过：semver 多位段比较、镜像后缀归一、清单 URL 拼接顺序、**真实本地 HTTP 拉清单→解版本→比对**
+- [x] 签名链验证：`tauri signer sign` 用私钥成功签出 `.exe.sig`，与 `tauri.conf.json` 公钥配对
+- [x] 常驻链验证：release 版启动后 `update.log` 出现 `poller start` → 8s 后 `check ok=… current=0.1.0 mirror=…`
+- [ ] 打 tag 后 Actions 绿、Release 含 `*_x64-setup.exe` / `.sig` / `latest.json`（待首次发版）
+- [ ] 覆盖安装后进程自启、`REV` 变新版本（需真实 Release 才能验，本机 NSIS 工具链下载被墙）
+- [ ] 篡改清单 url → 签名失败中止（同上，需真实 Release）
+
+## 实施记录
+- vendored `crates/wb-switch-core`（2.8MB / 58 文件）+ 补 `scripts/codebuddy-cli-helper.cjs`（core 用 `include_str!` 内嵌，缺了直接编译失败）
+- 新增 `update.rs`（检查/manifest 解析/镜像/缓存/安装/轮询/落地日志）、4 个命令、托盘「检查更新」、设置页更新卡、标题栏更新角标
+- 已知取舍：GUI 进程没有控制台，`eprintln!` 写不出去 → 更新链路写 `~/.wb-switch/update.log`（>128KB 自动重建）
+- 环境限制：本机沙箱内跨进程 loopback HTTP 不通（curl 也 000），故端到端「本地清单」只能靠进程内单测证明
+
+## 需用户操作（无法代做）
+1. 仓库 Settings → Secrets and variables → Actions：新增 `TAURI_SIGNING_PRIVATE_KEY`、
+   `TAURI_SIGNING_PRIVATE_KEY_PASSWORD`（我生成后给出内容，私钥不入库）。
+2. 首次 Release 由 CI 创建；之后每次发版只需 `bump + tag + push`。
+
+## 已知风险
+- CI 首次编译含 `rusqlite(bundled)` + `windows` crate，约 15–20 分钟；之后有缓存。
+- 国内直连 GitHub Release 可能慢：内置镜像前缀开关（默认空），填 `https://ghproxy.net/` 一类前缀即可。
+- 自动更新会关闭进程覆盖安装；默认**只在用户点确认后安装**，不静默后台装。

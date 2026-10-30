@@ -8,7 +8,8 @@
 import { computed, onMounted, ref } from "vue";
 import { CircleAlert, Download, Eraser, ExternalLink, FolderOpen, Loader2, RefreshCw } from "lucide-vue-next";
 import { open, save } from "@tauri-apps/plugin-dialog";
-
+import { useUpdate } from "@/composables/useUpdate";
+import { formatClock } from "@/lib/utils";
 import {
   autoSwitchCheck,
   autoSwitchSet,
@@ -64,6 +65,64 @@ async function load() {
 onMounted(() => {
   void load();
   void loadAutoSwitch();
+  void loadUpdate();
+});
+
+// ───────────────────────── 自动更新 ─────────────────────────
+// 检查 / 下载 / 进度都在 composable 里，这里只管「把结果排成一行读数」。
+// 解构成顶层 ref，模板才会自动解包（`up.status` 这种包一层的写法不会）。
+const {
+  status: upStatus,
+  checking: upChecking,
+  installing: upInstalling,
+  downloaded: upDownloaded,
+  percent: upPercent,
+  message: upMessage,
+  autoCheck: upAuto,
+  mirror: upMirror,
+  current: upCurrent,
+  hasUpdate: upHasUpdate,
+  loadConfig: loadUpdateConfig,
+  check: checkUpdate,
+  install: installUpdate,
+  saveConfig: saveUpdateConfig,
+} = useUpdate();
+
+const mirrorDraft = ref("");
+const mirrorSaved = ref(false);
+
+async function loadUpdate() {
+  await loadUpdateConfig();
+  mirrorDraft.value = upMirror.value;
+}
+
+async function saveMirror() {
+  await saveUpdateConfig(upAuto.value, mirrorDraft.value.trim());
+  mirrorDraft.value = upMirror.value;
+  mirrorSaved.value = true;
+  window.setTimeout(() => (mirrorSaved.value = false), 1600);
+  // 换源后旧结果作废：清掉再查一次，避免「填了镜像仍显示直连失败」
+  await checkUpdate(true);
+}
+
+async function toggleAutoCheck() {
+  await saveUpdateConfig(!upAuto.value, upMirror.value);
+}
+
+const checkedLabel = computed(() => {
+  const at = upStatus.value?.checkedAt;
+  return at ? formatClock(at * 1000) : t("up.unknown");
+});
+
+const latestLabel = computed(() => {
+  const s = upStatus.value;
+  if (!s?.ok) return t("up.unknown");
+  return s.latest ? `v${s.latest}` : t("up.unknown");
+});
+
+const progressLabel = computed(() => {
+  if (upPercent.value === null) return `${(upDownloaded.value / 1048576).toFixed(1)} MB`;
+  return `${upPercent.value}%`;
 });
 
 // ───────────────────────── 限流自动切换 ─────────────────────────
@@ -324,6 +383,110 @@ async function doClear() {
                 {{ info?.storeDir ?? "—" }}
               </div>
             </div>
+          </div>
+        </section>
+
+        <!-- 自动更新：当前 / 最新 / 检查时刻 三格读数 + 一行动作 + 一行设置 -->
+        <section class="border border-border bg-card xl:col-span-2">
+          <div class="flex items-center justify-between border-b border-border px-3 py-1.5">
+            <div class="flex items-center gap-2">
+              <span class="lbl">// {{ t("up.title") }}</span>
+              <span
+                v-if="upHasUpdate && !upInstalling"
+                class="readout border border-hazard bg-hazard-soft px-1.5 py-0.5 text-[8px] uppercase text-hazard"
+              >
+                {{ t("up.available") }}
+              </span>
+            </div>
+            <button
+              type="button"
+              class="flex items-center gap-1 border border-border-strong px-2 py-0.5 text-[9px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
+              :disabled="upChecking || upInstalling"
+              @click="checkUpdate(true)"
+            >
+              <Loader2 v-if="upChecking" class="size-3 animate-spin" />
+              <RefreshCw v-else class="size-3" />
+              {{ upChecking ? t("up.checking") : t("up.check") }}
+            </button>
+          </div>
+
+          <div class="grid grid-cols-3 gap-px bg-border">
+            <div class="bg-card px-3 py-2">
+              <div class="lbl">{{ t("up.current") }}</div>
+              <div class="readout mt-0.5 text-[13px] text-foreground">
+                v{{ upCurrent || info?.version || "—" }}
+              </div>
+            </div>
+            <div class="bg-card px-3 py-2">
+              <div class="lbl">{{ t("up.latest") }}</div>
+              <div class="readout mt-0.5 text-[13px]" :class="upHasUpdate ? 'text-hazard' : 'text-foreground'">
+                {{ latestLabel }}
+              </div>
+            </div>
+            <div class="bg-card px-3 py-2">
+              <div class="lbl">{{ t("up.checkedAt") }}</div>
+              <div class="readout mt-0.5 text-[13px] text-muted-foreground">{{ checkedLabel }}</div>
+            </div>
+          </div>
+
+          <!-- 下载进度 / 结果提示：只有进行中或出错时才出现，常态不占高度 -->
+          <div v-if="upInstalling || upMessage" class="border-t border-border px-3 py-2">
+            <div v-if="upInstalling" class="flex items-center gap-2">
+              <div class="h-1 min-w-0 flex-1 bg-border">
+                <div class="h-full bg-hazard transition-[width]" :style="{ width: `${upPercent ?? 4}%` }" />
+              </div>
+              <span class="readout shrink-0 text-[10px] text-hazard">{{ progressLabel }}</span>
+            </div>
+            <div v-else class="flex items-start gap-1.5 text-[10px] text-hazard">
+              <CircleAlert class="mt-px size-3 shrink-0" />
+              <span class="min-w-0 break-all">{{ upMessage }}</span>
+            </div>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-border px-3 py-2">
+            <button
+              type="button"
+              class="flex shrink-0 items-center gap-1 border px-2 py-1 text-[10px] uppercase tracking-[0.1em] transition-colors disabled:opacity-40"
+              :class="upHasUpdate && !upInstalling ? 'border-hazard bg-hazard text-white hover:bg-hazard/90' : 'border-border-strong text-muted-foreground hover:border-foreground hover:text-foreground'"
+              :disabled="upInstalling || upChecking || !upHasUpdate"
+              @click="installUpdate()"
+            >
+              <Download class="size-3" />
+              {{ upInstalling ? t("up.installing") : t("up.install") }}
+            </button>
+
+            <button
+              type="button"
+              class="readout shrink-0 border px-1.5 py-1 text-[9px] uppercase transition-colors"
+              :class="upAuto ? 'border-hazard bg-hazard-soft text-hazard' : 'border-border-strong text-faint hover:text-foreground'"
+              @click="toggleAutoCheck()"
+            >
+              {{ t("up.auto") }} {{ upAuto ? t("st.on") : t("st.off") }}
+            </button>
+
+            <label class="flex min-w-[200px] flex-1 items-center gap-1 text-[9px] text-faint">
+              {{ t("up.mirror") }}
+              <input
+                v-model="mirrorDraft"
+                type="text"
+                :placeholder="t('up.mirrorHint')"
+                class="readout min-w-0 flex-1 border border-border-strong bg-input px-1 py-0.5 text-[10px] text-foreground"
+                @keyup.enter="saveMirror()"
+              />
+            </label>
+            <button
+              type="button"
+              class="shrink-0 border border-border-strong px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+              @click="saveMirror()"
+            >
+              {{ mirrorSaved ? t("up.saved") : t("up.save") }}
+            </button>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/60 px-3 py-1.5 text-[9px] text-faint">
+            <span>{{ t("up.autoHint") }}</span>
+            <span class="text-border-strong">/</span>
+            <span>{{ t("up.restartHint") }}</span>
           </div>
         </section>
 

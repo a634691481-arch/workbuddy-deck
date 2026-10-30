@@ -1396,7 +1396,7 @@ pub fn system_info() -> Value {
 
     json!({
         "ok": true,
-        "version": wb_switch_core::modules::update::APP_VERSION,
+        "version": crate::update::APP_VERSION,
         "os": std::env::consts::OS,
         "arch": std::env::consts::ARCH,
         "storeDir": store.display().to_string(),
@@ -1433,5 +1433,49 @@ pub fn open_store_dir() -> Value {
     match spawned {
         Ok(_) => json!({ "ok": true, "path": target }),
         Err(error) => json!({ "ok": false, "path": target, "error": error.to_string() }),
+    }
+}
+
+/// 检查更新（`force=true` 绕过 6 小时缓存）。
+#[tauri::command]
+pub async fn update_check(force: bool) -> Value {
+    crate::update::check(force).await
+}
+
+/// 下载并安装更新：立即返回，进度与结果走 `update://progress` / `update://done` 事件。
+/// Windows 上安装器被拉起后本进程由插件结束，命令不会有机会「返回安装结果」。
+#[tauri::command]
+pub fn update_install(app: tauri::AppHandle) -> Value {
+    crate::update::install(app)
+}
+
+/// 读取更新设置。
+#[tauri::command]
+pub fn update_config_get() -> Value {
+    let cfg = crate::update::load_config();
+    json!({
+        "ok": true,
+        "current": crate::update::APP_VERSION,
+        "autoCheck": cfg.auto_check,
+        "mirror": cfg.mirror,
+        "configPath": crate::update::config_path().display().to_string(),
+    })
+}
+
+/// 保存更新设置：镜像变更即时生效并清空缓存（旧缓存是按旧源查的）。
+#[tauri::command]
+pub fn update_config_set(auto_check: bool, mirror: String) -> Value {
+    let mut cfg = crate::update::load_config();
+    let changed = cfg.mirror != mirror;
+    cfg.auto_check = auto_check;
+    cfg.mirror = mirror;
+    match crate::update::save_config(&cfg) {
+        Ok(()) => {
+            if changed {
+                crate::update::invalidate_cache();
+            }
+            json!({ "ok": true, "autoCheck": cfg.auto_check, "mirror": cfg.mirror })
+        }
+        Err(error) => json!({ "ok": false, "error": error.to_string() }),
     }
 }

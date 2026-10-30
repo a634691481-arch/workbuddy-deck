@@ -743,3 +743,54 @@ export const exportData = (kind: ExportKind, path: string) =>
 /** 把四份 CSV 一起写进目录。 */
 export const exportAllData = (dir: string) =>
   invoke<ExportAllResult>("export_all_data", { dir });
+
+// ───────────────────────── 自动更新 ─────────────────────────
+
+/** 一次更新检查的结果。`ok=false` 时只有 `error` / `releaseUrl` 有意义。 */
+export interface UpdateStatus {
+  ok: boolean;
+  current?: string;
+  latest?: string;
+  hasUpdate?: boolean;
+  notes?: string | null;
+  publishedAt?: string | null;
+  releaseUrl?: string;
+  checkedAt?: number;
+  autoCheck?: boolean;
+  mirror?: string;
+  error?: string;
+}
+
+export interface UpdateConfig {
+  ok: boolean;
+  current: string;
+  autoCheck: boolean;
+  mirror: string;
+  configPath?: string;
+  error?: string;
+}
+
+/** 下载进度：`total` 为空表示服务端没给 Content-Length。 */
+export interface UpdateProgress {
+  downloaded: number;
+  total: number | null;
+}
+
+/** 安装结束（Windows 上成功时进程已被安装器接管，多半收不到这条）。 */
+export interface UpdateDone {
+  ok: boolean;
+  error?: string | null;
+  version?: string;
+}
+
+/** 检查更新；`force=true` 绕过 6 小时缓存。 */
+export const updateCheck = (force = false) => invoke<UpdateStatus>("update_check", { force });
+
+/** 触发下载安装：立即返回，进度与结果走 `update://progress` / `update://done` 事件。 */
+export const updateInstall = () =>
+  invoke<{ ok: boolean; started?: boolean; error?: string }>("update_install");
+
+export const updateConfigGet = () => invoke<UpdateConfig>("update_config_get");
+
+export const updateConfigSet = (autoCheck: boolean, mirror: string) =>
+  invoke<UpdateConfig>("update_config_set", { autoCheck, mirror });

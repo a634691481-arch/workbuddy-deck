@@ -127,6 +127,17 @@ StatusBar   24px  ● READY · 最近刷新 · 账号数 · 日志数
   **三个安全默认不能改**：`enabled=false`、`notify_only=true`（自动切换会关进程打断用户）、
   冷却 30 分钟。自动执行时的切换是 **plain**（`replace_sessions=false`）——自动流程绝不碰会话数据。
   拿不到当前账号一律 Skip，宁可不动也不能瞎切。
+- **自动更新 = `src-tauri/src/update.rs` + `tauri-plugin-updater`**：检查与安装是两条独立路径，
+  别合并。检查用 `reqwest` 直读 release 资产 `latest.json`（**不走 GitHub API**：60 次/小时/IP，
+  多人共用出口 IP 会集体 403）；安装交给插件做 minisign 校验与 NSIS 覆盖。
+  三条不能动的前提：
+  ① **版本基线只认本应用 `env!("CARGO_PKG_VERSION")`**，不许再借 core 的 `APP_VERSION`
+  （core 是 0.1.62，一比就错，标题栏曾因此硬编码显示 0.1.62）；
+  ② 签名校验失败必须中止，不做「先装后补签」；
+  ③ 安装只在用户点确认后发生，后台轮询**只提示不安装**。
+  发版闭环：`npm run bump X.Y.Z --tag` → CI 构建签名 → Release → 客户端 8s 首查 / 每 6h 轮询。
+  `bundle.createUpdaterArtifacts=true` 意味着**本地打安装包必须带 `TAURI_SIGNING_PRIVATE_KEY`**，
+  只想要 exe 时用 `npm run tauri build -- --no-bundle`（不触发签名）。
 - **额度窗口没有独立模型**（2026-10-30 核实后放弃）：WorkBuddy 官方**不提供** 5h / 7d
   这类窗口字段；积分包到期（含企业配额周期）走 `resources[].expireAt`，限流恢复走
   `rateLimits[].resetAt`，卡片上已分别有到期时间与「28m 后恢复」倒计时。

@@ -30,6 +30,18 @@
   "bundle": {
     "active": true,
     "targets": ["nsis"],
-    "icon": ["icons/icon.ico", "icons/32x32.png", "icons/128x128.png"]
+    "icon": ["icons/icon.ico", "icons/32x32.png", "icons/128x128.png"],
+    "createUpdaterArtifacts": true
+  },
+  "plugins": {
+    "updater": {
+      "pubkey": "dW50cnVzdGVkIGNvbW1lbnQ6IG1pbmlzaWduIHB1YmxpYyBrZXk6IDNENDU1MEM3NUM1RENBNTYKUldSV3lsMWN4MUJGUFpMejh0YXJ0S2hMZVJ5K0Uyd1lGNkNRRkJLdmVTN0lOT3Buang5YnQyRVQK",
+      "endpoints": [
+        "https://github.com/a634691481-arch/workbuddy-deck/releases/latest/download/latest.json"
+      ],
+      "windows": {
+        "installMode": "passive"
+      }
+    }
   }
 }

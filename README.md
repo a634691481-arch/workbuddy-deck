@@ -88,18 +88,24 @@
 
 ## 快速开始
 
-目前只发布源码。
+**装现成的**：到 [Releases](https://github.com/a634691481-arch/workbuddy-deck/releases) 下最新的
+`*_x64-setup.exe`，装完直接运行。应用内的「系统设置 → 自动更新」会自动发现后续版本。
+
+**从源码构建**：
 
 ```bash
 git clone https://github.com/a634691481-arch/workbuddy-deck.git
 cd workbuddy-deck
 npm install
-npm run tauri build -- --no-bundle
+npm run tauri build                  # NSIS 安装包 + exe
+npm run tauri build -- --no-bundle   # 只出 exe，跳过签名（本地调试够用）
 ```
 
-产物在 `src-tauri/target/release/workbuddy-task-assistant.exe`。前置条件：Node.js 18+、Rust stable、Windows 10/11（WebView2 运行时）。
+产物：安装包在 `src-tauri/target/release/bundle/nsis/`，裸 exe 在 `src-tauri/target/release/workbuddy-task-assistant.exe`。
+前置条件：Node.js 18+、Rust stable、Windows 10/11（WebView2 运行时）。
 
-> ⚠️ **构建依赖尚未随仓库发布**：`src-tauri/Cargo.toml` 用 `path` 引用一个独立的领域能力 crate（账号库、签到、成长任务、旅行、令牌、切换的实现）。当前克隆后需自行提供该 crate 才能编译，这是本仓库唯一的硬性构建门槛，正在整理独立发布方案。
+领域能力 crate（账号库、签到、成长任务、旅行、令牌、切换）已随仓库放在 `crates/wb-switch-core/`，
+克隆即可编译，不再需要外部路径。
 
 只想调界面（无数据）可以跑浏览器预览：
 
@@ -108,6 +114,35 @@ npx vite --port 1421
 ```
 
 打开 `http://localhost:1421/`，hash 可直达分区：`#accounts` / `#tasks` / `#credits` / `#tokens` / `#logs` / `#settings`。
+
+## 自动更新
+
+发版到客户端升级是一条闭环，中间没有手工上传步骤：
+
+```
+改版本号  →  打 tag  →  CI 构建+签名  →  Release  →  客户端检查  →  下载校验  →  覆盖安装  →  重启
+```
+
+| 段 | 做法 |
+| --- | --- |
+| 版本号 | `npm run bump 0.1.1` 一次同步 `package.json` / `Cargo.toml` / `tauri.conf.json`；三处本来不一致就直接报错退出 |
+| 发版 | `npm run bump 0.1.1 --tag`（或手动 `git tag v0.1.1 && git push --tags`） |
+| 构建 | `.github/workflows/release.yml`：windows-latest → `tauri build --bundles nsis` → 用私钥签出 `.sig` + `latest.json` |
+| 检查 | 启动 8 秒后首查，之后每 6 小时；设置页可手动检查。读的是 release 资产 `latest.json`，**不走 GitHub API**（那有 60 次/小时/IP 限制） |
+| 校验 | minisign 签名不匹配直接中止，不安装 |
+| 安装 | NSIS `passive` 模式覆盖安装，装完自动重启；旧版本进程由安装器接管关闭 |
+| 留痕 | 结果写入通知存档，日志页「通知存档」能看到 `更新 · v0.1.1 已下载并校验通过` |
+
+**换源**：设置页「镜像前缀」可填 `https://ghproxy.net/` 一类前缀，检查与下载都走镜像；留空即直连 GitHub。
+
+**维护者一次性配置**（仓库 Settings → Secrets and variables → Actions）：
+
+| Secret | 内容 |
+| --- | --- |
+| `TAURI_SIGNING_PRIVATE_KEY` | `tauri signer generate` 产出的私钥全文（**不入库**） |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | 该私钥的口令 |
+
+私钥或口令丢失后，已发布版本将无法再自动升级（客户端只认对应公钥），只能让用户手动装新包。
 
 ## 架构
 
@@ -143,9 +178,8 @@ npx vite --port 1421
 ## 已知限制
 
 - 仅 Windows（依赖 WebView2）。
-- 无自动更新，升级靠重新构建或替换 exe。
-- 领域能力 crate 未随仓库发布，源码构建需要自行提供（见上）。
-- 尚无 CI 与自动化测试流水线；前端类型检查与 clippy 通过本地 `npm run verify` 执行。
+- 自动更新依赖 GitHub Releases：国内直连可能慢，需在设置里填镜像前缀。
+- 尚无单元测试之外的自动化测试流水线；类型检查与 clippy 由本地 `npm run verify` 执行，CI 只负责构建发版。
 - 界面文案中文为主，i18n 已内置中英切换，英文文案仍在补。
 - 用量预测需要每个账号至少 3 天快照才会给出天数，新装当天只会显示样本进度。
 

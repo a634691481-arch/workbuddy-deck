@@ -1,0 +1,54 @@
+name: release
+
+# 打 tag 即发版：构建 NSIS 安装包 → 用私钥签名 → 生成 latest.json → 建 Release。
+# 客户端读 releases/latest/download/latest.json，所以发布必须是「正式版」（非 draft/prerelease）。
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "要构建的版本号（如 v0.1.1）"
+        required: true
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - uses: dtolnay/rust-toolchain@stable
+
+      # vendored core 编译慢（rusqlite bundled + windows crate），缓存能省 10 分钟以上
+      - uses: swatinem/rust-cache@v2
+        with:
+          workspaces: src-tauri
+
+      - run: npm ci
+
+      - uses: tauri-apps/tauri-action@v0
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        with:
+          tagName: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+          releaseName: "WorkBuddy Deck ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}"
+          releaseBody: |
+            Windows 安装包（NSIS）与 `latest.json` 由 CI 产出；应用内「系统设置 → 自动更新」会自动发现本版本。
+            安装包的 `.sig` 签名用于客户端校验，不要单独分发 exe。
+          releaseDraft: false
+          prerelease: false
+          includeUpdaterJson: true
+          args: --bundles nsis

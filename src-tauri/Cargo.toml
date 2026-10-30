@@ -12,8 +12,9 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-# 并发查余额用信号量限流；Tauri 内部本就跑 tokio，这里只补 feature 不引入第二份运行时
-tokio = { version = "1", features = ["rt", "sync"] }
+# 并发查余额用信号量限流；更新轮询要 sleep。Tauri 内部本就跑 tokio，
+# 这里只补 feature 不引入第二份运行时。
+tokio = { version = "1", features = ["rt", "sync", "time"] }
 # tray-icon：关闭窗口后常驻系统托盘
 # image-png：托盘菜单用 PNG 图标
 # protocol-asset：预留本地图标资源
@@ -25,6 +26,12 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # 定时调度按本地日期 / 时刻判断（lastRunDate、HH:MM 到点）
 chrono = "0.4"
+# 自动更新：下载 / 校验 minisign 签名 / 调用 NSIS 覆盖安装，都由官方插件的
+# Windows 后端处理（自己拼 installer 命令行会在进程占用时失败）。
+# process：安装器启动后需要主动退出当前进程，交给插件做更稳。
+tauri-plugin-updater = "2"
+# 检查更新用：与 core 同版本同 feature，直接复用已编译产物，不增加构建时间。
+reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 # 直接复用已有工具的核心逻辑（账号库 / 签到 / 成长任务 / 旅行 / 令牌续期），
-# 不另起一份网络与存储实现。
-wb-switch-core = { path = "../../workbuddy-switch/crates/wb-switch-core" }
+# 不另起一份网络与存储实现。已 vendored 进 crates/，克隆即可编译（CI 前提）。
+wb-switch-core = { path = "../crates/wb-switch-core" }

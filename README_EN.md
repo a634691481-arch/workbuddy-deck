@@ -88,18 +88,25 @@ The tray tooltip shows account count, total balance, and the tightest account's 
 
 ## Quick start
 
-Source only for now.
+**Install a build**: grab the latest `*_x64-setup.exe` from
+[Releases](https://github.com/a634691481-arch/workbuddy-deck/releases). The in-app
+"System → Updates" card picks up later versions automatically.
+
+**Build from source**:
 
 ```bash
 git clone https://github.com/a634691481-arch/workbuddy-deck.git
 cd workbuddy-deck
 npm install
-npm run tauri build -- --no-bundle
+npm run tauri build                  # NSIS installer + exe
+npm run tauri build -- --no-bundle   # exe only, skips signing (fine for local work)
 ```
 
-The binary lands at `src-tauri/target/release/workbuddy-task-assistant.exe`. Requirements: Node.js 18+, stable Rust, Windows 10/11 with the WebView2 runtime.
+Installer: `src-tauri/target/release/bundle/nsis/`; raw exe: `src-tauri/target/release/workbuddy-task-assistant.exe`.
+Requirements: Node.js 18+, stable Rust, Windows 10/11 with the WebView2 runtime.
 
-> ⚠️ **The domain crate is not published with this repo yet.** `src-tauri/Cargo.toml` references it by `path` (accounts, check-in, growth tasks, travel, tokens, switching). A fresh clone needs that crate supplied before it compiles — the only hard build blocker here. Packaging it separately is in progress.
+The domain crate (accounts, check-in, growth tasks, travel, tokens, switching) is vendored at
+`crates/wb-switch-core/`, so a fresh clone builds with no external path.
 
 To work on the UI only (no data):
 
@@ -108,6 +115,35 @@ npx vite --port 1421
 ```
 
 Open `http://localhost:1421/`; hashes jump straight to a pane: `#accounts` / `#tasks` / `#credits` / `#tokens` / `#logs` / `#settings`.
+
+## Auto-update
+
+Tag to running client is one closed loop with no manual upload step:
+
+```
+bump version  →  push tag  →  CI builds + signs  →  Release  →  client check  →  verify  →  install  →  restart
+```
+
+| Stage | How |
+| --- | --- |
+| Version | `npm run bump 0.1.1` writes `package.json` / `Cargo.toml` / `tauri.conf.json` at once; it refuses to run when the three already disagree |
+| Release | `npm run bump 0.1.1 --tag`, or `git tag v0.1.1 && git push --tags` |
+| Build | `.github/workflows/release.yml`: windows-latest → `tauri build --bundles nsis` → sign `.sig` + `latest.json` |
+| Check | 8s after launch, then every 6h; manual check in Settings. Reads the release asset `latest.json`, **never the GitHub API** (60 req/h/IP) |
+| Verify | A minisign mismatch aborts the install |
+| Install | NSIS in `passive` mode overwrites in place and relaunches; the installer closes the old process |
+| Trail | Result lands in the notification archive — visible in Logs as `更新 · v0.1.1 已下载并校验通过` |
+
+**Mirror**: the Settings card accepts a prefix such as `https://ghproxy.net/`; both check and download go through it. Empty means direct GitHub.
+
+**One-time maintainer setup** (repo Settings → Secrets and variables → Actions):
+
+| Secret | Value |
+| --- | --- |
+| `TAURI_SIGNING_PRIVATE_KEY` | the private key from `tauri signer generate` (**never commit it**) |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | its passphrase |
+
+Lose the key or passphrase and already-shipped clients can no longer auto-upgrade — they trust that one public key.
 
 ## Architecture
 
@@ -143,9 +179,8 @@ Design choices worth knowing:
 ## Known limitations
 
 - Windows only (WebView2).
-- No auto-update; upgrade by rebuilding or replacing the exe.
-- The domain crate is not published with this repo, so source builds need it supplied (see above).
-- No CI or automated test pipeline yet; type checking and clippy run locally via `npm run verify`.
+- Auto-update rides on GitHub Releases: direct access can be slow in some regions, so the Settings card takes a mirror prefix.
+- No automated test pipeline beyond unit tests; type checking and clippy run locally via `npm run verify`, CI only builds releases.
 - UI copy is Chinese-first. i18n with an English switch is built in, but English strings are still being filled in.
 - The usage forecast needs at least three days of snapshots per account; on a fresh install it only shows sample progress.
 
