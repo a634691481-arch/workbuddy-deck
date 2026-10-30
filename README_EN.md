@@ -136,6 +136,11 @@ bump version  →  push tag  →  CI builds + signs  →  Release  →  client c
 
 **Mirror**: the Settings card accepts a prefix such as `https://ghproxy.net/`; both check and download go through it. Empty means direct GitHub.
 
+**Where multiple versions come from**: one tag = one release = one set of installers. Publish `v0.1.1`
+and it sits on top while `v0.1.0` stays downloadable; `releases/latest` always resolves to the newest
+stable release, which is all the client looks at. Ship the next one with `npm run bump 0.1.1 --tag` —
+never upload an exe by hand.
+
 **One-time maintainer setup** (repo Settings → Secrets and variables → Actions):
 
 | Secret | Value |

@@ -52,3 +52,22 @@ jobs:
           prerelease: false
           includeUpdaterJson: true
           args: --bundles nsis
+
+      # 闸门：没有 latest.json，客户端就查不到更新。
+      # 曾在中文 productName 时静默跳过（GitHub 把非 ASCII 文件名换掉，.sig 对不上），
+      # 所以这里必须显式验证，不能让「构建成功但更新链断」蒙混过去。
+      - name: Verify updater manifest is published
+        shell: pwsh
+        env:
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+        run: |
+          $url = "https://github.com/${{ github.repository }}/releases/download/$env:TAG/latest.json"
+          $ok = $false
+          for ($i = 0; $i -lt 10; $i++) {
+            try {
+              $body = Invoke-WebRequest -Uri $url -UseBasicParsing -TimeoutSec 15
+              if ($body.StatusCode -eq 200) { $ok = $true; break }
+            } catch { Start-Sleep -Seconds 6 }
+          }
+          if (-not $ok) { throw "latest.json missing for $env:TAG — updater chain is broken" }
+          Write-Output "latest.json ok: $url"

@@ -135,6 +135,10 @@ npx vite --port 1421
 
 **换源**：设置页「镜像前缀」可填 `https://ghproxy.net/` 一类前缀，检查与下载都走镜像；留空即直连 GitHub。
 
+**多版本怎么来的**：一个 tag = 一个 Release = 一套安装包。`v0.1.1` 发布后，`Releases` 列表里
+`v0.1.1` 在上、`v0.1.0` 仍可下载；`releases/latest` 始终指向最新正式版，客户端只认它。
+要发下一版就是再跑一次 `npm run bump 0.1.1 --tag`，不要手工上传 exe。
+
 **维护者一次性配置**（仓库 Settings → Secrets and variables → Actions）：
 
 | Secret | 内容 |
