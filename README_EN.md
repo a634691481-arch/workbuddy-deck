@@ -29,7 +29,7 @@ Built for people running several WorkBuddy accounts who click through check-in a
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/feature-tour.gif" alt="Feature tour: accounts, tasks, credits, tokens, logs and settings, one screen each" width="720">
+  <img src="docs/screenshots/feature-tour.gif" alt="Feature tour: accounts, tasks, credits, tokens, logs and settings, one screen each" width="900">
 </p>
 
 ## The manual version, every day

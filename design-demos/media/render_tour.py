@@ -158,12 +158,12 @@ def main():
     palette = "palette.png"
     subprocess.run(
         ["ffmpeg", "-y", "-v", "error", "-i", str(OUT_MP4), "-vf",
-         "fps=10,scale=820:-1:flags=lanczos,palettegen=max_colors=128:stats_mode=diff", palette],
+         "fps=8,scale=640:-1:flags=lanczos,palettegen=max_colors=48:stats_mode=diff", palette],
         check=True,
     )
     subprocess.run(
         ["ffmpeg", "-y", "-v", "error", "-i", str(OUT_MP4), "-i", palette, "-lavfi",
-         "fps=10,scale=820:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=none",
+         "fps=8,scale=640:-1:flags=lanczos[x];[x][1:v]paletteuse=dither=none",
          "-loop", "0", str(OUT_GIF)],
         check=True,
     )

@@ -29,7 +29,7 @@
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/feature-tour.gif" alt="功能导览：账号、任务、积分、TOKEN、日志、设置，一屏一个" width="720">
+  <img src="docs/screenshots/feature-tour.gif" alt="功能导览：账号、任务、积分、TOKEN、日志、设置，一屏一个" width="900">
 </p>
 
 ## 不用它的时候，每天是这样的
