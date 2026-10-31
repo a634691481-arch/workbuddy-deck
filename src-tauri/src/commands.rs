@@ -1479,3 +1479,15 @@ pub fn update_config_set(auto_check: bool, mirror: String) -> Value {
         Err(error) => json!({ "ok": false, "error": error.to_string() }),
     }
 }
+
+/// 主窗口前端已挂载并画完首帧。
+#[tauri::command]
+pub fn app_ready(app: tauri::AppHandle) {
+    crate::splash::ready(&app);
+}
+
+/// 启动页动画播放完毕（由 splash.html 自己上报，页面时钟才准）。
+#[tauri::command]
+pub fn splash_done(app: tauri::AppHandle) {
+    crate::splash::done(&app);
+}

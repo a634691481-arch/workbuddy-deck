@@ -138,6 +138,16 @@ StatusBar   24px  ● READY · 最近刷新 · 账号数 · 日志数
   发版闭环：`npm run bump X.Y.Z --tag` → CI 构建签名 → Release → 客户端 8s 首查 / 每 6h 轮询。
   `bundle.createUpdaterArtifacts=true` 意味着**本地打安装包必须带 `TAURI_SIGNING_PRIVATE_KEY`**，
   只想要 exe 时用 `npm run tauri build -- --no-bundle`（不触发签名）。
+- **启动画面 = `src-tauri/src/splash.rs` + `public/splash.html`**：主窗口在
+  `tauri.conf.json` 里是 `visible:false`，先由 splash 小窗（480×300 无边框、置顶、不在任务栏）
+  播 2.8s 动画，两个信号都到齐才切主窗口：
+  ① `splash_done`——启动页自己上报动画播完（**必须用页面时钟**：WebView2 冷启动会晚 0.6~1.5s，
+  后端按窗口创建时刻定时会把动画切在半截）；
+  ② `app_ready`——主窗口前端 mount 后等两帧再上报，避免「先白后黑」闪一下。
+  `SPLASH_MAX=10s` 兜底放行，任一信号丢失也不能把用户困在启动画面上。
+  **关闭即隐藏的拦截只对 `label=="main"` 生效**——曾因全局 `prevent_close` 让启动窗关不掉，
+  结果主界面已经出来了、启动窗还压在上面。启动窗收尾用 `destroy()`。
+  `withGlobalTauri: true` 仅为了让 splash.html（非 Vue 页面）能 invoke，别在业务页面依赖全局对象。
 - **额度窗口没有独立模型**（2026-10-30 核实后放弃）：WorkBuddy 官方**不提供** 5h / 7d
   这类窗口字段；积分包到期（含企业配额周期）走 `resources[].expireAt`，限流恢复走
   `rateLimits[].resetAt`，卡片上已分别有到期时间与「28m 后恢复」倒计时。

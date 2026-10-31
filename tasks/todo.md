@@ -412,3 +412,46 @@ decision(forced-on) = Skip("当前账号未被限流")
 - CI 首次编译含 `rusqlite(bundled)` + `windows` crate，约 15–20 分钟；之后有缓存。
 - 国内直连 GitHub Release 可能慢：内置镜像前缀开关（默认空），填 `https://ghproxy.net/` 一类前缀即可。
 - 自动更新会关闭进程覆盖安装；默认**只在用户点确认后安装**，不静默后台装。
+
+---
+
+# 新任务：一键清理 WorkBuddy 归档任务（2026-10-31）
+
+## 现状（已核实）
+- 归档任务 = `~/.workbuddy/workbuddy.db` → `sessions` 表 `status='archived'`，当前 **309 条**
+- 正文 = `~/.workbuddy/projects/<cwd编码>/<sessionId>.jsonl`，合计 **750.2 MB**
+- 次要残留：file-history / changes-detail / traces 内可能有关联文件（占比小，首版不动）
+
+## 方案（按钮放 06 系统设置 · 数据规模卡）
+- [ ] 后端 `purge.rs`：命令 `archived_tasks_stats`（条数+字节，只读）与
+      `purge_archived_tasks`（确认后执行：删 309 个 jsonl → 删 sessions 表 archived 行 → VACUUM）
+- [ ] 安全护栏：① WorkBuddy 进程运行中 → 拒绝执行（防 DB 回写覆盖）；② 执行前把待删
+      sessionId 清单与 DB 备份落盘（`tasks/restore-backup/` 同目录约定）；③ 返回 {deleted, freedBytes}
+- [ ] 前端 `SettingsView` 数据规模卡新增一行：「归档任务 N 条 · X MB [清理]」危险红描边按钮
+- [ ] 点击 → 确认弹框（复刻切换账号警示结构）：列出条数/大小/不可恢复提示
+- [ ] i18n（`pz.*` 前缀，先 grep 占用）
+- [ ] `npm run verify` 全绿
+
+---
+
+# 任务：启动动画（exe 启动时播放）
+
+## 状态：✅ 已完成（2026-10-31 08:45）
+
+- 产物：`public/splash.html`（2.8s 时间轴，纯 CSS/JS，无外部依赖）+ `src-tauri/src/splash.rs`
+- 时序：窗口创建 → WebView2 冷启动（约 0.6~1.5s）→ 顶部红线展开 → 标题/读数逐行 → 进度格 24 段 → `ready` → 淡出
+- 切换条件：`splash_done`（页面自报）∧ `app_ready`（主窗首帧），10s 兜底
+- 实测（release，全屏连拍）：1200ms 仅头标 / 2000ms 读数 04/06 + 进度约三成 / 2800ms 三行齐 + 进度满 /
+  ~3.1s 切主窗 / 3600ms 启动窗淡出中 / 4400ms 只剩主界面
+
+## 调试中修掉的两个真实缺陷
+1. **全局 `CloseRequested` 拦截**：所有窗口都被 `prevent_close` 挡住，`splash.close()` 无效 →
+   主界面已显示、启动窗仍压在上面（3600ms 截图可见重叠）。改为只拦 `label=="main"`，启动窗用 `destroy()`。
+2. **按窗口创建时刻定时**：WebView2 冷启动晚 0.6~1.5s，2.6s 固定倒计时会把动画切半截。
+   改为启动页自报 `splash_done`，两端都到齐才切。
+
+## 验收
+- [x] release 构建后启动可见完整动画，无白屏、无重叠残留
+- [x] 动画三行读数依次出现，末态 `06 / 06` + `synced` + `ready`
+- [x] 主界面出现后启动窗消失（4400ms 无残留）
+- [ ] 打包版（NSIS）复验（本机 NSIS 工具链下载受限，待 CI 产物验证）

@@ -9,6 +9,7 @@ mod commands;
 mod executor;
 mod export;
 mod scheduler;
+mod splash;
 mod tray;
 mod update;
 
@@ -77,8 +78,14 @@ pub fn run() {
             commands::update_install,
             commands::update_config_get,
             commands::update_config_set,
+            commands::app_ready,
+            commands::splash_done,
         ])
         .setup(|app| {
+            // 启动画面：主窗口此时是隐藏的（tauri.conf.json visible:false），
+            // 前端挂载完成后调 app_ready，补满动画时长再切过去。
+            splash::open(app.handle())?;
+
             // 托盘菜单：快捷执行在上，退出压到最下面并与其他项分隔。
             let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
             let checkin = MenuItem::with_id(app, "checkin", "一键签到（全部账号）", true, None::<&str>)?;
@@ -162,6 +169,11 @@ pub fn run() {
         })
         // 关闭即隐藏：保留后台执行与托盘，不销毁 WebView（下次显示无需重建）
         .on_window_event(|window, event| {
+            // 只拦主窗口：启动画面与其它辅助窗口必须能真正关闭，
+            // 否则启动窗会一直压在主界面上（曾因这条全局拦截复现）。
+            if window.label() != "main" {
+                return;
+            }
             if let WindowEvent::CloseRequested { api, .. } = event {
                 api.prevent_close();
                 let _ = window.hide();
