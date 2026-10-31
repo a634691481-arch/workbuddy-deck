@@ -22,7 +22,7 @@ Built for people running several WorkBuddy accounts who click through check-in a
   <a href="https://github.com/a634691481-arch/workbuddy-deck/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/a634691481-arch/workbuddy-deck?style=flat&label=stars"></a>
   <a href="https://github.com/a634691481-arch/workbuddy-deck/issues"><img alt="Issues" src="https://img.shields.io/github/issues/a634691481-arch/workbuddy-deck?style=flat"></a>
   <a href="https://github.com/a634691481-arch/workbuddy-deck/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/a634691481-arch/workbuddy-deck?style=flat"></a>
-  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-2b6cb0?style=flat">
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-2b6cb0?style=flat">
   <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2-24C8D8?style=flat">
   <img alt="Rust" src="https://img.shields.io/badge/Rust-2021-b7410e?style=flat">
   <img alt="Vue" src="https://img.shields.io/badge/Vue-3-42b883?style=flat">
@@ -172,7 +172,9 @@ Design choices worth knowing:
 
 ## Known limitations
 
-- Windows only (WebView2).
+- **Installers for all three platforms**: Windows NSIS, macOS dmg (Apple Silicon and Intel), Linux AppImage + deb — each built by its own CI job.
+- Windows needs the system WebView2 runtime (bundled with Win11; older Win10 may need it installed once). macOS and Linux need nothing extra.
+- The client path is auto-detected (Windows: running process → registry → drive scan; macOS: fixed `.app` path; Linux: conventional path). **Machines that installed it elsewhere may not be found** — "set as current account" / "launch client" then fails and prints every path it tried.
 - Auto-update rides on GitHub Releases: direct access can be slow in some regions, so the Settings card takes a mirror prefix.
 - No automated test pipeline beyond unit tests; type checking and clippy run locally via `npm run verify`, CI only builds releases.
 - UI copy is Chinese-first. i18n with an English switch is built in, but English strings are still being filled in.

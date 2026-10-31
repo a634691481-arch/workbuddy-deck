@@ -22,7 +22,7 @@
   <a href="https://github.com/a634691481-arch/workbuddy-deck/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/a634691481-arch/workbuddy-deck?style=flat&label=stars"></a>
   <a href="https://github.com/a634691481-arch/workbuddy-deck/issues"><img alt="Issues" src="https://img.shields.io/github/issues/a634691481-arch/workbuddy-deck?style=flat"></a>
   <a href="https://github.com/a634691481-arch/workbuddy-deck/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/a634691481-arch/workbuddy-deck?style=flat"></a>
-  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows-2b6cb0?style=flat">
+  <img alt="Platform" src="https://img.shields.io/badge/platform-Windows%20%7C%20macOS%20%7C%20Linux-2b6cb0?style=flat">
   <img alt="Tauri" src="https://img.shields.io/badge/Tauri-2-24C8D8?style=flat">
   <img alt="Rust" src="https://img.shields.io/badge/Rust-2021-b7410e?style=flat">
   <img alt="Vue" src="https://img.shields.io/badge/Vue-3-42b883?style=flat">
@@ -170,7 +170,9 @@ npx vite --port 1421
 
 ## 已知限制
 
-- 仅 Windows（依赖 WebView2）。
+- **三平台都有安装包**：Windows NSIS、macOS dmg（Apple Silicon / Intel 各一份）、Linux AppImage + deb，CI 三平台各自构建。
+- Windows 需要系统的 WebView2 运行时（Win11 自带；Win10 若缺失需装一次）。macOS / Linux 无需额外运行时。
+- 客户端路径由程序探测（Windows 走进程 → 注册表 → 盘符扫描，macOS 用固定 `.app` 路径，Linux 用约定路径）。**换过安装目录的机器可能探测不到**，此时「设为当前账号 / 启动客户端」会失败，并在错误里列出尝试过的路径。
 - 自动更新依赖 GitHub Releases：国内直连可能慢，需在设置里填镜像前缀。
 - 尚无单元测试之外的自动化测试流水线；类型检查与 clippy 由本地 `npm run verify` 执行，CI 只负责构建发版。
 - 界面文案中文为主，i18n 已内置中英切换，英文文案仍在补。
