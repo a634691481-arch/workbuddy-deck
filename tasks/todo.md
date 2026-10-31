@@ -639,3 +639,12 @@ decision(forced-on) = Skip("当前账号未被限流")
 ### 未做
 - 归档任务分区没有截图，GIF 只覆盖 6 个分区；补图后可加第 7 屏
 - 英文界面版（`-en.png`）未做，需要时改 `build.mjs` 的 `IMG()` 后缀重跑
+
+## 2026-10-31 标题栏红线改为加载进度条
+- 数据源真实：`src/lib/loading-bar.ts` 统计在飞 IPC 请求数（barStart/barEnd），
+  `api.ts` 顶部把 tauri invoke 包一层（48 处调用零改动、自动纳入）
+- 不做假百分比：一次刷新并发 4~10 个命令、总数不可知，加载中走**不确定态滑块**
+  （25% 宽纯色块 translateX -100%→400%，1.15s linear），请求清空 + 320ms 收尾后回满格
+- TitleBar：去掉 `border-b-2 border-hazard`，改成 absolute bottom-0 h-0.5 轨道，
+  空闲 = w-full 满格（与原视觉一致），busy = 滑块；`prefers-reduced-motion` 降级为静态半亮
+- 验证：vue-tsc 0 错；`npm run build` 产物含 `bar-sweep` keyframes；空闲态截图与原红线一致

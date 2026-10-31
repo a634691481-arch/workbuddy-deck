@@ -1,4 +1,15 @@
-import { invoke } from "@tauri-apps/api/core";
+import { invoke as tauriInvoke } from "@tauri-apps/api/core";
+
+import { barEnd, barStart } from "@/lib/loading-bar";
+
+/**
+ * 所有 IPC 的唯一入口：统计在飞请求，供标题栏顶部加载条使用。
+ * 命令实现零改动，48 处调用自动纳入统计。
+ */
+function invoke<T>(cmd: string, args?: Record<string, unknown>): Promise<T> {
+  barStart();
+  return tauriInvoke<T>(cmd, args).finally(barEnd);
+}
 
 /** 账号摘要（不含任何令牌字段）。 */
 export interface AccountSummary {

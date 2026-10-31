@@ -1,10 +1,11 @@
 <script setup lang="ts">
 // 窗口控制依赖 Tauri 宿主；浏览器预览时 win 为 null，按钮照常渲染但不生效（不白屏）。
-import { onMounted } from "vue";
+import { computed, onMounted } from "vue";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 import { Eye, EyeOff, Minus, Square, X } from "lucide-vue-next";
 
 import { locale, setLocale, t } from "@/lib/i18n";
+import { loadingBar } from "@/lib/loading-bar";
 import { isTauri } from "@/lib/tauri-env";
 import { maskAll, setMaskAll } from "@/lib/task-meta";
 import { useShell } from "@/composables/useShell";
@@ -14,15 +15,18 @@ const win = isTauri() ? getCurrentWindow() : null;
 const { go } = useShell();
 const { current: rev, hasUpdate, loadConfig } = useUpdate();
 
+/** 有 IPC 在飞（或刚结束的收尾窗口）就显示滑动态。 */
+const busy = computed(() => loadingBar.inflight.value > 0 || loadingBar.tail.value);
+
 // 标题栏先拿到本机版本号（设置页没打开过也要显示对），不额外发检查请求。
 onMounted(() => void loadConfig());
 </script>
 
 <template>
-  <!-- 标题栏：纯黑底 + 底部 2px 危险红，整块界面的"机头" -->
+  <!-- 标题栏：纯黑底，底部 2px 即为加载条（空闲满格 / 加载中滑动） -->
   <header
     data-tauri-drag-region
-    class="flex h-9 shrink-0 select-none items-center justify-between border-b-2 border-hazard bg-titlebar pl-3"
+    class="relative flex h-9 shrink-0 select-none items-center justify-between bg-titlebar pl-3"
   >
     <div data-tauri-drag-region class="flex min-w-0 items-baseline gap-3">
       <span class="display text-[15px] text-foreground">WorkBuddy</span>
@@ -92,5 +96,36 @@ onMounted(() => void loadConfig());
         <X class="size-4" />
       </button>
     </div>
+
+    <!-- 加载条：占位就是原来那 2px 红线。空闲 = 满格；有在飞请求 = 滑块巡游 -->
+    <div class="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 overflow-hidden bg-hazard/25">
+      <div
+        v-if="busy"
+        class="bar-sweep h-full w-1/4 bg-hazard"
+      />
+      <div v-else class="h-full w-full bg-hazard" />
+    </div>
   </header>
 </template>
+
+<style scoped>
+/* 纯色块平移，无渐变无圆角；速度固定，避免看起来像在"假装"有进度 */
+.bar-sweep {
+  animation: bar-sweep 1.15s linear infinite;
+}
+@keyframes bar-sweep {
+  from {
+    transform: translateX(-100%);
+  }
+  to {
+    transform: translateX(400%);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bar-sweep {
+    animation: none;
+    width: 100%;
+    opacity: 0.45;
+  }
+}
+</style>
