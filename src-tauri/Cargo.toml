@@ -1,6 +1,6 @@
 [package]
 name = "workbuddy-task-assistant"
-version = "0.1.3"
+version = "0.1.4"
 description = "WorkBuddy 任务助手"
 edition = "2021"
 
