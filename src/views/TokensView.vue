@@ -337,6 +337,10 @@ const cellColor = (level: number) =>
         </div>
       </div>
       <div class="flex shrink-0 items-center gap-1.5">
+        <!-- 有旧数据时不清屏：只在角落标「扫描中」，避免整页闪一下 -->
+        <span v-if="loading && stats" class="readout text-[9px] uppercase tracking-[0.14em] text-hazard">
+          scanning…
+        </span>
         <div class="flex gap-px bg-border">
           <button
             v-for="range in RANGES"

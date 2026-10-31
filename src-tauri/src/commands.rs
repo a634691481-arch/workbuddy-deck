@@ -412,25 +412,18 @@ pub async fn credit_statistics(refresh: Option<bool>) -> Value {
 }
 
 /// Token 统计：扫描本地会话 jsonl（同步重活，放阻塞线程避免卡 IPC）。
+///
+/// 缓存交给 `token_cache`：按档位分槽 + 落盘，切档位与重启应用都不再重扫。
+/// TTL 30 分钟——统计的是历史量，没必要更实时；「重新扫描」按钮带 refresh=true 绕过。
 #[tauri::command]
 pub async fn token_statistics(days: Option<i64>, refresh: Option<bool>) -> Value {
-    static CACHE: std::sync::Mutex<Option<(i64, Value, i64)>> = std::sync::Mutex::new(None);
-    const TTL_MS: i64 = 5 * 60 * 1000;
+    const TTL_MS: i64 = 30 * 60 * 1000;
 
     let days = days.unwrap_or(0);
-    let refresh = refresh.unwrap_or(false);
-
-    // 全盘扫描要读几百个会话文件（秒级耗时），重复进页面 / 切回来直接回缓存；
-    // 「重新扫描」按钮带 refresh=true 才强制重算。
-    if !refresh {
-        if let Ok(guard) = CACHE.lock() {
-            if let Some((cached_days, value, cached_at)) = guard.as_ref() {
-                if *cached_days == days && config::now_ms() - cached_at < TTL_MS {
-                    let mut cached = value.clone();
-                    cached["cached"] = json!(true);
-                    return cached;
-                }
-            }
+    if !refresh.unwrap_or(false) {
+        if let Some(mut cached) = crate::token_cache::get(days, TTL_MS) {
+            cached["cached"] = json!(true);
+            return cached;
         }
     }
 
@@ -442,9 +435,7 @@ pub async fn token_statistics(days: Option<i64>, refresh: Option<bool>) -> Value
     {
         Ok(value) => {
             if value.get("error").is_none() {
-                if let Ok(mut guard) = CACHE.lock() {
-                    *guard = Some((days, value.clone(), config::now_ms()));
-                }
+                crate::token_cache::put(days, &value);
             }
             value
         }
@@ -1332,6 +1323,26 @@ pub fn open_external(url: String) -> Value {
     }
 }
 
+/// 打开 WorkBuddy 客户端深链（`workbuddy://...`），用于成长任务的官方入口。
+///
+/// 单独一条命令而不是放宽 `open_external`：那条接收任意字符串，
+/// 一旦允许自定义协议就等于把 `file://`、安装器协议全交给页面。
+/// 这里**只认 `workbuddy://` 前缀**，且拒绝空白与控制字符。
+#[tauri::command]
+pub fn open_workbuddy_deeplink(url: String) -> Value {
+    let trimmed = url.trim();
+    if !trimmed.starts_with("workbuddy://") || trimmed.len() > 512 {
+        return json!({ "ok": false, "error": "只允许打开 workbuddy:// 深链" });
+    }
+    if trimmed.chars().any(|c| c.is_control() || c.is_whitespace()) {
+        return json!({ "ok": false, "error": "链接包含非法字符" });
+    }
+    match open_in_browser(trimmed) {
+        Ok(()) => json!({ "ok": true }),
+        Err(error) => json!({ "ok": false, "error": error }),
+    }
+}
+
 // ───────────────────────── 数据导出 ─────────────────────────
 
 /// 导出一份 CSV 到用户选定的路径。`kind` ∈ accounts / tokensDaily / tokensModels / credits。
@@ -1496,12 +1507,23 @@ pub async fn archived_tasks_list() -> Value {
         .unwrap_or_else(|_| json!({ "ok": false, "error": "spawn failed" }))
 }
 
-/// 执行归档任务清理：WorkBuddy 运行中会被后端拒绝（blocked=true）。
+/// 执行归档任务清理：自动关 WorkBuddy → 清理 → 自动拉起（默认）。
+///
+/// `relaunch=false` 只清理不拉起。逐阶段进度走事件 `purge-progress`，
+/// 前端弹框照「切换账号」那套显示，失败时带 `stage` 说清停在哪一步。
 #[tauri::command]
-pub async fn purge_archived_tasks() -> Value {
-    tauri::async_runtime::spawn_blocking(crate::purge::purge)
-        .await
-        .unwrap_or_else(|_| json!({ "ok": false, "error": "spawn failed" }))
+pub async fn purge_archived_tasks(app: tauri::AppHandle, relaunch: Option<bool>) -> Value {
+    let relaunch = relaunch.unwrap_or(true);
+    let progress: Box<dyn Fn(&str) + Send + Sync> = Box::new(move |message: &str| {
+        let _ = app.emit("purge-progress", json!({ "message": message }));
+    });
+    tauri::async_runtime::spawn_blocking(move || {
+        crate::purge::purge_auto(relaunch, progress.as_ref())
+    })
+    .await
+    .unwrap_or_else(|error| {
+        json!({ "ok": false, "blocked": true, "stage": "purge", "error": format!("清理任务异常: {error}") })
+    })
 }
 
 /// 主窗口前端已挂载（启动动画遮罩已绘制）：此时才显示窗口，避免先白后黑闪一下。

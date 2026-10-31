@@ -30,7 +30,8 @@ const pad = (n: number) => String(n).padStart(3, "0");
 const fmt = (value: number | null, loading: boolean) => {
   if (loading) return "···";
   if (typeof value !== "number") return "—";
-  return value.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
+  // 积分是离散点数，不显示小数：带 .9 / .78 只会让人以为精度更高
+  return value.toLocaleString("zh-CN", { maximumFractionDigits: 0 });
 };
 </script>
 

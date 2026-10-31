@@ -2,13 +2,12 @@ import type { GrowthTask, RunRow } from "@/lib/api";
 import { t, type I18nKey } from "@/lib/i18n";
 import { ref } from "vue";
 
-/** 批量动作的展示名与后端动作名的唯一映射（按钮表由它驱动）。 */
+/** 批量动作的展示名与后端动作名的唯一映射（按钮表由它驱动）。
+ *  三个动作 = 三件彼此独立的事；「全部日常」不在按钮里（托盘菜单仍保留该入口）。 */
 export const ACTIONS = [
-  // 只有「全部日常」是主路径，其余保持 outline：四个实心按钮并排会让主次消失。
-  { key: "daily", labelKey: "act.daily", variant: "default" },
-  { key: "checkin", labelKey: "act.checkin", variant: "outline" },
+  { key: "checkin", labelKey: "act.checkin", variant: "default" },
   { key: "travel", labelKey: "act.travel", variant: "outline" },
-  { key: "growth", labelKey: "act.growth", variant: "outline" },
+  { key: "growth", labelKey: "act.growth", hintKey: "act.growthHint", variant: "outline" },
 ] as const;
 
 export type ActionKey = (typeof ACTIONS)[number]["key"];
@@ -55,6 +54,44 @@ export function failuresOf(rows: RunRow[]): { label: string; reason: string }[] 
       label: row.label ?? row.accountId ?? "未知账号",
       reason: row.error ?? row.reason ?? "未返回原因",
     }));
+}
+
+/** 「没做」明细：只挑有缺口却没推进的任务，按账号分组。 */
+export function pendingOf(
+  rows: RunRow[],
+): {
+  label: string;
+  items: { code: string; reason: string; title: string; jumpUrl: string }[];
+}[] {
+  return rows
+    .map((row) => ({
+      label: row.label ?? row.accountId ?? "未知账号",
+      items: (row.tasks ?? [])
+        .filter((task) => task.skipped)
+        .map((task) => ({
+          code: task.code,
+          reason: skipReason(task.skipped ?? ""),
+          title: task.title || task.code,
+          jumpUrl: task.jumpUrl || "",
+        })),
+    }))
+    .filter((entry) => entry.items.length > 0);
+}
+
+/** 跳过原因码 → 人话（后端只给码，不返回中文）。 */
+export function skipReason(code: string): string {
+  switch (code) {
+    case "manual_skip":
+      return t("tm.skipManual");
+    case "tries_exhausted":
+      return t("tm.skipTries");
+    case "no_recipe":
+      return t("tm.skipNoRecipe");
+    case "manual_required":
+      return t("tm.skipManualTask");
+    default:
+      return code;
+  }
 }
 
 /** 全局名称脱敏开关：关 = 所有显示点直接回原文，开 = 按规则打码。

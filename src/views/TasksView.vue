@@ -3,7 +3,7 @@
  * 任务面板：原 App.vue 的六段布局整体搬入这里，成为左侧导航的第一个分区。
  * 状态与副作用仍全部在 composables（AGENTS.md §0 分层）。
  */
-import { computed, onBeforeUnmount, onMounted, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { CircleAlert } from "lucide-vue-next";
 
@@ -37,6 +37,8 @@ const {
   sidebarWidth,
   failures,
   showFailures,
+  pendingRows,
+  openTaskJump,
   cancelling,
   busyAction,
   run,
@@ -56,6 +58,9 @@ const {
   clearLogs,
   pushLog,
 } = useAssistant();
+
+// 未完成明细默认收起（与失败条一致）
+const showPending = ref(false);
 
 const { balance, loading: balanceLoading, load: loadBalance, total, totalLoading, totalFailed, loadTotal } =
   useBalance();
@@ -176,6 +181,44 @@ watch(
               :title="`${mask(item.label)}：${item.reason}`"
             >
               ✕ {{ mask(item.label) }} — {{ item.reason }}
+            </li>
+          </ul>
+        </div>
+
+        <!-- 没做哪些、为什么：与失败分开展示（失败是错的，这里是「有缺口但没推进」） -->
+        <div v-if="pendingRows.length > 0" class="shrink-0 border-b border-border bg-panel px-2 py-1">
+          <button
+            class="flex w-full items-center gap-1.5 text-[10px] uppercase tracking-[0.1em] text-muted-foreground"
+            @click="showPending = !showPending"
+          >
+            [ {{ t("tm.pendingTitle") }}
+            {{ String(pendingRows.reduce((sum, row) => sum + row.items.length, 0)).padStart(2, "0") }} ]
+            <span class="text-muted-foreground/70">
+              {{ showPending ? t("fail.collapse") : t("fail.expand") }}
+            </span>
+          </button>
+          <ul v-if="showPending" class="mt-1 max-h-32 space-y-1 overflow-y-auto pl-2 text-[10px] text-muted-foreground">
+            <li v-for="row in pendingRows" :key="row.label">
+              <div class="truncate text-foreground">{{ mask(row.label) }}</div>
+              <div class="flex flex-wrap items-center gap-1 pt-0.5">
+                <span
+                  v-for="item in row.items"
+                  :key="item.code"
+                  class="flex items-center gap-1 border border-border px-1 py-0.5"
+                  :title="`${item.title} · ${item.reason}`"
+                >
+                  {{ item.title }}
+                  <span class="text-faint">（{{ item.reason }}）</span>
+                  <button
+                    v-if="item.jumpUrl"
+                    type="button"
+                    class="text-hazard hover:underline"
+                    @click="openTaskJump(item.jumpUrl)"
+                  >
+                    {{ t("tm.openSite") }} ↗
+                  </button>
+                </span>
+              </div>
             </li>
           </ul>
         </div>

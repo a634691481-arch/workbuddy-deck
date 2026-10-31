@@ -32,7 +32,7 @@ onMounted(() => void load(false));
 
 const fmt = (value: number | null | undefined) => {
   if (value === null || value === undefined || !Number.isFinite(value)) return "—";
-  return value.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
+  return value.toLocaleString("zh-CN", { maximumFractionDigits: 0 });
 };
 
 const pct = (ratio: number | null | undefined) => {

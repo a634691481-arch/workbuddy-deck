@@ -97,6 +97,24 @@ export interface LoginPoll {
   error?: string | null;
 }
 
+/** 成长任务单条结果（后端 results[] 透传，skipped 表示「没做」及原因）。 */
+export interface GrowthRunTask {
+  code: string;
+  status?: string;
+  current?: number;
+  target?: number;
+  claimed?: boolean;
+  credit?: number;
+  energy?: number;
+  error?: string;
+  /** manual_skip（有意跳过）/ manual_required（需手动）/ tries_exhausted / no_recipe */
+  skipped?: string;
+  /** 官方任务标题 */
+  title?: string | null;
+  /** 官方一键入口：workbuddy:// 深链或 http(s) 活动页 */
+  jumpUrl?: string | null;
+}
+
 export interface RunRow {
   accountId?: string | null;
   label?: string;
@@ -107,6 +125,8 @@ export interface RunRow {
   claimedCount?: number;
   checkin?: string;
   travel?: string;
+  /** growth 动作才有：逐任务结果（含没做原因） */
+  tasks?: GrowthRunTask[];
 }
 
 /** 批量执行的可观察进度（界面轮询 run_status）。 */
@@ -186,9 +206,6 @@ export const runGrowth = (accountIds: string[] = []) =>
 
 export const runTravel = (accountIds: string[] = []) =>
   invoke<RunResult>("run_travel", { accountIds });
-
-export const runDaily = (accountIds: string[] = []) =>
-  invoke<RunResult>("run_daily", { accountIds });
 
 /** 每日自动执行配置（存后端，跨会话生效）。 */
 export interface AutoDailyConfig {
@@ -660,6 +677,10 @@ export const openStoreDir = () =>
 export const openExternal = (url: string) =>
   invoke<{ ok: boolean; error?: string }>("open_external", { url });
 
+/** 打开 WorkBuddy 客户端深链（后端只放行 workbuddy://）。 */
+export const openWorkbuddyDeeplink = (url: string) =>
+  invoke<{ ok: boolean; error?: string }>("open_workbuddy_deeplink", { url });
+
 /** ─────────────── 限流自动切换 ─────────────── */
 
 export interface AutoSwitchConfig {
@@ -767,6 +788,13 @@ export interface PurgeResult {
   total?: number;
   backupDir?: string;
   blocked?: boolean;
+  /** 停在哪个阶段：close / purge / done */
+  stage?: string;
+  /** 是否替用户关掉了正在运行的 WorkBuddy */
+  closed?: boolean;
+  relaunched?: boolean;
+  /** 清理成功但拉起失败时的原因（数据已清干净，不算清理失败） */
+  launchError?: string;
   error?: string;
 }
 
@@ -793,7 +821,12 @@ export interface ArchivedList {
 
 export const archivedTasksList = () => invoke<ArchivedList>("archived_tasks_list");
 
-export const purgeArchivedTasks = () => invoke<PurgeResult>("purge_archived_tasks");
+/**
+ * 一键清理归档：自动关 WorkBuddy → 清理 → 自动拉起（默认）。
+ * 进度走事件 `purge-progress`，与切换账号同一套路。
+ */
+export const purgeArchivedTasks = (relaunch = true) =>
+  invoke<PurgeResult>("purge_archived_tasks", { relaunch });
 
 // ───────────────────────── 自动更新 ─────────────────────────
 

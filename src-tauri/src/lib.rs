@@ -10,6 +10,7 @@ mod executor;
 mod export;
 mod purge;
 mod scheduler;
+mod token_cache;
 mod tray;
 mod update;
 
@@ -67,6 +68,7 @@ pub fn run() {
             commands::system_info,
             commands::open_store_dir,
             commands::open_external,
+            commands::open_workbuddy_deeplink,
             commands::export_data,
             commands::export_all_data,
             commands::auto_switch_status,

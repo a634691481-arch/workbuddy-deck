@@ -329,7 +329,7 @@ const variantText = (variant: string) => (variant === "ai" ? "INTL" : "CN");
 
 const fmt = (value: number | null | undefined) => {
   if (value === null || value === undefined || !Number.isFinite(value)) return "—";
-  return value.toLocaleString("zh-CN", { maximumFractionDigits: 2 });
+  return value.toLocaleString("zh-CN", { maximumFractionDigits: 0 });
 };
 
 const fmtTime = (ts: number | null | undefined) => {

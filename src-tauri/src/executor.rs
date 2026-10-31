@@ -229,6 +229,8 @@ pub async fn execute(action: &'static str, account_ids: Vec<String>) -> Value {
                     "checkin": daily_checkin,
                     "travel": daily_travel,
                     "claimedCount": claimed,
+                    // 明细跟着走：定时任务跑的是 daily，没这张表就看不出哪个任务没做。
+                    "tasks": growth_row.get("tasks").cloned().unwrap_or(Value::Null),
                 })
             }
         };
@@ -270,6 +272,10 @@ pub async fn execute(action: &'static str, account_ids: Vec<String>) -> Value {
         "[run] action={} done={}/{} ok={} fail={} skip={} cancelled={}",
         action, state.done, state.total, state.ok, state.fail, state.skip, cancelled
     );
+    // 全部日常无论手动还是定时触发，跑完都标记当天已跑（防调度器到点重复执行）。
+    if action == "daily" {
+        crate::scheduler::mark_ran_today();
+    }
     json!({
         "status": if cancelled { "cancelled" } else { "done" },
         "accounts": rows,

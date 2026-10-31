@@ -54,8 +54,20 @@ const EXPERT_MARKET: &str = "https://acc-1258344699.cos.accelerate.myqcloud.com/
 /// 换主题任务对客户端有真实副作用，默认不做。
 const SKIP_TASKS: [&str; 1] = ["Hp_Appearance"];
 
+/// 只能去官网手动完成的任务（2026-10-31 实测判定）。
+///
+/// `Library_read`：埋点上报返回 `code:0` 但进度恒为 0/1（8 个账号全部不涨），元素名已失效；
+/// `Buddy_App`：桌面信封同样全账号 0/1，无一次成功；
+/// `wb_wechat_oa_subscribe_task`：关注公众号，需人工授权，任何脚本都不该代按。
+/// 继续打点是纯浪费（每天 3 次 × N 账号），所以显式标 manual，UI 直说「需手动」。
+const MANUAL_TASKS: [&str; 3] = ["Library_read", "Buddy_App", "wb_wechat_oa_subscribe_task"];
+
 fn is_skipped(code: &str) -> bool {
     SKIP_TASKS.contains(&code)
+}
+
+fn is_manual(code: &str) -> bool {
+    MANUAL_TASKS.contains(&code)
 }
 
 // ---------------------------------------------------------------------------
@@ -1329,7 +1341,7 @@ fn tries_bump(scope: &str, code: &str) {
 
 /// 是否该推进这个任务：仍有缺口、未跳过、当日尝试未超限。
 async fn gate(account: &Value, scope: &str, code: &str, max_tries: i64) -> bool {
-    if is_skipped(code) {
+    if is_skipped(code) || is_manual(code) {
         return false;
     }
     if tries_get(scope, code) >= max_tries {
@@ -1438,6 +1450,23 @@ pub async fn run_growth_account(account: &Value, cfg: &Value) -> Value {
     }
     let accepted = accept_missing(account, &tasks).await;
 
+    // 2) 先清账：已完成但未领取的任务直接领奖。
+    //    gate() 把 completed 视为「无需推进」→ 配方不跑 → settle 不执行，
+    //    这类任务会永久卡住（2026-10-31 实测两个账号各卡 2 个，白丢 400 分）。
+    let completed: Vec<String> = tasks
+        .iter()
+        .filter(|t| {
+            t.get("accept_status").and_then(Value::as_str) == Some("completed")
+                && t.get("task_code")
+                    .and_then(Value::as_str)
+                    .is_some_and(|c| !is_skipped(c))
+        })
+        .filter_map(|t| t.get("task_code").and_then(Value::as_str).map(String::from))
+        .collect();
+    for code in completed {
+        settle(account, &code, &mut results, &mut claimed).await;
+    }
+
     // 2) 逐配方补缺口（顺序对齐参考实现：轻 → 重）
     if gate(account, &scope, "Library_read", max_tries).await {
         t_library(account).await;
@@ -1530,12 +1559,71 @@ pub async fn run_growth_account(account: &Value, cfg: &Value) -> Value {
         settle(account, "Model_chat_GLM5.2", &mut results, &mut claimed).await;
     }
 
+    // 3) 收尾：把「没做」的任务补成显式行，UI 才能说清原因。
+    //    原来 gate 返回 false 什么都不留，界面只有「跳过 N」，等于不可诊断。
+    for task in &tasks {
+        let Some(code) = task.get("task_code").and_then(Value::as_str) else {
+            continue;
+        };
+        if code.is_empty()
+            || results
+                .iter()
+                .any(|r| r.get("code").and_then(Value::as_str) == Some(code))
+        {
+            continue;
+        }
+        let p = parse_progress(task);
+        // 已领完 / 无缺口的不啰嗦，只标「有缺口却没推进」的。
+        if !needs_work(&p) {
+            continue;
+        }
+        let reason = if is_skipped(code) {
+            "manual_skip"
+        } else if is_manual(code) {
+            "manual_required"
+        } else if tries_get(&scope, code) >= max_tries {
+            "tries_exhausted"
+        } else {
+            "no_recipe"
+        };
+        results.push(json!({
+            "code": code,
+            "status": p.status,
+            "current": p.cur,
+            "target": p.tgt,
+            "skipped": reason,
+            // 官方给的一键入口（workbuddy:// 深链或活动页），UI 直接给按钮。
+            "title": task.get("title").cloned().unwrap_or(Value::Null),
+            "jumpUrl": task.get("jump_url").cloned().unwrap_or(Value::Null),
+        }));
+    }
+
     let credit_total: i64 = claimed
         .iter()
         .filter_map(|c| c.get("credit").and_then(Value::as_i64))
         .sum();
+    // 每账号每轮一条汇总：没做哪些、为什么。claim 明细仍单独记，便于按任务回溯。
+    let pending: Vec<Value> = results
+        .iter()
+        .filter(|r| r.get("skipped").is_some())
+        .cloned()
+        .collect();
+    if !pending.is_empty() {
+        add_growth_log(&json!({
+            "ts": now_ms(),
+            "accountId": account.get("id").cloned().unwrap_or(Value::Null),
+            "email": account_display_name(account),
+            "variant": variant_of(account).as_str(),
+            "result": "summary",
+            "claimed": claimed.len(),
+            "credit": credit_total,
+            "pending": pending,
+        }));
+    }
+    // 只按「真跑过的配方」判成败：skipped 说明行是给人看的，不能算失败证据。
+    let attempted = results.iter().filter(|r| r.get("skipped").is_none()).count();
     let result = if claimed.is_empty() {
-        if results.is_empty() {
+        if attempted == 0 {
             "none"
         } else {
             "partial"

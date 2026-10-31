@@ -4,7 +4,7 @@ import { computed, onBeforeUnmount, onMounted, ref } from "vue";
 
 import type { LogLine } from "@/components/LogPanel.vue";
 import * as api from "@/lib/api";
-import { actionLabel, failuresOf, mask, type ActionKey } from "@/lib/task-meta";
+import { actionLabel, failuresOf, mask, pendingOf, type ActionKey } from "@/lib/task-meta";
 
 /** 轮询间隔：只在运行中开启，结束立刻停表（AGENTS.md §6）。 */
 const POLL_INTERVAL_MS = 400;
@@ -41,6 +41,7 @@ export function useAssistant() {
   const tab = ref<"tasks" | "checkin" | "raw">("tasks");
   const sidebarWidth = ref(clampWidth(Number(localStorage.getItem(SIDEBAR_KEY)) || 300));
   const failures = ref<{ label: string; reason: string }[]>([]);
+  const pendingRows = ref<ReturnType<typeof pendingOf>>([]);
   const showFailures = ref(false);
   const cancelling = ref(false);
   const busyAction = ref<ActionKey | "single" | "refresh" | "">("");
@@ -180,17 +181,17 @@ export function useAssistant() {
 
     try {
       startPolling();
-      const result =
-        action === "checkin"
-          ? await api.runCheckin(targetIds.value)
-          : action === "growth"
-            ? await api.runGrowth(targetIds.value)
-            : action === "travel"
-              ? await api.runTravel(targetIds.value)
-              : await api.runDaily(targetIds.value);
+      // 动作 → 命令一一对应，不再有 else 兜底（按钮表只有三个动作）。
+      const runner = {
+        checkin: api.runCheckin,
+        travel: api.runTravel,
+        growth: api.runGrowth,
+      } as const;
+      const result = await runner[action](targetIds.value);
 
       run.value = await api.runStatus().catch(() => run.value);
       failures.value = failuresOf(result.accounts ?? []);
+      pendingRows.value = pendingOf(result.accounts ?? []);
 
       const verdict =
         result.status === "cancelled"
@@ -212,6 +213,19 @@ export function useAssistant() {
       stopPolling();
       busyAction.value = "";
       cancelling.value = false;
+    }
+  }
+
+  /** 打开任务官方入口：workbuddy:// 走专用命令（后端只放行该协议），http(s) 走浏览器。 */
+  async function openTaskJump(url: string) {
+    if (!url) return;
+    try {
+      const result = url.startsWith("workbuddy://")
+        ? await api.openWorkbuddyDeeplink(url)
+        : await api.openExternal(url);
+      if (!result.ok) pushLog(`打开入口失败：${result.error ?? "未知原因"}`, "err");
+    } catch (error) {
+      pushLog(`打开入口失败：${String(error)}`, "err");
     }
   }
 
@@ -280,6 +294,8 @@ export function useAssistant() {
     sidebarWidth,
     failures,
     showFailures,
+    pendingRows,
+    openTaskJump,
     cancelling,
     busyAction,
     run,

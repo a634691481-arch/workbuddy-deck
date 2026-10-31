@@ -1,5 +1,5 @@
 <script setup lang="ts">
-// 命令区：作用域 + 四个批量动作 + 中断。
+// 命令区：作用域 + 三个批量动作（签到 / 旅行 / 成长任务）+ 中断。
 // 二次确认内联在这里（不引入弹窗）：目标 > 1 时首次点击变红框确认态，8 秒回退。
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 
@@ -87,6 +87,7 @@ onBeforeUnmount(clearPending);
         :key="action.key"
         size="sm"
         :variant="pending === action.key ? 'danger' : action.variant"
+        :title="'hintKey' in action ? t(action.hintKey) : undefined"
         :disabled="
           props.busyAction !== '' ||
           (pending !== '' && pending !== action.key) ||

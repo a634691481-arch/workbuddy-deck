@@ -525,3 +525,72 @@ decision(forced-on) = Skip("当前账号未被限流")
 - [x] `npm run verify` 全绿；grep 确认无 skin 残留
 - [x] 发版：`node scripts/bump.mjs 0.1.2 --tag`（注意 `npm run bump X --tag` 会把 --tag 吞成 npm dist-tag），
       已推送 main + tag v0.1.2，CI release 启动
+
+## 2026-10-31 按钮简化 + 自动化闭环 + 成长任务诊断
+- [x] 任务面板按钮收敛为 3 个：每日签到（主按钮）/ 猫猫旅行 / 成长任务；删 act.daily 前端文案与 api.runDaily 死包装；
+      后端 run_daily 命令保留（托盘菜单在用）
+- [x] 调度闭环（唯一调度器 = scheduler.rs，core 三份 auto_*_config 为死配置，未启用任何循环）：
+      ① 默认 enabled=true；② spawn 启动立即 tick（当天没跑就补跑）；
+      ③ executor 跑完 daily 一律 mark_ran_today()（手动/定时都防重）
+- [x] 成长任务 bug 修复（8 账号只读实测后定位）：run_growth_account 开头加「已完成未领取 → 直接领奖」阶段，
+      修复 gate 把 completed 当无需推进导致的永久卡死（实测 2 账号各卡 2 个 = 400 分）
+- [ ] 待办：growth 每账号 pending 明细落盘 + 前端执行结果展开展示；wb_wechat_oa_subscribe_task 无配方覆盖；
+      Buddy_App / Library_read / douyinyin 埋点对部分账号不动需逆向
+- [x] verify 全绿
+
+---
+
+## 归档清理改为「一键闭环」（2026-10-31，用户要求：去掉提示条、点按钮就弹框、跟切换账号一样、自动关闭→清理→启动软件）
+
+### 改了什么
+| 层 | 文件 | 内容 |
+| --- | --- | --- |
+| 后端 | `src-tauri/src/purge.rs` | 新增 `purge_auto(relaunch, progress)`：① 运行中自动 `close_workbuddy`（超时强杀，关不掉才拦）② 复用 `purge()` ③ `launch_workbuddy` 拉起；新增 `running_variants()` / `relaunch_target()`（优先刚关掉的那个变体，其次有 auth 文件的，兜底 Cn）|
+| 命令 | `commands.rs` | `purge_archived_tasks(app, relaunch: Option<bool>)`；进度走事件 `purge-progress`；失败一律带 `stage`（close / purge）|
+| 前端 | `api.ts` | `PurgeResult` 扩 `stage / closed / relaunched / launchError`；`purgeArchivedTasks(relaunch = true)` |
+| 前端 | `ArchivedView.vue` | 删掉「WorkBuddy 正在运行，请先退出」红色提示条与按钮 title；弹框改为**切换账号同款**（header 标题+✕ / 红色警示块+4 条 bullet / 逐阶段进度 / 备份目录 / 失败现场带阶段 / footer 关闭+「清理并重启」）；成功 1.5s 后弹框自动关闭，结果留副标题 notice |
+| 文案 | `i18n.ts` | zh/en 各新增 13 key（`pz.subtitle/bullets/confirm/going/blocked/stage*/deleted/backup/launchFail`），删 `pz.running` |
+
+### 关键决策
+- **不再要求学生手动退出 WorkBuddy**：进程由后端关（优雅退出→超时强杀→确认消失），关不掉才在弹框里报 `stage=close`。
+- **拉起失败不算清理失败**：数据已清干净，`launchError` 单独回传并单开一条红条，避免把「清完了但没启动起来」说成失败。
+- 清理后拉起的变体 = 刚关掉的那个，避免把 INTL 用户拉成 CN。
+
+### 验证
+- [x] `npm run verify` 全绿（vue-tsc 0 错 / clippy 0 警告）
+- [ ] 端到端：WorkBuddy 开着时点「清理」→ 自动关闭 → 清完自动重启（需真实退出 WB，本会话即 WB，无法代测）
+
+## 2026-10-31 成长任务可诊断闭环（第二轮）
+- [x] 后端 `run_growth_account` 收尾补「没做」行：对每个仍 needs_work 但未进入 results 的任务码，
+      标 `skipped` 原因 `manual_skip` / `tries_exhausted` / `no_recipe`（一处收尾覆盖全部配方 + 未覆盖任务）
+- [x] 结果判定修正：`attempted` 只数非 skipped 行，避免「只剩无配方任务」被误判 partial→失败
+- [x] 每账号每轮一条 `result:"summary"` 日志（claimed 数 / credit / pending 明细），落盘可回溯
+- [x] 前端：`RunRow.tasks` 类型 + `pendingOf()`；任务页失败条下方新增「未完成 N」灰条，展开按账号列
+      「任务码（原因）」；i18n tm.pendingTitle / tm.skipManual / tm.skipTries / tm.skipNoRecipe（中英）
+- [x] verify 全绿
+- [ ] 待定：Library_read / Buddy_App 埋点事件格式逆向（子代理调研中）
+
+## 2026-10-31 埋点失效判定（实测）与 manual 收敛
+- 实验：对账号 xiz🍉 单发一次 Library_read 埋点（web_element_click / library_doc_intro_click /
+  page_url=/library）→ `HTTP 200 code:0 OK`，4 秒后复查进度仍 `accepted 0/1` → **事件被接收但不计进度，元素名已失效**
+- 对照：8 账号 Buddy_App 全为 `accepted 0/1`（无一成功）；`/library` 页面本身 404（page_url 已不存在）
+- 判定：`MANUAL_TASKS = [Library_read, Buddy_App, wb_wechat_oa_subscribe_task]`
+  ① gate 直接 false（不再每天 3 次白打）；② 收尾行标 `manual_required`；③ 前端显示「需去官网手动完成」
+- 能力边界（写清，不再承诺 100%）：19 个任务码中 16 个可自动（多账号已验证 claimed），
+  3 个必须人工，1 个（Hp_Appearance）主动跳过（换主题有副作用）
+- [x] verify 全绿
+- [ ] 建议：任务页「未完成」条里给 manual_required 行加「打开官网成长中心」一键入口
+
+## 2026-10-31 jump_url 一键入口（深挖后落地）
+- 重大发现：官方任务对象带 `jump_url`（Library_read→`workbuddy://library`，
+  Buddy_App→`workbuddy://home?openBuddySwitcher=true`，公众号→`https://www.workbuddy.cn/events/follow-guide/`）
+  → 说明进度靠**客户端内真实操作**统计，不是 web 埋点；这正是我们上报 200 却不涨的原因
+- [x] 后端：`open_workbuddy_deeplink(url)` 专用命令，**只认 workbuddy:// 前缀** + 拒绝控制字符/超长；
+      不放宽 `open_external`（那条接收任意串，放开自定义协议等于放行 file://）
+- [x] core：skipped 行带 `title` + `jumpUrl`（所有未完成任务都能给精确入口，不只 manual）
+- [x] 前端：`api.openWorkbuddyDeeplink`、`useAssistant.openTaskJump`（按协议分流）、
+      未完成条改为「任务标题（原因）+ 打开 ↗」标签式布局；i18n tm.openSite
+- [x] 验证：`HKLM/HKCU\Software\Classes\workbuddy` 已注册到 WorkBuddy.exe "%1"，深链可用
+- [x] 深挖结论：客户端 app.asar 内**没有**成长任务 element_id/eventCode（只有无关 iframeMenuElementId），
+      埋点在远程 web 前端；远程 JS 下载被安全策略拦截 → Library_read/Buddy_App 自动化无法本地修复
+- [x] verify 全绿

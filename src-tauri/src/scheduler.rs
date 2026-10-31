@@ -33,7 +33,8 @@ fn logs_file() -> PathBuf {
 }
 
 fn default_config() -> Value {
-    json!({ "enabled": false, "time": DEFAULT_TIME, "lastRunDate": "" })
+    // 默认开启：用户要的是「装好就自动跑」，不是「装好还要自己去设置页打开」。
+    json!({ "enabled": true, "time": DEFAULT_TIME, "lastRunDate": "" })
 }
 
 /// 读配置并把缺省字段补齐，避免旧文件缺 key 时下游判空。
@@ -108,14 +109,27 @@ fn summarize(result: &Value) -> (usize, usize, usize) {
     (rows.len(), ok, fail + skip)
 }
 
-/// 后台循环：常驻期间每 30s 检查一次到点情况。
+/// 后台循环：启动立刻检查一次（当天没跑过就补跑），之后每 30s 检查一次。
 pub fn spawn(app: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
+        // 启动即补跑：不先睡 30s，否则「刚打开就自动跑」会迟到半分钟。
+        tick(&app).await;
         loop {
             tokio::time::sleep(Duration::from_secs(TICK_SECS)).await;
             tick(&app).await;
         }
     });
+}
+
+/// 标记「今天已跑」：手动执行完也调用，避免到点再跑一遍（重复烧任务次数）。
+pub fn mark_ran_today() {
+    let mut cfg = load_config();
+    let today = today();
+    if cfg["lastRunDate"].as_str() == Some(today.as_str()) {
+        return;
+    }
+    cfg["lastRunDate"] = json!(today);
+    let _ = save_config(&cfg);
 }
 
 async fn tick(app: &tauri::AppHandle) {

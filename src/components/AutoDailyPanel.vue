@@ -66,13 +66,13 @@ onBeforeUnmount(() => unlisten?.());
 
 <template>
   <div class="shrink-0 border-t border-border bg-panel">
-    <div class="flex h-9 items-center gap-2 px-2 text-[10px] uppercase tracking-[0.1em]">
+    <div class="flex h-9 items-center gap-2 whitespace-nowrap px-2 text-[10px] uppercase tracking-[0.1em]">
       <CalendarClock class="size-3 shrink-0 text-faint" />
-      <span class="text-faint">{{ t("ad.title") }}</span>
+      <span class="shrink-0 text-faint">{{ t("ad.title") }}</span>
 
       <!-- 开关：反白=启用，磷光绿仅用于就绪语义，这里用普通反白避免歧义 -->
       <button
-        class="px-2 py-0.5"
+        class="shrink-0 px-2 py-0.5"
         :class="enabled ? 'bg-foreground text-background' : 'border border-border text-faint hover:text-foreground'"
         :disabled="saving"
         @click="toggle"
@@ -80,7 +80,7 @@ onBeforeUnmount(() => unlisten?.());
         {{ enabled ? t("ad.on") : t("ad.off") }}
       </button>
 
-      <label class="flex items-center gap-1 text-faint">
+      <label class="flex shrink-0 items-center gap-1 text-faint">
         {{ t("ad.time") }}
         <input
           v-model="time"
@@ -92,16 +92,16 @@ onBeforeUnmount(() => unlisten?.());
         />
       </label>
 
-      <span class="text-faint">
+      <span class="shrink-0 text-faint">
         {{ t("ad.lastrun") }}:
         <span class="text-foreground">{{ lastRun || t("ad.never") }}</span>
       </span>
 
-      <span class="hidden truncate text-faint/60 md:inline">— {{ t("ad.hint") }}</span>
+      <span class="hidden min-w-0 flex-1 truncate text-faint/60 md:inline">— {{ t("ad.hint") }}</span>
 
       <!-- 记录折叠 -->
       <button
-        class="ml-auto flex items-center gap-1 text-faint hover:text-foreground"
+        class="ml-auto flex shrink-0 items-center gap-1 text-faint hover:text-foreground"
         @click="expanded = !expanded"
       >
         [ {{ logs.length }} ]
