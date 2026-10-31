@@ -1488,6 +1488,14 @@ pub async fn archived_tasks_stats() -> Value {
         .unwrap_or_else(|_| json!({ "ok": false, "error": "spawn failed" }))
 }
 
+/// 归档任务清单（只读）：标题 / 归档时刻 / 正文体积，供侧栏「归档任务」分区展示。
+#[tauri::command]
+pub async fn archived_tasks_list() -> Value {
+    tauri::async_runtime::spawn_blocking(crate::purge::list)
+        .await
+        .unwrap_or_else(|_| json!({ "ok": false, "error": "spawn failed" }))
+}
+
 /// 执行归档任务清理：WorkBuddy 运行中会被后端拒绝（blocked=true）。
 #[tauri::command]
 pub async fn purge_archived_tasks() -> Value {

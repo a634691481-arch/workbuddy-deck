@@ -772,6 +772,27 @@ export interface PurgeResult {
 
 export const archivedTasksStats = () => invoke<ArchivedStats>("archived_tasks_stats");
 
+export interface ArchivedTask {
+  id: string;
+  title: string;
+  /** 归档时刻（毫秒时间戳，可能为空） */
+  updatedAt: number | null;
+  bytes: number;
+  human: string;
+}
+
+export interface ArchivedList {
+  ok: boolean;
+  dbExists: boolean;
+  running: boolean;
+  total: number;
+  bytes: number;
+  human: string;
+  rows: ArchivedTask[];
+}
+
+export const archivedTasksList = () => invoke<ArchivedList>("archived_tasks_list");
+
 export const purgeArchivedTasks = () => invoke<PurgeResult>("purge_archived_tasks");
 
 // ───────────────────────── 自动更新 ─────────────────────────

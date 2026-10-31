@@ -126,7 +126,20 @@ const zh = {
   "nav.accounts": "账号管理",
   "nav.section": "// 导航",
   "nav.logs": "运行日志",
+  "nav.archived": "归档任务",
   "nav.settings": "系统设置",
+
+  "ar.title": "归档任务",
+  "ar.subtitle": "// WorkBuddy 会话库 · 归档清单（只读）",
+  "ar.refresh": "刷新",
+  "ar.colTask": "任务",
+  "ar.colDate": "归档时刻",
+  "ar.colSize": "正文",
+  "ar.empty": "没有归档任务",
+  "ar.dbMissing": "未找到 WorkBuddy 会话库（workbuddy.db）",
+  "ar.running": "WB 运行中 · 列表为即时快照",
+  "ar.hint": "物理删除 · 执行前自动备份会话库",
+  "ar.total": "共",
 
   // 积分统计
   "cr.title": "积分统计",
@@ -568,7 +581,20 @@ const en: Record<I18nKey, string> = {
   "nav.accounts": "ACCOUNTS",
   "nav.section": "// NAV",
   "nav.logs": "LOGS",
+  "nav.archived": "ARCHIVED",
   "nav.settings": "SYSTEM",
+
+  "ar.title": "ARCHIVED TASKS",
+  "ar.subtitle": "// WORKBUDDY DB · ARCHIVED LIST (READ-ONLY)",
+  "ar.refresh": "REFRESH",
+  "ar.colTask": "TASK",
+  "ar.colDate": "ARCHIVED AT",
+  "ar.colSize": "SIZE",
+  "ar.empty": "NO ARCHIVED TASKS",
+  "ar.dbMissing": "WORKBUDDY DB NOT FOUND (workbuddy.db)",
+  "ar.running": "WB RUNNING · SNAPSHOT",
+  "ar.hint": "PHYSICAL DELETE · DB BACKED UP FIRST",
+  "ar.total": "TOTAL",
 
   // credits
   "cr.title": "CREDIT TELEMETRY",

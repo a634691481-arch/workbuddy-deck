@@ -10,6 +10,7 @@ import AppSidebar from "@/components/AppSidebar.vue";
 import BootOverlay from "@/components/BootOverlay.vue";
 import TitleBar from "@/components/TitleBar.vue";
 import AccountsView from "@/views/AccountsView.vue";
+import ArchivedView from "@/views/ArchivedView.vue";
 import CreditsView from "@/views/CreditsView.vue";
 import LogsView from "@/views/LogsView.vue";
 import SettingsView from "@/views/SettingsView.vue";
@@ -20,8 +21,8 @@ import type { NavKey } from "@/lib/nav";
 
 const { accountCount, running, nav } = useShell();
 
-// hash 直达分区（浏览器预览与 WB_START_NAV 深链共用）：#tasks / #credits / #tokens / #accounts / #logs / #settings
-const NAV_KEYS: NavKey[] = ["accounts", "tasks", "credits", "tokens", "logs", "settings"];
+// hash 直达分区（浏览器预览与 WB_START_NAV 深链共用）：#tasks / #credits / #tokens / #accounts / #logs / #archived / #settings
+const NAV_KEYS: NavKey[] = ["accounts", "tasks", "credits", "tokens", "logs", "archived", "settings"];
 function navFromHash(): NavKey | null {
   const key = window.location.hash.replace("#", "") as NavKey;
   return NAV_KEYS.includes(key) ? key : null;
@@ -41,6 +42,7 @@ const views = {
   credits: CreditsView,
   tokens: TokensView,
   logs: LogsView,
+  archived: ArchivedView,
   settings: SettingsView,
 } as const;
 

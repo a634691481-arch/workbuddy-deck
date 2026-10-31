@@ -15,7 +15,14 @@ defineProps<{
 
 const emit = defineEmits<{ select: [key: NavKey] }>();
 
-type LabelKey = "nav.tasks" | "nav.credits" | "nav.tokens" | "nav.accounts" | "nav.logs" | "nav.settings";
+type LabelKey =
+  | "nav.tasks"
+  | "nav.credits"
+  | "nav.tokens"
+  | "nav.accounts"
+  | "nav.logs"
+  | "nav.archived"
+  | "nav.settings";
 
 const items: { key: NavKey; idx: string; labelKey: LabelKey }[] = [
   { key: "accounts", idx: "01", labelKey: "nav.accounts" },
@@ -23,7 +30,8 @@ const items: { key: NavKey; idx: string; labelKey: LabelKey }[] = [
   { key: "credits", idx: "03", labelKey: "nav.credits" },
   { key: "tokens", idx: "04", labelKey: "nav.tokens" },
   { key: "logs", idx: "05", labelKey: "nav.logs" },
-  { key: "settings", idx: "06", labelKey: "nav.settings" },
+  { key: "archived", idx: "06", labelKey: "nav.archived" },
+  { key: "settings", idx: "07", labelKey: "nav.settings" },
 ];
 </script>
 

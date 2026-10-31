@@ -79,6 +79,7 @@ pub fn run() {
             commands::update_config_get,
             commands::update_config_set,
             commands::archived_tasks_stats,
+            commands::archived_tasks_list,
             commands::purge_archived_tasks,
             commands::app_ready,
         ])

@@ -116,6 +116,81 @@ pub fn stats() -> Value {
     }
 }
 
+/// 归档任务清单：标题 / 归档时刻 / 正文体积，按归档时刻倒序。只读。
+pub fn list() -> Value {
+    let running = process::is_workbuddy_running(WbVariant::Cn)
+        || process::is_workbuddy_running(WbVariant::Ai);
+    let Some(conn) = Connection::open_with_flags(db_path(), OpenFlags::SQLITE_OPEN_READ_ONLY).ok() else {
+        return json!({
+            "ok": db_path().exists(),
+            "dbExists": db_path().exists(),
+            "running": running,
+            "total": 0,
+            "bytes": 0,
+            "human": human_bytes(0),
+            "rows": [],
+        });
+    };
+
+    // 先建 id→体积映射：一次扫盘，避免逐会话查文件。
+    let mut bytes_by_id: std::collections::HashMap<String, u64> = std::collections::HashMap::new();
+    if let Ok(entries) = fs::read_dir(projects_dir()) {
+        for dir in entries.filter_map(Result::ok) {
+            let Ok(files_in_dir) = fs::read_dir(dir.path()) else {
+                continue;
+            };
+            for file in files_in_dir.filter_map(Result::ok) {
+                let path = file.path();
+                if path.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
+                    continue;
+                }
+                if let Some(stem) = path.file_stem().and_then(|stem| stem.to_str()) {
+                    let size = file.metadata().map(|meta| meta.len()).unwrap_or(0);
+                    *bytes_by_id.entry(stem.to_string()).or_insert(0) += size;
+                }
+            }
+        }
+    }
+
+    let query = "SELECT id, COALESCE(NULLIF(custom_title, ''), title, id), updated_at \
+                 FROM sessions WHERE status = 'archived' ORDER BY updated_at DESC";
+    let mut rows: Vec<Value> = Vec::new();
+    let mut total_bytes = 0u64;
+    if let Ok(mut stmt) = conn.prepare(query) {
+        let mapped = stmt.query_map([], |row| {
+            Ok((
+                row.get::<_, String>(0)?,
+                row.get::<_, String>(1)?,
+                row.get::<_, Option<i64>>(2)?,
+            ))
+        });
+        if let Ok(mapped) = mapped {
+            for row in mapped.filter_map(Result::ok) {
+                let (id, title, updated_at) = row;
+                let bytes = bytes_by_id.get(&id).copied().unwrap_or(0);
+                total_bytes += bytes;
+                rows.push(json!({
+                    "id": id,
+                    "title": title,
+                    "updatedAt": updated_at,
+                    "bytes": bytes,
+                    "human": human_bytes(bytes),
+                }));
+            }
+        }
+    }
+
+    json!({
+        "ok": true,
+        "dbExists": true,
+        "running": running,
+        "total": rows.len(),
+        "bytes": total_bytes,
+        "human": human_bytes(total_bytes),
+        "rows": rows,
+    })
+}
+
 /// 执行清理：备份 → 删正文 → 删库行。任一步失败即停，不半途吞错。
 pub fn purge() -> Value {
     if process::is_workbuddy_running(WbVariant::Cn)

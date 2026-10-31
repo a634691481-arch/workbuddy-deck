@@ -20,7 +20,6 @@ import {
   exportData,
   openExternal,
   openStoreDir,
-  purgeArchivedTasks,
   systemInfo,
   type ArchivedStats,
   type AutoSwitchCheck,
@@ -72,13 +71,9 @@ onMounted(() => {
   void loadArchived();
 });
 
-// ───────────────────────── 归档任务清理 ─────────────────────────
-// 数字来自后端实扫（会话库 + projects 正文），不缓存不硬编码；
-// WorkBuddy 运行中或库不存在时按钮禁用，后端还会再拦一道。
-
+// ───────────────────────── 归档任务读数 ─────────────────────────
+// 这里只显示用量；删除入口唯一在「归档任务」分区（06），避免两处都能删。
 const archived = ref<ArchivedStats | null>(null);
-const purgeOpen = ref(false);
-const purging = ref(false);
 
 async function loadArchived() {
   try {
@@ -88,33 +83,11 @@ async function loadArchived() {
   }
 }
 
-const purgeBlocked = computed(() => {
-  const stats = archived.value;
-  return !stats || !stats.ok || stats.running || stats.count === 0;
-});
-
 const purgeReadout = computed(() => {
   const stats = archived.value;
   if (!stats) return "—";
   return `${stats.count} · ${stats.human}`;
 });
-
-async function doPurge() {
-  if (purging.value) return;
-  purging.value = true;
-  try {
-    const result = await purgeArchivedTasks();
-    if (!result.ok) throw new Error(result.error || "purge failed");
-    notice.value = `${t("pz.done")} · ${result.deleted ?? 0} · ${result.human ?? ""}`;
-    purgeOpen.value = false;
-  } catch (cause) {
-    error.value = `${t("st.fail")}: ${cause instanceof Error ? cause.message : String(cause)}`;
-    purgeOpen.value = false;
-  } finally {
-    purging.value = false;
-    await loadArchived();
-  }
-}
 
 // ───────────────────────── 自动更新 ─────────────────────────
 // 检查 / 下载 / 进度都在 composable 里，这里只管「把结果排成一行读数」。
@@ -565,27 +538,13 @@ async function doClear() {
             </span>
           </div>
 
-          <!-- 归档任务：不在上表四列里挤，独立一行带动作（低频危险操作） -->
+          <!-- 归档任务：只读读数，删除入口在「归档任务」分区 -->
           <div class="flex items-center justify-between gap-2 border-t border-border px-3 py-1.5" :title="t('pz.statHint')">
-            <div class="flex min-w-0 items-center gap-2">
-              <span class="text-[11px] text-foreground">{{ t("pz.row") }}</span>
-              <span class="readout text-[10px]" :class="archived?.count ? 'text-hazard' : 'text-muted-foreground'">
-                {{ purgeReadout }}
-              </span>
-            </div>
-            <button
-              type="button"
-              class="flex shrink-0 items-center gap-1 border border-border-strong px-2 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-hazard hover:text-hazard disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border-strong disabled:hover:text-muted-foreground"
-              :disabled="purgeBlocked"
-              @click="purgeOpen = true"
-            >
-              <Eraser class="size-2.5" />
-              {{ t("pz.clean") }}
-            </button>
+            <span class="text-[11px] text-foreground">{{ t("pz.row") }}</span>
+            <span class="readout text-[10px]" :class="archived?.count ? 'text-hazard' : 'text-muted-foreground'">
+              {{ purgeReadout }}
+            </span>
           </div>
-          <p v-if="archived?.running" class="border-t border-hazard/40 bg-hazard-soft px-3 py-1.5 text-[9px] text-hazard">
-            {{ t("pz.running") }}
-          </p>
         </section>
 
         <!-- 显示偏好 -->
@@ -850,47 +809,6 @@ async function doClear() {
             >
               <Loader2 v-if="clearing" class="size-3 animate-spin" />
               {{ t("st.maint") }}
-            </button>
-          </div>
-        </div>
-      </div>
-    </Teleport>
-    <Teleport to="body">
-      <!-- 归档清理确认：复刻维护清空的警示结构，数字来自实扫 -->
-      <div
-        v-if="purgeOpen"
-        class="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
-        @click.self="purgeOpen = false"
-      >
-        <div class="w-full max-w-sm border border-hazard bg-card">
-          <div class="flex items-center justify-between border-b border-border px-3 py-2">
-            <span class="text-[12px] tracking-[0.1em] text-hazard">{{ t("pz.title") }}</span>
-            <button type="button" class="text-[11px] text-muted-foreground hover:text-foreground" @click="purgeOpen = false">
-              ✕
-            </button>
-          </div>
-          <div class="space-y-2 px-3 py-3 text-[11px] leading-relaxed text-muted-foreground">
-            <p>{{ t("pz.body") }}</p>
-            <p class="readout text-[10px] text-foreground">
-              {{ t("pz.row") }} · {{ purgeReadout }}
-            </p>
-          </div>
-          <div class="flex justify-end gap-1.5 border-t border-border px-3 py-2">
-            <button
-              type="button"
-              class="border border-border-strong px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground hover:text-foreground"
-              @click="purgeOpen = false"
-            >
-              CANCEL
-            </button>
-            <button
-              type="button"
-              class="flex items-center gap-1.5 border border-hazard bg-hazard px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-white disabled:opacity-40"
-              :disabled="purging"
-              @click="doPurge()"
-            >
-              <Loader2 v-if="purging" class="size-3 animate-spin" />
-              {{ t("pz.confirm") }}
             </button>
           </div>
         </div>

@@ -476,3 +476,44 @@ decision(forced-on) = Skip("当前账号未被限流")
 - 删除：`src-tauri/src/splash.rs`、`public/splash.html`、`splash_done` 命令、`withGlobalTauri`。
 - 修 bug：`loaded` 与 `leaving` 曾共用一个 ref，导致读数读完即淡出（1.3s 就没了）。
 - 实测：2300ms 遮罩三行齐 + 进度约半 / 3400ms 淡出中 / 4200ms 只剩主界面。
+
+## 追加：侧栏「归档任务」分区（2026-10-31 完成）
+- [x] `purge.rs` 新增 `list()`：标题/归档时刻/正文体积，归档时刻倒序（updated_at 为毫秒，已核实）
+- [x] 命令 `archived_tasks_list` 注册；`api.ts` 加 ArchivedTask/ArchivedList
+- [x] `nav.ts` 加 "archived"；侧栏 06 归档 / 07 系统（设置页顺延重编号）；`App.vue` 注册视图与 #archived hash
+- [x] 新建 `ArchivedView.vue`：台账表（# / 任务 / 归档时刻 / 正文）+ 顶部合计读数 + WB 运行中徽标
+      + 库缺失错误条；底部只放「去系统设置清理」带路按钮（删除入口仍在设置页，不重复）
+- [x] i18n：nav.archived + ar.*（中英同 key）；utils 加 formatStamp（毫秒 → YYYY-MM-DD HH:mm）
+- [x] `npm run verify` 全绿
+- 备注：归档任务已被用户实际清理成功（309 条归零），端到端闭环达成；列表页现显示空态
+
+## 调整：删除入口移入归档页（2026-10-31 完成，用户要求）
+- [x] SettingsView：移除「清理」按钮 / 运行中提示条 / 确认弹框 / doPurge，数据规模卡只留归档读数（N · 体积）
+- [x] ArchivedView：footer 加「清理」按钮（无归档时禁用，WB 运行中挂红色提示条）+ 确认弹框；
+      清理成功在副标题显示「已清理 · N · 释放量」，失败进顶部错误条，完成后重拉列表
+- [x] i18n：ar.hint 改「物理删除 · 执行前自动备份会话库」，删 ar.gotoSettings
+- [x] `npm run verify` 全绿
+
+---
+
+# 新功能：WB 皮肤工坊（2026-10-31 完成）
+
+## 逆向结论（改代码前先读）
+- WB 皮肤 = `~/.workbuddy/appearance-resources/<resourceKey>-<毫秒时间戳>/skin.v2.css`，纯 CSS 覆盖 `--cb-*` 变量
+- resourceKey 限 `^[A-Za-z0-9._-]+$`；zip 内允许图片/字体资源；LRU 保留 8 个目录
+- 选中状态 = `storage/user-*/global/preferences.json` 的**扁平 key** `appearance.themeSelection`（不是嵌套对象）
+- 本地 6 个皮肤全是浅色基底（历史导入），补丁层统一白色半透明方案
+- **WB 运行中禁止应用**（退出时回写内存缓存会覆盖我们的修改）
+
+## 功能（侧栏 07 WB 皮肤）
+- [x] `skin.rs`：bases（枚举本地基底）/ stage_image（复制暂存防原路径失效）/
+      apply（基底 CSS + 补丁层：背景图+内容区透明+暗化+强调色）/ reset（切回 dark）
+- [x] preferences.json 逐账号改写 + 每次备份到 `~/.wb-switch/backups/wb-skin/`
+- [x] `SkinView.vue`：基底网格 / 图片选择 / 透明度·暗化滑杆 / 强调色色板+HEX / 应用·还原 / 风险提示
+- [x] 命令 wb_skin_* 注册；api.ts 契约；i18n sk.*（中英）
+- [x] verify 全绿 + 单测 2 条通过
+- [ ] 端到端：退出 WB → 选基底+传图 → 应用 → 重启 WB 查看效果（需用户操作）
+
+## 已知风险（UI 已提示）
+- 云端同步可能覆盖自定义选中 → 重新应用即可
+- WB 大版本更新可能改变量名 → 皮肤失效重做
