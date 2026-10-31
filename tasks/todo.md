@@ -517,3 +517,11 @@ decision(forced-on) = Skip("当前账号未被限流")
 ## 已知风险（UI 已提示）
 - 云端同步可能覆盖自定义选中 → 重新应用即可
 - WB 大版本更新可能改变量名 → 皮肤失效重做
+
+## 2026-10-31 撤除 WB 皮肤工坊 + 发版 v0.1.2
+- [x] 删除 `src-tauri/src/skin.rs`、`src/views/SkinView.vue`
+- [x] 拔除 lib.rs 模块与 4 条命令注册、commands.rs 包装、api.ts 契约、i18n（nav.skin + sk.*）、
+      nav.ts NavKey、AppSidebar 导航项（07 系统设置回归）、App.vue import/NAV_KEYS/views
+- [x] `npm run verify` 全绿；grep 确认无 skin 残留
+- [x] 发版：`node scripts/bump.mjs 0.1.2 --tag`（注意 `npm run bump X --tag` 会把 --tag 吞成 npm dist-tag），
+      已推送 main + tag v0.1.2，CI release 启动

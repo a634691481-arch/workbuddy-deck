@@ -74,7 +74,7 @@ This app puts that loop in one desktop window: accounts run in sequence, results
 ## What is actually different
 
 **1. Switching has a hard gate instead of "looks successful"**
-Replace-mode sync must have *actually written* the data first: copied rows must equal source rows and failures must be zero before the target account's old sessions may be deleted. Otherwise it fails closed, keeps the old data, and says why in the result. This rule came from two real data-loss incidents (recorded in `tasks/lessons.md`) and has regression tests in the session module. After writing, the auth file is **read back and the uid verified**; a mismatch triggers a rollback.
+Replace-mode sync must have *actually written* the data first: copied rows must equal source rows and failures must be zero before the target account's old sessions may be deleted. Otherwise it fails closed, keeps the old data, and says why in the result. This rule came from two real data-loss incidents and has regression tests in the session module. After writing, the auth file is **read back and the uid verified**; a mismatch triggers a rollback.
 
 **2. The balance line also tells you how long it lasts**
 An account card no longer stops at `3,539 / 4,000`; it adds `≈21.0 days`. The estimate takes the smaller of a median and an EWMA (early warning beats optimism) and only counts **balance decreases** as usage — a check-in or reward that raises the balance is not negative consumption. With fewer than three days of snapshots it shows "sample 2/3 days" instead of inventing a number.
