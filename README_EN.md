@@ -40,16 +40,17 @@ At three accounts this is tolerable. At eight it is fifteen minutes of mechanica
 
 This app puts that loop in one desktop window: accounts run in sequence, results are grouped into success / failure / skipped, balances and expiries and rate limits sit on one screen, and every run leaves an archived record you can look up later.
 
-## Six panes
+## Seven panes
 
 | Pane | What it handles |
 |---|---|
 | 01 Accounts | QR login / import-export, balance and credit packages, **days-remaining forecast**, **health dot**, per-model rate limits, one-click "make current" |
-| 02 Tasks | Pick accounts → check-in / growth / travel / full daily run, live progress and failure aggregation |
+| 02 Tasks | Pick accounts → check-in / growth / travel, live progress and failure aggregation; **expand unfinished items to see the reason**, with a one-click deep link into the official panel |
 | 03 Credits | Daily spend, per-account balance, model / client / account breakdowns; official numbers first, local snapshots as fallback |
 | 04 Tokens | Multi-source totals, top sessions, request detail, week × hour heatmap, **7-day comparison** |
 | 05 Logs | Notification archive + daily runs + error log + **switch ledger**, four sources in one timeline, clearable per source |
-| 06 Settings | Version, source link, data directory, data size, display prefs, **CSV export**, rate-limit auto-switch, per-source cleanup |
+| 06 Archived | Read-only ledger of WorkBuddy's archived sessions (count / size / archived-at); one-click purge that closes the client, cleans, and relaunches it |
+| 07 Settings | Version, source link, data directory, data size, display prefs, **CSV export**, rate-limit auto-switch, per-source cleanup |
 
 ## What is actually different
 
@@ -70,6 +71,9 @@ Four CSVs from Settings: accounts (with health and forecast), tokens by day, tok
 
 **6. It is still there when the window is closed**
 The tray tooltip shows account count, total balance, and the tightest account's remaining days. Every run writes an archived notification that survives a restart and appears in pane 05.
+
+**7. Growth tasks finish on their own — and say why when they can't**
+Auto-accept → fill progress → claim on completion, and **tasks that finished but were never claimed get claimed first in the next run** (two accounts had 200 credits stuck each). Whatever is left is never silent: expand "not done" in the Tasks pane to see each account's task name plus the reason (attempts used up / needs manual / no automation), and the "needs manual" ones carry a one-click deep link that opens the matching panel in the client. It runs once a day on a schedule, and skips the rest of the day if you already ran it by hand.
 
 ## Quick start
 
