@@ -594,3 +594,24 @@ decision(forced-on) = Skip("当前账号未被限流")
 - [x] 深挖结论：客户端 app.asar 内**没有**成长任务 element_id/eventCode（只有无关 iframeMenuElementId），
       埋点在远程 web 前端；远程 JS 下载被安全策略拦截 → Library_read/Buddy_App 自动化无法本地修复
 - [x] verify 全绿
+
+## 2026-10-31 品牌：三个 logo 方向 + 图标换 C
+- [x] `assets/logo/`：a-rec / b-stack / c-trace 各出深色版 + 单色版（内联 SVG，坐标可改）
+- [x] `assets/logo/c-trace-1024.png`：1024 图标源（黑底方角、主体占 78%，16px 仍有形）
+- [x] `assets/logo/icon-sizes.png`：16/24/32/48px 可辨性检查（48/32 清晰，24 可辨，16 仅剩红点+灰点）
+- [x] `src-tauri/icons/` 全量重生成（icon.ico 9.6KB / icon.icns 42.8KB / 各尺寸 png / Windows Square*Logo），
+      原图标是模板遗留的绿色手绘幼苗，与工业遥测风冲突
+- [x] `assets/app-icon.png` 同步；`design-demos/logo-directions.html` 三方向对比页
+- [ ] 待办：16px 专用简化版（去掉细十字、加粗括号与波形），可选
+- [x] 发 v0.1.4（图标必须重新打包才进 exe）
+
+## 2026-10-31 托盘图标专用版（用户反馈「托盘不好看」）
+- 根因：托盘复用 `default_window_icon`（128px 黑底方角 + 细线），缩到 16px = 一块黑斑 + 糊点
+- 实测排除：白线在**浅色任务栏上完全消失**（T1/T3 只剩红线）；斜线峰在 16px 必糊（N1）；
+  方波细节太多（3 段以上）在 16px 也糊
+- 定稿 **S1 两条粗横条**（红 #E61919 + 灰 #B0B0B0，高 7/32、右端不齐形成叠层感）：
+  16px 深/浅底都清晰，24/32 更好；`tray-preview2.png` 是证据图
+- [x] `src-tauri/icons/tray.png`（32×32 透明底）
+- [x] `lib.rs`：托盘改用 `Image::from_bytes(include_bytes!("../icons/tray.png"))`，失败回退窗口图标
+- [x] 源文件留 `assets/logo/tray-s1-{16,24,32,64}.png`
+- [x] verify 全绿
