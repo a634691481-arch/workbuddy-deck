@@ -1,21 +1,21 @@
 <!-- README_SYNC: source=working-tree; updated=2026-10-30 -->
 
 <p align="center">
-  <a href="./README_ZH.md">简体中文</a> · English
+  简体中文 · <a href="./README_EN.md">English</a>
 </p>
 
 <h1 align="center">workbuddy-deck</h1>
 
-<p align="center"><b>A control deck for multiple WorkBuddy accounts: switching, check-in, daily tasks, credits, tokens and rate limits on one screen.</b><br/>
-Built for people running several WorkBuddy accounts who click through check-in and growth tasks by hand every day.</p>
+<p align="center"><b>WorkBuddy 多账号控制台：切号、签到、日常任务、积分、TOKEN、限流，一块屏管完。</b><br/>
+给同时养着好几个 WorkBuddy 账号、每天要手动点一遍签到和成长任务的人。</p>
 
 <p align="center">
-  If it saves you those ten minutes a day, a <a href="https://github.com/a634691481-arch/workbuddy-deck/stargazers"><b>star</b></a> helps you find it again — and helps the next person with the same chore find it too.
+  如果它替你省下了每天那十几分钟，点个 <a href="https://github.com/a634691481-arch/workbuddy-deck/stargazers"><b>Star</b></a>：方便以后回来，也让更多同样在手动养号的人找到它。
 </p>
 
 <p align="center">
-  <a href="https://a634691481-arch.github.io/workbuddy-deck/"><b>Landing page</b></a> ·
-  <a href="https://github.com/a634691481-arch/workbuddy-deck/releases/latest">Download</a>
+  <a href="https://a634691481-arch.github.io/workbuddy-deck/"><b>宣传页</b></a> ·
+  <a href="https://github.com/a634691481-arch/workbuddy-deck/releases/latest">下载</a>
 </p>
 
 <p align="center">
@@ -29,179 +29,153 @@ Built for people running several WorkBuddy accounts who click through check-in a
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/feature-tour.gif" alt="Feature tour: accounts, tasks, credits, tokens, logs and settings, one screen each" width="900">
+  <img src="docs/screenshots/feature-tour.gif" alt="功能导览：账号、任务、积分、TOKEN、日志、设置，一屏一个" width="720">
 </p>
 
-<p align="center">
-  <img src="docs/screenshots/01-accounts-en.png" alt="Accounts: balance, days-remaining forecast, health dot, package expiry and rate-limit markers" width="900">
-</p>
+## 不用它的时候，每天是这样的
 
-## The manual version, every day
+打开客户端 → 逐个账号切换 → 签到 → 进成长中心领任务奖励 → 再切下一个 → 想确认今天额度还剩多少，得把账号再轮一遍。
 
-Open the client → switch to account 1 → check in → claim growth rewards → switch to account 2 → repeat. Want to know how much credit is left today? Walk the whole list again.
+三个账号还能忍，八个账号就是每天十几分钟的机械劳动。而且**切号本身就是风险点**：如果替换会话时上一个账号的记录被覆盖，丢的是聊天记录，不是日志。
 
-At three accounts this is tolerable. At eight it is fifteen minutes of mechanical work — and **switching is the risky part**: if the session swap overwrites the previous account's records, what you lose is chat history, not a log line.
+这个应用把这段流程收进一个桌面窗口：串行跑完所有账号的签到与日常，结果按「成功 / 失败 / 跳过」归类；额度、到期、限流集中在一屏；每轮跑完写一条存档，事后能查。
 
-This app puts that loop in one desktop window: accounts run in sequence, results are grouped into success / failure / skipped, balances and expiries and rate limits sit on one screen, and every run leaves an archived record you can look up later.
+## 六个分区
 
-## Six panes
-
-| Pane | What it handles |
+| 分区 | 解决的事 |
 |---|---|
-| 01 Accounts | QR login / import-export, balance and credit packages, **days-remaining forecast**, **health dot**, per-model rate limits, one-click "make current" |
-| 02 Tasks | Pick accounts → check-in / growth / travel / full daily run, live progress and failure aggregation |
-| 03 Credits | Daily spend, per-account balance, model / client / account breakdowns; official numbers first, local snapshots as fallback |
-| 04 Tokens | Multi-source totals, top sessions, request detail, week × hour heatmap, **7-day comparison** |
-| 05 Logs | Notification archive + daily runs + error log + **switch ledger**, four sources in one timeline, clearable per source |
-| 06 Settings | Version, source link, data directory, data size, display prefs, **CSV export**, rate-limit auto-switch, per-source cleanup |
+| 01 账号 | 扫码登录 / 导入导出、余额与积分包、**剩余天数预测**、**健康点**、模型限流标记、一键设为当前账号 |
+| 02 任务 | 选账号 → 签到 / 成长任务 / 旅行 / 全套日常，实时进度与失败聚合 |
+| 03 积分 | 每日消耗、账号余额、模型 / 客户端 / 账号三维度，官方用量优先、本地快照兜底 |
+| 04 TOKEN | 多数据源汇总、会话 TOP、调用明细、周 × 时热力图、**7 日环比** |
+| 05 日志 | 通知存档 + 自动日常 + 错误日志 + **切换台账**四源合一，可按源清理 |
+| 06 系统 | 版本、开源地址、数据目录、数据规模、显示偏好、**数据导出**、限流自动切换、按源清日志 |
 
-<p align="center">
-  <img src="docs/screenshots/02-tasks-en.png" alt="Task pane: account selection, telemetry readouts, task table, action bar and log panel" width="900"><br/>
-  <sub>Task pane: accounts on the left, telemetry and task table in the middle, action bar at the bottom, log panel always visible</sub>
-</p>
+## 真正不同的六点
 
-<p align="center">
-  <img src="docs/screenshots/03-credits-en.png" alt="Credits: remaining balance, daily spend chart, per-account balances and model breakdown" width="900"><br/>
-  <sub>Credits: official usage when available, local snapshots as the fallback</sub>
-</p>
+**1. 切号有硬门槛，不是"看起来成功"**
+替换式同步必须先**真实写入**：本次复制条数等于源会话数、且失败数为 0，才允许删除目标账号的旧会话；否则 fail-closed，保留旧数据并在结果里写明原因。这条规则来自两次真实的数据丢失事故，回归测试在核心 crate 的 session 模块。切换完成后还会**读回认证文件校验 uid**，身份不符直接回滚。
 
-<p align="center">
-  <img src="docs/screenshots/04-tokens-en.png" alt="Tokens: metrics, composition, sources, daily bars, project distribution and efficiency" width="900"><br/>
-  <sub>Tokens: metrics → composition → sources → daily → projects → sessions / request detail</sub>
-</p>
+**2. 余额旁边写着"还能撑几天"**
+账号卡不再只显示 `3,539 / 4,000`，而是附一个 `≈21.0 天`。算法用中位数与 EWMA 取小（宁可早预警），只把余额**下降**算作消耗——签到、领奖造成的上涨不是负消耗。样本不足 3 天时显示「样本 2/3 天」，而不是给一个猜出来的数字。
 
-<p align="center">
-  <img src="docs/screenshots/05-logs-en.png" alt="Logs: four sources merged into one timeline with source breakdown" width="900">
-  <img src="docs/screenshots/06-settings-en.png" alt="Settings: app info and source link, data size, display prefs, CSV export, maintenance" width="900">
-</p>
+**3. 限流归因有台账**
+不只告诉你"429 了"，而是记录**哪个账号、哪个模型、官方给的恢复时刻、命中几次**。账号卡上直接标出来，排班时先挑没被限的那个；需要的话可以打开限流自动切换（默认关闭，默认只提示不执行）。
 
-## What is actually different
+**4. 20 个号也能一眼扫出"哪个快废了"**
+每个账号名称前一个健康点（绿 / 灰 / 红），分数来自一张可解释的扣分表：限流 −35、余额为 0 −50、余额不足 10% −30、拉取失败 −20、预测 3 天内耗尽 −25、快到期额度占多数 −10。悬停能看到具体原因，不是黑盒评分。
 
-**1. Switching has a hard gate instead of "looks successful"**
-Replace-mode sync must have *actually written* the data first: copied rows must equal source rows and failures must be zero before the target account's old sessions may be deleted. Otherwise it fails closed, keeps the old data, and says why in the result. This rule came from two real data-loss incidents and has regression tests in the session module. After writing, the auth file is **read back and the uid verified**; a mismatch triggers a rollback.
+**5. 数据能带走**
+设置页可导出四份 CSV——账号（含健康分与预测）、Token 按天、Token 按模型（含占比）、积分快照（含逐条差值）。写 UTF-8 BOM，Excel 双击打开不乱码。
 
-**2. The balance line also tells you how long it lasts**
-An account card no longer stops at `3,539 / 4,000`; it adds `≈21.0 days`. The estimate takes the smaller of a median and an EWMA (early warning beats optimism) and only counts **balance decreases** as usage — a check-in or reward that raises the balance is not negative consumption. With fewer than three days of snapshots it shows "sample 2/3 days" instead of inventing a number.
+**6. 关掉窗口也还在**
+托盘常驻，鼠标悬停就能看到「几个账号 · 合计余额 · 最紧的那个号还能撑几天」；每轮执行写一条通知存档，重启后仍在 05 分区按时间轴可查。
 
-**3. Rate limits are attributed, not just reported**
-Not "you got a 429", but which account, which model, the official reset time, and how many times it hit. It shows on the account card so you can pick an unrestricted account first — and there is an optional auto-switch (off by default, notify-only by default).
+## 快速开始
 
-**4. Twenty accounts, one glance to find the dying one**
-A health dot (green / grey / red) before each account name, from a deductive table you can read: rate-limited −35, zero balance −50, under 10% −30, fetch failure −20, forecast under 3 days −25, mostly-expiring credit −10. Hover shows the actual reasons; it is not a black-box score.
+**装现成的**：到 [Releases](https://github.com/a634691481-arch/workbuddy-deck/releases) 下最新的
+`*_x64-setup.exe`，装完直接运行。应用内的「系统设置 → 自动更新」会自动发现后续版本。
 
-**5. The data leaves with you**
-Four CSVs from Settings: accounts (with health and forecast), tokens by day, tokens by model (with share), and credit snapshots (with per-row deltas). UTF-8 with BOM, so Excel opens them without mojibake.
-
-**6. It is still there when the window is closed**
-The tray tooltip shows account count, total balance, and the tightest account's remaining days. Every run writes an archived notification that survives a restart and appears in pane 05.
-
-## Quick start
-
-**Install a build**: grab the latest `*_x64-setup.exe` from
-[Releases](https://github.com/a634691481-arch/workbuddy-deck/releases). The in-app
-"System → Updates" card picks up later versions automatically.
-
-**Build from source**:
+**从源码构建**：
 
 ```bash
 git clone https://github.com/a634691481-arch/workbuddy-deck.git
 cd workbuddy-deck
 npm install
-npm run tauri build                  # NSIS installer + exe
-npm run tauri build -- --no-bundle   # exe only, skips signing (fine for local work)
+npm run tauri build                  # NSIS 安装包 + exe
+npm run tauri build -- --no-bundle   # 只出 exe，跳过签名（本地调试够用）
 ```
 
-Installer: `src-tauri/target/release/bundle/nsis/`; raw exe: `src-tauri/target/release/workbuddy-task-assistant.exe`.
-Requirements: Node.js 18+, stable Rust, Windows 10/11 with the WebView2 runtime.
+产物：安装包在 `src-tauri/target/release/bundle/nsis/`，裸 exe 在 `src-tauri/target/release/workbuddy-task-assistant.exe`。
+前置条件：Node.js 18+、Rust stable、Windows 10/11（WebView2 运行时）。
 
-The domain crate (accounts, check-in, growth tasks, travel, tokens, switching) is vendored at
-`crates/wb-switch-core/`, so a fresh clone builds with no external path.
+领域能力 crate（账号库、签到、成长任务、旅行、令牌、切换）已随仓库放在 `crates/wb-switch-core/`，
+克隆即可编译，不再需要外部路径。
 
-To work on the UI only (no data):
+只想调界面（无数据）可以跑浏览器预览：
 
 ```bash
 npx vite --port 1421
 ```
 
-Open `http://localhost:1421/`; hashes jump straight to a pane: `#accounts` / `#tasks` / `#credits` / `#tokens` / `#logs` / `#settings`.
+打开 `http://localhost:1421/`，hash 可直达分区：`#accounts` / `#tasks` / `#credits` / `#tokens` / `#logs` / `#settings`。
 
-## Auto-update
+## 自动更新
 
-Tag to running client is one closed loop with no manual upload step:
+发版到客户端升级是一条闭环，中间没有手工上传步骤：
 
 ```
-bump version  →  push tag  →  CI builds + signs  →  Release  →  client check  →  verify  →  install  →  restart
+改版本号  →  打 tag  →  CI 构建+签名  →  Release  →  客户端检查  →  下载校验  →  覆盖安装  →  重启
 ```
 
-| Stage | How |
+| 段 | 做法 |
 | --- | --- |
-| Version | `npm run bump 0.1.1` writes `package.json` / `Cargo.toml` / `tauri.conf.json` at once; it refuses to run when the three already disagree |
-| Release | `npm run bump 0.1.1 --tag`, or `git tag v0.1.1 && git push --tags` |
-| Build | `.github/workflows/release.yml`: windows-latest → `tauri build --bundles nsis` → sign `.sig` + `latest.json` |
-| Check | 8s after launch, then every 6h; manual check in Settings. Reads the release asset `latest.json`, **never the GitHub API** (60 req/h/IP) |
-| Verify | A minisign mismatch aborts the install |
-| Install | NSIS in `passive` mode overwrites in place and relaunches; the installer closes the old process |
-| Trail | Result lands in the notification archive — visible in Logs as `更新 · v0.1.1 已下载并校验通过` |
+| 版本号 | `npm run bump 0.1.1` 一次同步 `package.json` / `Cargo.toml` / `tauri.conf.json`；三处本来不一致就直接报错退出 |
+| 发版 | `npm run bump 0.1.1 --tag`（或手动 `git tag v0.1.1 && git push --tags`） |
+| 构建 | `.github/workflows/release.yml`：windows-latest → `tauri build --bundles nsis` → 用私钥签出 `.sig` + `latest.json` |
+| 检查 | 启动 8 秒后首查，之后每 6 小时；设置页可手动检查。读的是 release 资产 `latest.json`，**不走 GitHub API**（那有 60 次/小时/IP 限制） |
+| 校验 | minisign 签名不匹配直接中止，不安装 |
+| 安装 | NSIS `passive` 模式覆盖安装，装完自动重启；旧版本进程由安装器接管关闭 |
+| 留痕 | 结果写入通知存档，日志页「通知存档」能看到 `更新 · v0.1.1 已下载并校验通过` |
 
-**Mirror**: the Settings card accepts a prefix such as `https://ghproxy.net/`; both check and download go through it. Empty means direct GitHub.
+**换源**：设置页「镜像前缀」可填 `https://ghproxy.net/` 一类前缀，检查与下载都走镜像；留空即直连 GitHub。
 
-**Where multiple versions come from**: one tag = one release = one set of installers. Publish `v0.1.1`
-and it sits on top while `v0.1.0` stays downloadable; `releases/latest` always resolves to the newest
-stable release, which is all the client looks at. Ship the next one with `npm run bump 0.1.1 --tag` —
-never upload an exe by hand.
+**多版本怎么来的**：一个 tag = 一个 Release = 一套安装包。`v0.1.1` 发布后，`Releases` 列表里
+`v0.1.1` 在上、`v0.1.0` 仍可下载；`releases/latest` 始终指向最新正式版，客户端只认它。
+要发下一版就是再跑一次 `npm run bump 0.1.1 --tag`，不要手工上传 exe。
 
-**One-time maintainer setup** (repo Settings → Secrets and variables → Actions):
+**维护者一次性配置**（仓库 Settings → Secrets and variables → Actions）：
 
-| Secret | Value |
+| Secret | 内容 |
 | --- | --- |
-| `TAURI_SIGNING_PRIVATE_KEY` | the private key from `tauri signer generate` (**never commit it**) |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | its passphrase |
+| `TAURI_SIGNING_PRIVATE_KEY` | `tauri signer generate` 产出的私钥全文（**不入库**） |
+| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | 该私钥的口令 |
 
-Lose the key or passphrase and already-shipped clients can no longer auto-upgrade — they trust that one public key.
+私钥或口令丢失后，已发布版本将无法再自动升级（客户端只认对应公钥），只能让用户手动装新包。
 
-## Architecture
+## 架构
 
 ```text
-frontend  src/components/ui/*      presentational atoms
-          src/components/*         business components (props / emit only)
-          src/composables/*        state and side effects (the only layer calling lib/api)
-          src/views/*              six panes, each fetching and acting on its own
-          src/lib/api.ts           the whole IPC contract (types + invoke wrappers)
-backend   src-tauri/src/commands.rs thin command layer: validate then delegate
-          src-tauri/src/executor.rs batch runner: mutex, progress snapshots, cancel, grouping
-          src-tauri/src/scheduler.rs daily schedule: fire, receipt, run-on-miss
-          src-tauri/src/export.rs  four CSV writers (BOM, escaping, write straight to disk)
-          src-tauri/src/tray.rs    tray readout
-          domain crate             accounts / check-in / growth / travel / tokens / switching / forecast / health
+前端  src/components/ui/*      纯展示原子组件
+      src/components/*         业务组件（只收 props / emit）
+      src/composables/*        状态与副作用（唯一允许调用 lib/api 的层）
+      src/views/*              六个分区，各自取数、各自处理动作
+      src/lib/api.ts           全部 IPC 契约（类型 + invoke 封装）
+后端  src-tauri/src/commands.rs 薄命令层：参数校验 + 转调
+      src-tauri/src/executor.rs 批量执行器：互斥、进度快照、取消、结果归类
+      src-tauri/src/scheduler.rs 每日定时：到点触发、写回执、错过补跑
+      src-tauri/src/export.rs  四份 CSV 生成（BOM、转义、直写盘）
+      src-tauri/src/tray.rs    托盘读数
+      领域能力 crate            账号 / 签到 / 成长 / 旅行 / 令牌 / 切换 / 预测 / 健康分
 ```
 
-Design choices worth knowing:
+关键取舍：
 
-- **One account at a time**, never parallel API calls; cancellation only lands on account boundaries so a single account's actions are never torn in half.
-- **Mutex before queue**: one run at a time; a second trigger returns `busy` immediately.
-- **Tokens never leave the backend**: returned account structures carry label / variant / note only; phone numbers and emails are masked in the UI and logs.
-- **Forecasts read local snapshots only**: rate-limit and consumption decisions make no network calls, so a limited account does not have to wait for another round trip.
-- **One accent colour** (aviation red); state is carried by 1px rules and monospaced numbers rather than gradients or rounded corners — telemetry styling that stays readable over long sessions.
+- **单账号串行执行**，不并发打接口；取消只在账号边界生效，保证单个账号的动作不被撕开。
+- **互斥优先于排队**：同一时刻只允许一轮执行，重复触发直接返回 `busy`。
+- **令牌永不出后端**：命令返回的账号结构只含 label / variant / note，界面与日志里手机号、邮箱统一脱敏。
+- **预测只读本地快照**：限流与消耗相关的判断不发请求，被限流时不用再等一轮接口。
+- **界面只有一个强调色**（航空红），状态靠 1px 实线与等宽数字区分，不用渐变和圆角——工业遥测风格，长时间盯不累。
 
-## Data and privacy
+## 数据与隐私
 
-- Everything stays in `~/.wb-switch/` on your machine (accounts, check-in config, notification archive, auto-run config, auto-switch config and logs, error log). Nothing is uploaded.
-- The app reads and writes those local files and calls the official endpoints for check-in, tasks and token renewal. It does not proxy traffic, run a gateway, or export your conversations.
-- The one outward-facing action is "make current": it closes WorkBuddy, replaces session files, writes the auth file and restarts. That is **destructive**, so it sits behind a confirmation with visible progress.
-- Rate-limit auto-switch ships **off** and **notify-only**: actually switching closes and restarts WorkBuddy, which can lose unsaved work, so the app does not press that button for you by default.
+- 所有数据留在本机 `~/.wb-switch/`（账号库、签到配置、通知存档、自动日常配置、自动切换配置与日志、错误日志），不上传任何服务器。
+- 应用只读写这些本地文件，并调用官方接口完成签到 / 任务 / 令牌续期；不代理、不建网关、不导出你的会话内容。
+- 唯一的外部动作是「设为当前账号」：它会关闭 WorkBuddy、替换会话文件、写入认证并重启，属于**破坏性操作**，界面有二次确认与进度提示。
+- 限流自动切换默认**关闭**且默认**只提示不执行**：自动执行会关闭并重启 WorkBuddy，正在编辑的内容可能丢失，所以默认不替你按下这个按钮。
 
-## Known limitations
+## 已知限制
 
-- Windows only (WebView2).
-- Auto-update rides on GitHub Releases: direct access can be slow in some regions, so the Settings card takes a mirror prefix.
-- No automated test pipeline beyond unit tests; type checking and clippy run locally via `npm run verify`, CI only builds releases.
-- UI copy is Chinese-first. i18n with an English switch is built in, but English strings are still being filled in.
-- The usage forecast needs at least three days of snapshots per account; on a fresh install it only shows sample progress.
+- 仅 Windows（依赖 WebView2）。
+- 自动更新依赖 GitHub Releases：国内直连可能慢，需在设置里填镜像前缀。
+- 尚无单元测试之外的自动化测试流水线；类型检查与 clippy 由本地 `npm run verify` 执行，CI 只负责构建发版。
+- 界面文案中文为主，i18n 已内置中英切换，英文文案仍在补。
+- 用量预测需要每个账号至少 3 天快照才会给出天数，新装当天只会显示样本进度。
 
 ## License
 
-There is **no LICENSE file** in this repository, so no licence is granted here. Until one is added, assume "all rights reserved": reading and learning are fine, but ask in an issue before commercial use or redistribution. When a licence is chosen it will be added here and to the repository's About section together.
+仓库当前**没有 LICENSE 文件**，因此这里不给出许可证承诺。在补充许可证之前，默认按「保留所有权利」处理：可以阅读、学习，但商业使用或再分发请先开 Issue 联系作者。选定协议后会在此处与仓库 About 同步更新。
 
-## Finally
+## 最后
 
-If it saves you those minutes, a **star** is welcome. If a run fails, a check-in breaks, or a number looks wrong, open an [issue](https://github.com/a634691481-arch/workbuddy-deck/issues) with your account count, the action you ran, and the raw error — that is far more useful than "doesn't work".
+如果它替你省下了每天那十几分钟，欢迎点个 **Star**；遇到跑不通、签到失败或统计口径不对，直接开 [Issue](https://github.com/a634691481-arch/workbuddy-deck/issues) 带上账号数量、动作和错误原文，比"用不了"有用得多。

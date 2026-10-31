@@ -1,0 +1,13 @@
+{
+  "grammar": "t2_keynote_ui",
+  "duration": 7.5,
+  "fps": 30,
+  "width": 1680,
+  "height": 1170,
+  "theme": { "name": "ink", "accent": "#E61919", "bg": "#000000" },
+  "cues": [
+    { "at": 0.0, "kind": "card", "text": "积分与消耗", "sub": "余额趋势 · 分类构成", "image": "assets/03-credits.png" },
+    { "at": 2.4, "kind": "card", "text": "TOKEN 账本", "sub": "按模型 / 项目 / 会话拆开", "image": "assets/04-tokens.png" },
+    { "at": 4.8, "kind": "card", "text": "日志四源合一", "sub": "通知 · 自动日常 · 切换历史 · 错误", "image": "assets/05-logs.png" }
+  ]
+}

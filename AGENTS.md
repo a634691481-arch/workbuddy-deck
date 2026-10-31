@@ -109,9 +109,9 @@ StatusBar   24px  ● READY · 最近刷新 · 账号数 · 日志数
   改扣分标准前先想清楚：剩 5% 只掉到 80 分会被判成 good，等于没报警。
 - **打开外部链接 = `open_external(url)`**：设置页「开源地址」用。**只放行 http/https**——
   这个命令接收前端传来的任意字符串，不校验就等于把 `file://`、自定义协议都交给页面。
-- **README 截图按语言分开**：`docs/screenshots/NN-xxx.png` 是中文界面，
-  `NN-xxx-en.png` 是英文界面；`README.md` 默认展示英文（引后者），
-  中文版在 `README_ZH.md`（引前者）。
+- **README 默认中文**：`README.md` 是中文版（GitHub 默认展示），英文版在 `README_EN.md`，两文件顶部互链。
+  单张分区截图已移除，README 只留 `docs/screenshots/feature-tour.gif` 一段 15s 演示；
+  截图源文件仍留在 `docs/screenshots/` 作为素材，不再被文档引用。
 - **数据导出 = `export_data` / `export_all_data`**（`src-tauri/src/export.rs`）：
   四份 CSV —— `accounts` / `tokensDaily` / `tokensModels` / `credits`。三条约定：
   ① **后端直接写盘**，CSV 不回传前端（几 MB 过 IPC 没意义），前端只负责 `save`/`open` 拿路径；
