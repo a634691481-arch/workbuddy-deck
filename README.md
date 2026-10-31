@@ -32,10 +32,6 @@ Built for people running several WorkBuddy accounts who click through check-in a
   <img src="docs/screenshots/feature-tour.gif" alt="Feature tour: accounts, tasks, credits, tokens, logs and settings, one screen each" width="900">
 </p>
 
-<p align="center">
-  <img src="docs/screenshots/01-accounts-en.png" alt="Accounts: balance, days-remaining forecast, health dot, package expiry and rate-limit markers" width="900">
-</p>
-
 ## The manual version, every day
 
 Open the client → switch to account 1 → check in → claim growth rewards → switch to account 2 → repeat. Want to know how much credit is left today? Walk the whole list again.
@@ -54,26 +50,6 @@ This app puts that loop in one desktop window: accounts run in sequence, results
 | 04 Tokens | Multi-source totals, top sessions, request detail, week × hour heatmap, **7-day comparison** |
 | 05 Logs | Notification archive + daily runs + error log + **switch ledger**, four sources in one timeline, clearable per source |
 | 06 Settings | Version, source link, data directory, data size, display prefs, **CSV export**, rate-limit auto-switch, per-source cleanup |
-
-<p align="center">
-  <img src="docs/screenshots/02-tasks-en.png" alt="Task pane: account selection, telemetry readouts, task table, action bar and log panel" width="900"><br/>
-  <sub>Task pane: accounts on the left, telemetry and task table in the middle, action bar at the bottom, log panel always visible</sub>
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/03-credits-en.png" alt="Credits: remaining balance, daily spend chart, per-account balances and model breakdown" width="900"><br/>
-  <sub>Credits: official usage when available, local snapshots as the fallback</sub>
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/04-tokens-en.png" alt="Tokens: metrics, composition, sources, daily bars, project distribution and efficiency" width="900"><br/>
-  <sub>Tokens: metrics → composition → sources → daily → projects → sessions / request detail</sub>
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/05-logs-en.png" alt="Logs: four sources merged into one timeline with source breakdown" width="900">
-  <img src="docs/screenshots/06-settings-en.png" alt="Settings: app info and source link, data size, display prefs, CSV export, maintenance" width="900">
-</p>
 
 ## What is actually different
 

@@ -32,10 +32,6 @@
   <img src="docs/screenshots/feature-tour.gif" alt="功能导览：账号、任务、积分、TOKEN、日志、设置，一屏一个" width="900">
 </p>
 
-<p align="center">
-  <img src="docs/screenshots/01-accounts.png" alt="账号管理：余额、剩余天数预测、健康点、积分包到期与限流标记" width="900">
-</p>
-
 ## 不用它的时候，每天是这样的
 
 打开客户端 → 逐个账号切换 → 签到 → 进成长中心领任务奖励 → 再切下一个 → 想确认今天额度还剩多少，得把账号再轮一遍。
@@ -54,26 +50,6 @@
 | 04 TOKEN | 多数据源汇总、会话 TOP、调用明细、周 × 时热力图、**7 日环比** |
 | 05 日志 | 通知存档 + 自动日常 + 错误日志 + **切换台账**四源合一，可按源清理 |
 | 06 系统 | 版本、开源地址、数据目录、数据规模、显示偏好、**数据导出**、限流自动切换、按源清日志 |
-
-<p align="center">
-  <img src="docs/screenshots/02-tasks.png" alt="任务面板：账号勾选、遥测读数、任务表、操作条与日志面板" width="900"><br/>
-  <sub>任务面板：左侧账号勾选，中间遥测读数与任务表，底部操作条，日志面板常驻</sub>
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/03-credits.png" alt="积分统计：剩余积分、每日消耗柱状图、账号余额与模型维度" width="900"><br/>
-  <sub>积分统计：官方用量可用时优先官方口径，不可用时回退本地快照</sub>
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/04-tokens.png" alt="TOKEN 统计：指标、消耗构成、数据源、每日柱、项目分布与效率指标" width="900"><br/>
-  <sub>TOKEN 统计：指标 → 构成 → 数据源 → 每日 → 项目分布 → 会话 / 调用明细</sub>
-</p>
-
-<p align="center">
-  <img src="docs/screenshots/05-logs.png" alt="运行日志：四源合一的时间轴表与来源分布" width="900">
-  <img src="docs/screenshots/06-settings.png" alt="系统设置：应用信息与开源地址、数据规模、显示偏好、数据导出、维护" width="900">
-</p>
 
 ## 真正不同的六点
 
