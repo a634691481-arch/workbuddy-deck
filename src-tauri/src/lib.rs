@@ -8,8 +8,8 @@
 mod commands;
 mod executor;
 mod export;
+mod purge;
 mod scheduler;
-mod splash;
 mod tray;
 mod update;
 
@@ -78,14 +78,11 @@ pub fn run() {
             commands::update_install,
             commands::update_config_get,
             commands::update_config_set,
+            commands::archived_tasks_stats,
+            commands::purge_archived_tasks,
             commands::app_ready,
-            commands::splash_done,
         ])
         .setup(|app| {
-            // 启动画面：主窗口此时是隐藏的（tauri.conf.json visible:false），
-            // 前端挂载完成后调 app_ready，补满动画时长再切过去。
-            splash::open(app.handle())?;
-
             // 托盘菜单：快捷执行在上，退出压到最下面并与其他项分隔。
             let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
             let checkin = MenuItem::with_id(app, "checkin", "一键签到（全部账号）", true, None::<&str>)?;

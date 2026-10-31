@@ -438,6 +438,16 @@ const zh = {
   "st.fail": "操作失败",
   "st.on": "开",
   "st.off": "关",
+
+  "pz.row": "归档任务",
+  "pz.statHint": "WorkBuddy 会话库里的归档会话及其正文文件",
+  "pz.clean": "清理",
+  "pz.title": "清理归档任务",
+  "pz.body": "将物理删除全部归档会话及其正文文件，不可恢复。执行前会自动备份数据库到本应用备份目录。",
+  "pz.confirm": "确认清理",
+  "pz.running": "WorkBuddy 正在运行，请先退出再清理",
+  "pz.done": "已清理",
+  "pz.empty": "没有可清理的归档任务",
 } as const;
 
 export type I18nKey = keyof typeof zh;
@@ -870,6 +880,16 @@ const en: Record<I18nKey, string> = {
   "st.fail": "FAILED",
   "st.on": "ON",
   "st.off": "OFF",
+
+  "pz.row": "ARCHIVED TASKS",
+  "pz.statHint": "Archived sessions in WorkBuddy DB and their transcript size",
+  "pz.clean": "PURGE",
+  "pz.title": "PURGE ARCHIVED TASKS",
+  "pz.body": "Physically deletes all archived sessions and their transcript files. Unrecoverable. The database is backed up to this app's backup dir first.",
+  "pz.confirm": "CONFIRM PURGE",
+  "pz.running": "WORKBUDDY RUNNING — QUIT IT FIRST",
+  "pz.done": "PURGED",
+  "pz.empty": "NOTHING TO PURGE",
 };
 
 const dict: Record<Locale, Record<I18nKey, string>> = { zh, en };

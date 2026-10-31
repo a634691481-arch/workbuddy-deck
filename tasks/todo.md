@@ -455,3 +455,24 @@ decision(forced-on) = Skip("当前账号未被限流")
 - [x] 动画三行读数依次出现，末态 `06 / 06` + `synced` + `ready`
 - [x] 主界面出现后启动窗消失（4400ms 无残留）
 - [ ] 打包版（NSIS）复验（本机 NSIS 工具链下载受限，待 CI 产物验证）
+
+## 实施记录（2026-10-31 完成）
+- [x] `src-tauri/src/purge.rs`（新模块）：
+  - `stats()` 只读统计——运行时解析 `home/.workbuddy/workbuddy.db` 与 `projects/*/<id>.jsonl`，
+    无硬编码路径，任何机器装了 WorkBuddy 即可用；库不存在 → count=0 按钮禁用
+  - `purge()` 三护栏：WB 进程运行中拒绝（blocked=true）→ DB+wal+shm 备份与
+    id 清单落 `~/.wb-switch/backups/archived-purge-<时间戳>/` → 删正文 → 删 archived 行 → VACUUM
+- [x] `Cargo.toml` 加 rusqlite 0.32（与 core 同版本共享编译产物）；`lib.rs`/`commands.rs` 注册两条命令
+- [x] `api.ts` 契约（ArchivedStats/PurgeResult）；`i18n.ts` 加 pz.*（中英同 key）
+- [x] `SettingsView.vue` 数据规模卡底部加「归档任务 N · X MB [清理]」行 + 确认弹框；
+  运行中在行下挂红色提示条；清理后 notice 显示「已清理 · N · 释放量」并重拉统计
+- [x] `npm run verify` 全绿（vue-tsc 0 错 / clippy 0 警告）；单测 human_bytes 通过
+- [ ] 端到端验证：需退出 WorkBuddy 后实际点一次清理（本会话即 WorkBuddy，无法代测）
+
+## 追加：改为页面内加载动画（2026-10-31 08:55）
+- 独立小窗方案废弃：480×300 与内容尺寸在 DPI 缩放下对不齐，且多一个窗口 + 跨窗口握手。
+- 新方案：`BootOverlay.vue` 整窗遮罩，2.45s 淡出、2.85s 卸载；主窗口 `visible:false`，
+  前端 mount 后调 `app_ready` 显示（遮罩已绘制，无白屏）。
+- 删除：`src-tauri/src/splash.rs`、`public/splash.html`、`splash_done` 命令、`withGlobalTauri`。
+- 修 bug：`loaded` 与 `leaving` 曾共用一个 ref，导致读数读完即淡出（1.3s 就没了）。
+- 实测：2300ms 遮罩三行齐 + 进度约半 / 3400ms 淡出中 / 4200ms 只剩主界面。

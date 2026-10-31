@@ -744,6 +744,36 @@ export const exportData = (kind: ExportKind, path: string) =>
 export const exportAllData = (dir: string) =>
   invoke<ExportAllResult>("export_all_data", { dir });
 
+/** ─────────────── 归档任务清理（WorkBuddy 会话库） ─────────────── */
+
+export interface ArchivedStats {
+  ok: boolean;
+  /** 库文件是否存在；不存在时 count 恒为 0，按钮禁用 */
+  dbExists: boolean;
+  /** WorkBuddy 是否正在运行（运行中后端拒绝清理） */
+  running: boolean;
+  count: number;
+  bytes: number;
+  human: string;
+  error?: string;
+}
+
+export interface PurgeResult {
+  ok: boolean;
+  deleted?: number;
+  freedBytes?: number;
+  human?: string;
+  /** 实际删除的正文文件数可能小于会话数（无正文的会话跳过） */
+  total?: number;
+  backupDir?: string;
+  blocked?: boolean;
+  error?: string;
+}
+
+export const archivedTasksStats = () => invoke<ArchivedStats>("archived_tasks_stats");
+
+export const purgeArchivedTasks = () => invoke<PurgeResult>("purge_archived_tasks");
+
 // ───────────────────────── 自动更新 ─────────────────────────
 
 /** 一次更新检查的结果。`ok=false` 时只有 `error` / `releaseUrl` 有意义。 */

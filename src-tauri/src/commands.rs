@@ -1480,14 +1480,28 @@ pub fn update_config_set(auto_check: bool, mirror: String) -> Value {
     }
 }
 
-/// 主窗口前端已挂载并画完首帧。
+/// 归档任务统计（只读）：条数 + 正文体积 + WorkBuddy 运行状态。
 #[tauri::command]
-pub fn app_ready(app: tauri::AppHandle) {
-    crate::splash::ready(&app);
+pub async fn archived_tasks_stats() -> Value {
+    tauri::async_runtime::spawn_blocking(crate::purge::stats)
+        .await
+        .unwrap_or_else(|_| json!({ "ok": false, "error": "spawn failed" }))
 }
 
-/// 启动页动画播放完毕（由 splash.html 自己上报，页面时钟才准）。
+/// 执行归档任务清理：WorkBuddy 运行中会被后端拒绝（blocked=true）。
 #[tauri::command]
-pub fn splash_done(app: tauri::AppHandle) {
-    crate::splash::done(&app);
+pub async fn purge_archived_tasks() -> Value {
+    tauri::async_runtime::spawn_blocking(crate::purge::purge)
+        .await
+        .unwrap_or_else(|_| json!({ "ok": false, "error": "spawn failed" }))
+}
+
+/// 主窗口前端已挂载（启动动画遮罩已绘制）：此时才显示窗口，避免先白后黑闪一下。
+/// 窗口在 tauri.conf.json 里是 `visible:false`。
+#[tauri::command]
+pub fn app_ready(app: tauri::AppHandle) {
+    if let Some(window) = tauri::Manager::get_webview_window(&app, "main") {
+        let _ = window.show();
+        let _ = window.set_focus();
+    }
 }

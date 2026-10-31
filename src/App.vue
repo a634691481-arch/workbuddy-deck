@@ -4,9 +4,10 @@
  * 页面自闭环：每个 view 自己取数、自己处理动作，外壳不掺业务。
  * 分区顺序以「账号管理」打头：先有账号，才谈得上任务与统计。
  */
-import { computed } from "vue";
+import { computed, ref } from "vue";
 
 import AppSidebar from "@/components/AppSidebar.vue";
+import BootOverlay from "@/components/BootOverlay.vue";
 import TitleBar from "@/components/TitleBar.vue";
 import AccountsView from "@/views/AccountsView.vue";
 import CreditsView from "@/views/CreditsView.vue";
@@ -44,6 +45,9 @@ const views = {
 } as const;
 
 const activeView = computed(() => views[nav.value]);
+
+// 启动动画覆盖在主界面之上：窗口显示时遮罩已绘好，不会先白后黑。
+const booting = ref(true);
 </script>
 
 <template>
@@ -62,5 +66,7 @@ const activeView = computed(() => views[nav.value]);
         <component :is="activeView" />
       </KeepAlive>
     </div>
+
+    <BootOverlay v-if="booting" @done="booting = false" />
   </div>
 </template>

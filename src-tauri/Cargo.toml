@@ -35,3 +35,6 @@ reqwest = { version = "0.12", default-features = false, features = ["json", "rus
 # 直接复用已有工具的核心逻辑（账号库 / 签到 / 成长任务 / 旅行 / 令牌续期），
 # 不另起一份网络与存储实现。已 vendored 进 crates/，克隆即可编译（CI 前提）。
 wb-switch-core = { path = "../crates/wb-switch-core" }
+# 归档任务清理：读写 WorkBuddy 会话库 workbuddy.db。
+# 与 core 同版本同 feature（bundled+backup），共享编译产物不增加构建时间。
+rusqlite = { version = "0.32", features = ["bundled", "backup"] }
