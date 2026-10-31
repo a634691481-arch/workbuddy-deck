@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- 方向 A 单色版（浅底用） -->
+  <circle cx="32" cy="32" r="26" stroke="#1a1a1a" stroke-width="2" stroke-dasharray="2 3.6" opacity=".45"/>
+  <path d="M32 6 A 26 26 0 0 1 58 32" stroke="#e61919" stroke-width="2"/>
+  <path d="M30.4 30 L31.3 12 H32.7 L33.6 30 Z" fill="#e61919"/>
+  <rect x="29.5" y="29.5" width="5" height="5" fill="#1a1a1a"/>
+  <rect x="22" y="49" width="20" height="2" fill="#1a1a1a" opacity=".5"/>
+  <rect x="26" y="54" width="12" height="2" fill="#1a1a1a" opacity=".25"/>
+</svg>

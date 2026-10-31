@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128">
+  <!-- 应用图标源（1024 渲染用）：黑底方角 + 中心 78% 主体，保证 16px 下仍可辨 -->
+  <rect width="128" height="128" fill="#000000"/>
+  <g transform="translate(19.2 19.2) scale(1.4)" fill="none">
+    <path d="M6 18 V8 H16" stroke="#eaeaea" stroke-width="2" opacity=".55"/>
+    <path d="M48 8 H58 V18" stroke="#eaeaea" stroke-width="2" opacity=".55"/>
+    <path d="M58 46 V56 H48" stroke="#eaeaea" stroke-width="2" opacity=".55"/>
+    <path d="M16 56 H6 V46" stroke="#eaeaea" stroke-width="2" opacity=".55"/>
+    <path d="M32 12 V52" stroke="#eaeaea" stroke-width="1" opacity=".18"/>
+    <path d="M12 32 H52" stroke="#eaeaea" stroke-width="1" opacity=".18"/>
+    <path d="M12 34 H23 L28 22" stroke="#eaeaea" stroke-width="2.4"/>
+    <path d="M28 22 L36 42 L40 34 H52" stroke="#e61919" stroke-width="2.4"/>
+  </g>
+</svg>

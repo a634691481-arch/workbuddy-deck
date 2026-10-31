@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- 方向 C 单色版（浅底用） -->
+  <path d="M6 18 V8 H16" stroke="#1a1a1a" stroke-width="2" opacity=".5"/>
+  <path d="M48 8 H58 V18" stroke="#1a1a1a" stroke-width="2" opacity=".5"/>
+  <path d="M58 46 V56 H48" stroke="#1a1a1a" stroke-width="2" opacity=".5"/>
+  <path d="M16 56 H6 V46" stroke="#1a1a1a" stroke-width="2" opacity=".5"/>
+  <path d="M32 12 V52" stroke="#1a1a1a" stroke-width="1" opacity=".15"/>
+  <path d="M12 32 H52" stroke="#1a1a1a" stroke-width="1" opacity=".15"/>
+  <path d="M12 34 H23 L28 22" stroke="#1a1a1a" stroke-width="2.4"/>
+  <path d="M28 22 L36 42 L40 34 H52" stroke="#e61919" stroke-width="2.4"/>
+</svg>

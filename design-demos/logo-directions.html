@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<title>WorkBuddy Deck · Logo 三方向</title>
+<style>
+  /* 假设：品牌名 WorkBuddy Deck（应用标题「WorkBuddy 任务助手」），
+     视觉沿用应用内的工业遥测 / CRT 语言：纯黑底、1px 实线、零圆角、唯一红色强调。 */
+  :root {
+    --bg: #000;
+    --panel: #0d0d0d;
+    --line: #2a2a2a;
+    --fg: #eaeaea;
+    --muted: #8a8a8a;
+    --faint: #4a4a4a;
+    --hazard: #e61919;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body {
+    background: var(--bg);
+    color: var(--fg);
+    font-family: ui-monospace, "SFMono-Regular", "JetBrains Mono", Consolas, monospace;
+    padding: 40px 32px 56px;
+    -webkit-font-smoothing: antialiased;
+  }
+  .lbl { font-size: 10px; letter-spacing: .18em; text-transform: uppercase; color: var(--faint); }
+
+  header { border-bottom: 2px solid var(--hazard); padding-bottom: 12px; margin-bottom: 20px; }
+  header h1 { font-size: 20px; font-weight: 600; letter-spacing: .04em; }
+  header .sub { margin-top: 6px; font-size: 11px; letter-spacing: .1em; color: var(--muted); }
+
+  .grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 1px; background: var(--line); border: 1px solid var(--line); }
+  .card { background: var(--panel); padding: 20px 18px 18px; display: flex; flex-direction: column; gap: 14px; }
+
+  .stage { display: flex; align-items: center; justify-content: center; height: 220px; background: #050505; border: 1px solid var(--line); }
+  .stage svg { width: 176px; height: 176px; }
+
+  .sizes { display: flex; align-items: flex-end; gap: 18px; }
+  .sizes > div { display: flex; flex-direction: column; align-items: center; gap: 5px; }
+  .sizes span { font-size: 9px; color: var(--faint); letter-spacing: .1em; }
+
+  .inverse { display: flex; align-items: center; gap: 12px; background: #e8e8e8; border: 1px solid var(--line); padding: 10px 12px; }
+  .inverse svg { width: 44px; height: 44px; }
+  .inverse span { font-size: 9px; color: #555; letter-spacing: .1em; text-transform: uppercase; }
+
+  .card h2 { font-size: 12px; letter-spacing: .16em; text-transform: uppercase; }
+  .card h2 b { color: var(--hazard); font-weight: 600; }
+  .card p { font-size: 11px; line-height: 1.65; color: var(--muted); }
+  .card p + p { margin-top: -6px; }
+  .why { font-size: 10px; line-height: 1.6; color: var(--faint); border-top: 1px solid var(--line); padding-top: 10px; }
+
+  footer { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 28px; border-top: 1px solid var(--line); padding-top: 14px; }
+  .swatch { display: flex; align-items: center; gap: 7px; font-size: 10px; color: var(--muted); letter-spacing: .06em; }
+  .swatch i { width: 14px; height: 14px; border: 1px solid #333; display: block; }
+</style>
+</head>
+<body>
+
+<header>
+  <h1>WorkBuddy Deck · LOGO DIRECTIONS</h1>
+  <div class="sub">
+    工业遥测 / CRT · 零圆角 · 唯一强调色 航空红 #E61919 · 矢量几何（无渐变、无阴影、无 emoji）
+  </div>
+</header>
+
+<div class="grid">
+
+  <!-- ══════════ 方向 A · REC（遥测环 + 指向针）══════════ -->
+  <div class="card">
+    <div class="stage">
+      <svg viewBox="0 0 64 64" fill="none">
+        <g id="a-mark">
+          <!-- 刻度环：虚线沿整圆铺开 = 均匀刻度，比手画 24 根线更干净 -->
+          <circle cx="32" cy="32" r="26" stroke="#eaeaea" stroke-width="2"
+                  stroke-dasharray="2 3.6" opacity=".5" />
+          <!-- 红色弧：当前值区段（右上 90°）-->
+          <path d="M32 6 A 26 26 0 0 1 58 32" stroke="#e61919" stroke-width="2" />
+          <!-- 指针：中心 → 12 点，粗到细的梯形 -->
+          <path d="M30.4 30 L31.3 12 H32.7 L33.6 30 Z" fill="#e61919" />
+          <!-- 中心轴 -->
+          <rect x="29.5" y="29.5" width="5" height="5" fill="#eaeaea" />
+          <!-- 底部基座：三条卡槽，暗示"deck" -->
+          <rect x="22" y="49" width="20" height="2" fill="#eaeaea" opacity=".5" />
+          <rect x="26" y="54" width="12" height="2" fill="#eaeaea" opacity=".25" />
+        </g>
+      </svg>
+    </div>
+    <div class="sizes">
+      <div>
+        <svg viewBox="0 0 64 64" width="64" height="64" fill="none"><use href="#a-mark" /></svg>
+        <span>64</span>
+      </div>
+      <div>
+        <svg viewBox="0 0 64 64" width="32" height="32" fill="none"><use href="#a-mark" /></svg>
+        <span>32</span>
+      </div>
+      <div>
+        <svg viewBox="0 0 64 64" width="16" height="16" fill="none"><use href="#a-mark" /></svg>
+        <span>16</span>
+      </div>
+    </div>
+    <div class="inverse">
+      <svg viewBox="0 0 64 64" fill="none">
+        <circle cx="32" cy="32" r="26" stroke="#1a1a1a" stroke-width="2" stroke-dasharray="2 3.6" opacity=".45"/>
+        <path d="M32 6 A 26 26 0 0 1 58 32" stroke="#e61919" stroke-width="2"/>
+        <path d="M30.4 30 L31.3 12 H32.7 L33.6 30 Z" fill="#e61919"/>
+        <rect x="29.5" y="29.5" width="5" height="5" fill="#1a1a1a"/>
+        <rect x="22" y="49" width="20" height="2" fill="#1a1a1a" opacity=".5"/>
+        <rect x="26" y="54" width="12" height="2" fill="#1a1a1a" opacity=".25"/>
+      </svg>
+      <span>light / mono</span>
+    </div>
+    <h2><b>A</b> · REC 遥测环</h2>
+    <p>刻度环 + 红色指针 = 仪表台读数。底部两条卡槽交代「deck」。</p>
+    <div class="why">为什么：应用的骨架就是「监控一组账号的实时状态」，环=监控，红弧=当前告警位。16px 下刻度会糊，只剩环+针，仍可辨。</div>
+  </div>
+
+  <!-- ══════════ 方向 B · STACK（叠层牌堆）══════════ -->
+  <div class="card">
+    <div class="stage">
+      <svg viewBox="0 0 64 64" fill="none">
+        <g id="b-mark">
+          <rect x="8" y="18" width="28" height="36" stroke="#eaeaea" stroke-width="2" opacity=".3" />
+          <rect x="15" y="13" width="28" height="36" stroke="#eaeaea" stroke-width="2" opacity=".6" />
+          <rect x="22" y="8" width="32" height="38" fill="#e61919" />
+          <rect x="28" y="17" width="20" height="2" fill="#000" opacity=".55" />
+          <rect x="28" y="24" width="14" height="2" fill="#000" opacity=".55" />
+        </g>
+      </svg>
+    </div>
+    <div class="sizes">
+      <div><svg viewBox="0 0 64 64" width="64" height="64" fill="none"><use href="#b-mark" /></svg><span>64</span></div>
+      <div><svg viewBox="0 0 64 64" width="32" height="32" fill="none"><use href="#b-mark" /></svg><span>32</span></div>
+      <div><svg viewBox="0 0 64 64" width="16" height="16" fill="none"><use href="#b-mark" /></svg><span>16</span></div>
+    </div>
+    <div class="inverse">
+      <svg viewBox="0 0 64 64" fill="none">
+        <rect x="8" y="18" width="28" height="36" stroke="#1a1a1a" stroke-width="2" opacity=".3"/>
+        <rect x="15" y="13" width="28" height="36" stroke="#1a1a1a" stroke-width="2" opacity=".6"/>
+        <rect x="22" y="8" width="32" height="38" fill="#e61919"/>
+        <rect x="28" y="17" width="20" height="2" fill="#e8e8e8" opacity=".7"/>
+        <rect x="28" y="24" width="14" height="2" fill="#e8e8e8" opacity=".7"/>
+      </svg>
+      <span>light / mono</span>
+    </div>
+    <h2><b>B</b> · STACK 牌堆</h2>
+    <p>三张零圆角卡片向右上错位叠放，顶卡实心航空红，卡内两道黑色读数条。</p>
+    <div class="why">为什么：deck 的本义 = 一叠卡；也是「多个账号叠在一起管」的直译。最耐缩小，16px 仍是一叠卡片的剪影。</div>
+  </div>
+
+  <!-- ══════════ 方向 C · TRACE（准星 + 波形）══════════ -->
+  <div class="card">
+    <div class="stage">
+      <svg viewBox="0 0 64 64" fill="none">
+        <g id="c-mark">
+          <!-- 四角括号：取景框 / 锁定 -->
+          <path d="M6 18 V8 H16" stroke="#eaeaea" stroke-width="2" opacity=".55" />
+          <path d="M48 8 H58 V18" stroke="#eaeaea" stroke-width="2" opacity=".55" />
+          <path d="M58 46 V56 H48" stroke="#eaeaea" stroke-width="2" opacity=".55" />
+          <path d="M16 56 H6 V46" stroke="#eaeaea" stroke-width="2" opacity=".55" />
+          <!-- 中心十字参考线 -->
+          <path d="M32 12 V52" stroke="#eaeaea" stroke-width="1" opacity=".18" />
+          <path d="M12 32 H52" stroke="#eaeaea" stroke-width="1" opacity=".18" />
+          <!-- 波形：脉冲上升沿 + 峰值段（红） -->
+          <path d="M12 34 H23 L28 22" stroke="#eaeaea" stroke-width="2.4" />
+          <path d="M28 22 L36 42 L40 34 H52" stroke="#e61919" stroke-width="2.4" />
+        </g>
+      </svg>
+    </div>
+    <div class="sizes">
+      <div><svg viewBox="0 0 64 64" width="64" height="64" fill="none"><use href="#c-mark" /></svg><span>64</span></div>
+      <div><svg viewBox="0 0 64 64" width="32" height="32" fill="none"><use href="#c-mark" /></svg><span>32</span></div>
+      <div><svg viewBox="0 0 64 64" width="16" height="16" fill="none"><use href="#c-mark" /></svg><span>16</span></div>
+    </div>
+    <div class="inverse">
+      <svg viewBox="0 0 64 64" fill="none">
+        <path d="M6 18 V8 H16" stroke="#1a1a1a" stroke-width="2" opacity=".5"/>
+        <path d="M48 8 H58 V18" stroke="#1a1a1a" stroke-width="2" opacity=".5"/>
+        <path d="M58 46 V56 H48" stroke="#1a1a1a" stroke-width="2" opacity=".5"/>
+        <path d="M16 56 H6 V46" stroke="#1a1a1a" stroke-width="2" opacity=".5"/>
+        <path d="M32 12 V52" stroke="#1a1a1a" stroke-width="1" opacity=".15"/>
+        <path d="M12 32 H52" stroke="#1a1a1a" stroke-width="1" opacity=".15"/>
+        <path d="M12 34 H23 L28 22" stroke="#1a1a1a" stroke-width="2.4"/>
+        <path d="M28 22 L36 42 L40 34 H52" stroke="#e61919" stroke-width="2.4"/>
+      </svg>
+      <span>light / mono</span>
+    </div>
+    <h2><b>C</b> · TRACE 波形准星</h2>
+    <p>四角取景括号 + 示波器脉冲折线，峰值段用红色，其余白线。</p>
+    <div class="why">为什么：最接近「遥测」原意——读的是一条信号。辨识度靠波形，不依赖任何字母，跨语言都成立。</div>
+  </div>
+
+</div>
+
+<footer>
+  <div class="swatch"><i style="background:#000"></i>BG #000000</div>
+  <div class="swatch"><i style="background:#0d0d0d"></i>PANEL #0D0D0D</div>
+  <div class="swatch"><i style="background:#eaeaea"></i>FG #EAEAEA</div>
+  <div class="swatch"><i style="background:#e61919"></i>HAZARD #E61919</div>
+  <div class="swatch"><i style="background:#7a1010"></i>HAZARD-DIM #7A1010</div>
+</footer>
+
+</body>
+</html>

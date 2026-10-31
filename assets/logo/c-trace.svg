@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- WorkBuddy Deck · 方向 C：TRACE 波形准星（深色版，当前采用） -->
+  <path d="M6 18 V8 H16" stroke="#eaeaea" stroke-width="2" opacity=".55"/>
+  <path d="M48 8 H58 V18" stroke="#eaeaea" stroke-width="2" opacity=".55"/>
+  <path d="M58 46 V56 H48" stroke="#eaeaea" stroke-width="2" opacity=".55"/>
+  <path d="M16 56 H6 V46" stroke="#eaeaea" stroke-width="2" opacity=".55"/>
+  <path d="M32 12 V52" stroke="#eaeaea" stroke-width="1" opacity=".18"/>
+  <path d="M12 32 H52" stroke="#eaeaea" stroke-width="1" opacity=".18"/>
+  <path d="M12 34 H23 L28 22" stroke="#eaeaea" stroke-width="2.4"/>
+  <path d="M28 22 L36 42 L40 34 H52" stroke="#e61919" stroke-width="2.4"/>
+</svg>

@@ -1,0 +1,8 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <!-- WorkBuddy Deck · 方向 B：STACK 牌堆（深色版） -->
+  <rect x="8" y="18" width="28" height="36" stroke="#eaeaea" stroke-width="2" opacity=".3"/>
+  <rect x="15" y="13" width="28" height="36" stroke="#eaeaea" stroke-width="2" opacity=".6"/>
+  <rect x="22" y="8" width="32" height="38" fill="#e61919"/>
+  <rect x="28" y="17" width="20" height="2" fill="#000" opacity=".55"/>
+  <rect x="28" y="24" width="14" height="2" fill="#000" opacity=".55"/>
+</svg>
