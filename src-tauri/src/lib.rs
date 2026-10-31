@@ -148,13 +148,8 @@ pub fn run() {
                     }
                 });
 
-            // 托盘用**专用小图标**：32px 黑底方角的窗口图标缩到 16px 只剩一块黑斑，
-            // 这里换成透明底、粗横条版（深/浅任务栏都能看清），失败才回退窗口图标。
-            let tray_icon = tauri::image::Image::from_bytes(include_bytes!("../icons/tray.png"))
-                .map(|image| image.to_owned())
-                .ok();
-            if let Some(icon) = tray_icon.or_else(|| app.default_window_icon().cloned()) {
-                builder = builder.icon(icon);
+            if let Some(icon) = app.default_window_icon() {
+                builder = builder.icon(icon.clone());
             }
             builder.build(app)?;
 

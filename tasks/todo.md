@@ -615,3 +615,27 @@ decision(forced-on) = Skip("当前账号未被限流")
 - [x] `lib.rs`：托盘改用 `Image::from_bytes(include_bytes!("../icons/tray.png"))`，失败回退窗口图标
 - [x] 源文件留 `assets/logo/tray-s1-{16,24,32,64}.png`
 - [x] verify 全绿
+
+---
+
+## README 功能导览 GIF（2026-10-31）
+
+### 产物
+| 文件 | 说明 |
+| --- | --- |
+| `docs/screenshots/feature-tour.gif` | 900×627 · 10fps · 15.4s · 154 帧 · 1.2MB，README 顶部展示 |
+| `design-demos/feature-tour/build.mjs` | 生成动画 HTML（内嵌产品同款 Archivo Black + JetBrains Mono、6 张真实截图 base64） |
+| `design-demos/feature-tour/shoot.mjs` | 逐帧 `__seek(t)` 截图 → ffmpeg 双阶段 palette → GIF（输出直写 docs/screenshots） |
+
+### 结构（时间轴 15.4s 循环）
+片头 1.6s（品牌页 + 红线展开 + 六格逐个点亮）→ 6 屏 × 2.0s（账号 / 任务 / 积分 / TOKEN / 日志 / 设置，标题带 + 副标打字机 + 扫描线 wipe 转场 0.32s）→ 结尾 1.8s（仓库地址）
+
+### 踩到的四个坑（都已修）
+1. `__seek` 重置 `lastTick` → 下一帧 tick 走进首帧分支渲染 `render(0)`，截出来全是错帧 → seek 时加 `__hold` 冻结时钟
+2. phase 全部 `z-index:1` → DOM 靠后的 outro 垫在截图之上，转场时露出 "DECK" 大字 → 只留「当前 + 上一」可见，其余 `display:none`
+3. 内联 `style.display="block"` 覆盖了 `#ph-intro` 的 `display:flex` → 片头/结尾内容散到左上角 → 可见时写 `""` 交还 CSS
+4. Ken Burns 让每帧全屏像素都在动 → GIF 体积 18-22MB；去掉后 1.2MB（动感交给转场 + 打字机 + 光标）
+
+### 未做
+- 归档任务分区没有截图，GIF 只覆盖 6 个分区；补图后可加第 7 屏
+- 英文界面版（`-en.png`）未做，需要时改 `build.mjs` 的 `IMG()` 后缀重跑

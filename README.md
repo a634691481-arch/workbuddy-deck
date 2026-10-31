@@ -29,6 +29,10 @@ Built for people running several WorkBuddy accounts who click through check-in a
 </p>
 
 <p align="center">
+  <img src="docs/screenshots/feature-tour.gif" alt="Feature tour: accounts, tasks, credits, tokens, logs and settings, one screen each" width="900">
+</p>
+
+<p align="center">
   <img src="docs/screenshots/01-accounts-en.png" alt="Accounts: balance, days-remaining forecast, health dot, package expiry and rate-limit markers" width="900">
 </p>
 

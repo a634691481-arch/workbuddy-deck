@@ -29,6 +29,10 @@
 </p>
 
 <p align="center">
+  <img src="docs/screenshots/feature-tour.gif" alt="功能导览：账号、任务、积分、TOKEN、日志、设置，一屏一个" width="900">
+</p>
+
+<p align="center">
   <img src="docs/screenshots/01-accounts.png" alt="账号管理：余额、剩余天数预测、健康点、积分包到期与限流标记" width="900">
 </p>
 

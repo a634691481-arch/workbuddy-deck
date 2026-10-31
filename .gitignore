@@ -16,3 +16,8 @@ tasks/restore-backup/
 .DS_Store
 Thumbs.db
 .workbuddy/
+
+# 功能导览动画的构建中间产物（含 base64 截图，约 5MB）；重跑 design-demos/feature-tour/build.mjs 可再生成
+design-demos/feature-tour/feature-tour.html
+design-demos/feature-tour/frames/
+design-demos/feature-tour/palette.png
