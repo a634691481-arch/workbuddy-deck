@@ -65,7 +65,8 @@ const booting = ref(true);
       />
 
       <KeepAlive>
-        <component :is="activeView" />
+        <!-- 首次进入分区 120ms 淡入（KeepAlive 复用 DOM，切回不重播，避免来回闪） -->
+        <component :is="activeView" class="wb-view" />
       </KeepAlive>
     </div>
 

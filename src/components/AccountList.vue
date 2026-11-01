@@ -168,7 +168,7 @@ const unitNo = (index: number) => String(index + 1).padStart(2, "0");
           <Loader2 class="size-3 animate-spin" />
         </span>
         <span v-else class="flex shrink-0 items-center gap-1" title="就绪">
-          <i class="block size-1.5 bg-success" />
+          <i class="block size-1.5 bg-foreground/45" />
         </span>
       </div>
 

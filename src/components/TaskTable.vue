@@ -120,7 +120,7 @@ const GRID = "grid grid-cols-[minmax(0,1fr)_74px_62px_66px_30px] items-center ga
             {{ task.reward_credit ?? 0 }}
           </div>
           <div class="border-l border-border/60 py-1 text-center">
-            <Check v-if="isDone(task)" class="mx-auto size-3 text-success" />
+            <Check v-if="isDone(task)" class="mx-auto size-3 text-foreground" />
             <span v-else class="text-faint">·</span>
           </div>
         </div>

@@ -648,3 +648,13 @@ decision(forced-on) = Skip("当前账号未被限流")
 - TitleBar：去掉 `border-b-2 border-hazard`，改成 absolute bottom-0 h-0.5 轨道，
   空闲 = w-full 满格（与原视觉一致），busy = 滑块；`prefers-reduced-motion` 降级为静态半亮
 - 验证：vue-tsc 0 错；`npm run build` 产物含 `bar-sweep` keyframes；空闲态截图与原红线一致
+
+## 2026-11-01 界面工艺批改（finesse-ui 评审后）
+- [x] 脱敏可区分：mask 保留首字 + 尾 2 字（原来 4 个账号全是「1***」）
+- [x] 绿色收敛：健康点/账号点/已领奖勾/日志 ok 行改灰阶，绿色只留 READY
+- [x] 主次对调：账号页主按钮改「刷新余额」，导出降为描边
+- [x] 余额进度条：底色 border-strong + 白 85%，<10% 才转红，宽度 300ms 过渡
+- [x] 柱状图：柱宽上限 46px + 三条参考线 + 灰阶（红只标最高值），排名条去红
+- [x] 分类维度过滤 0 消耗行（15 项里 4 项是 0，白占行）
+- [x] 图标统一 stroke-width 1.75；分区首次进入 120ms 淡入（respects reduced-motion）
+- [x] 失败条/未完成条出现时淡入；操作条确认提示固定宽度不再挤压按钮

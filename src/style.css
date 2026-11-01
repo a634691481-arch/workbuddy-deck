@@ -170,3 +170,31 @@ body {
     transition-duration: 0.01ms !important;
   }
 }
+
+
+/* —— 工艺层：图标与动效 ————————————————————————————— */
+
+/* lucide 默认 2px，在 #0d0d0d 上发灰；统一 1.75 兼顾清晰与轻量 */
+.lucide {
+  stroke-width: 1.75;
+}
+
+/* 分区切换：120ms 淡入 + 2px 上移，不给每个元素单独做动画 */
+@keyframes wb-view-in {
+  from {
+    opacity: 0;
+    transform: translateY(2px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+.wb-view {
+  animation: wb-view-in 120ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wb-view {
+    animation: none;
+  }
+}

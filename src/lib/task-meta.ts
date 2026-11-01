@@ -115,5 +115,7 @@ export function mask(text: string): string {
   const email = text.match(/^(.{2}).*(@.*)$/);
   if (email) return `${email[1]}***${email[2]}`;
   const chars = Array.from(text);
-  return `${chars[0]}***`;
+  // 只留首字会让 4 个账号全变成「1***」——留尾巴才能区分（手机号已单独处理）。
+  if (chars.length <= 4) return `${chars[0]}***`;
+  return `${chars[0]}***${chars.slice(-2).join("")}`;
 }

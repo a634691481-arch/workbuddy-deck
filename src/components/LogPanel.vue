@@ -24,7 +24,7 @@ const listStyle = computed(() => ({ height: `${VISIBLE_ROWS * ROW_HEIGHT}px` }))
 const levelMark = (level: LogLine["level"]) =>
   level === "err" ? "✕" : level === "ok" ? "✓" : "·";
 const levelClass = (level: LogLine["level"]) =>
-  level === "err" ? "text-hazard" : level === "ok" ? "text-success" : "text-muted-foreground";
+  level === "err" ? "text-hazard" : "text-muted-foreground";
 </script>
 
 <template>

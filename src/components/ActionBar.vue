@@ -103,7 +103,9 @@ onBeforeUnmount(clearPending);
 
     <!-- 中断 -->
     <div class="ml-auto flex items-center gap-2 border-l border-border px-2">
-      <span v-if="pending !== ''" class="lbl text-hazard">{{ t("ab.confirmHint") }}</span>
+      <span class="lbl w-[132px] shrink-0 text-right text-hazard">
+        {{ pending !== "" ? t("ab.confirmHint") : "" }}
+      </span>
       <Button
         size="sm"
         variant="outline"

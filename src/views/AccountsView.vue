@@ -160,7 +160,7 @@ const healthDot = (health: AccountHealth | null | undefined) => {
   if (!health) return "bg-muted";
   if (health.grade === "critical") return "bg-hazard";
   if (health.grade === "warn") return "bg-foreground/60";
-  return "bg-success";
+  return "bg-foreground/85";
 };
 
 /** 原因码 → 文案。后端只给码，翻译在这里，避免中英分裂。 */
@@ -583,7 +583,7 @@ async function doSwitch() {
       <div class="flex shrink-0 items-center gap-1.5">
         <button
           type="button"
-          class="flex items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
+          class="flex items-center gap-1.5 bg-primary px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
           :disabled="refreshing"
           @click="load(true)"
         >
@@ -622,7 +622,7 @@ async function doSwitch() {
         </button>
         <button
           type="button"
-          class="flex items-center gap-1.5 bg-primary px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-primary-foreground transition-opacity hover:opacity-85"
+          class="flex items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
           @click="exportAccounts()"
         >
           <Download class="size-3" />
@@ -765,8 +765,13 @@ async function doSwitch() {
 
           <!-- 余额进度 -->
           <div class="mt-1.5 px-3" aria-hidden="true">
-            <div class="h-[3px] bg-muted">
-              <div class="h-full bg-foreground/70" :style="{ width: `${balanceRatio(row)}%` }" />
+            <div class="h-[3px] bg-border-strong">
+              <!-- 余量越低越亮：<10% 转红（唯一需要警觉的档），其余按明度分层 -->
+              <div
+                class="h-full transition-[width] duration-300 ease-out"
+                :class="balanceRatio(row) < 10 ? 'bg-hazard' : 'bg-foreground/85'"
+                :style="{ width: `${balanceRatio(row)}%` }"
+              />
             </div>
           </div>
 

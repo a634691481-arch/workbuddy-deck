@@ -228,9 +228,11 @@ const accountRows = computed(() => {
 
 /** 当前维度下的排行（模板只认这一份，切换维度即换数据）。 */
 const dimRows = computed(() => {
-  if (dimension.value === "client") return clients.value.rows;
-  if (dimension.value === "account") return accountRows.value.rows;
-  return models.value;
+  // 0 消耗的行不参与排名：原来 15 项里有 4 项是 0，白占四行还稀释了占比
+  const dropZero = (rows: typeof models.value) => rows.filter((row) => (row.credit ?? 0) > 0);
+  if (dimension.value === "client") return dropZero(clients.value.rows);
+  if (dimension.value === "account") return dropZero(accountRows.value.rows);
+  return dropZero(models.value);
 });
 
 /** 维度汇总：项数 / 合计 / 单次均耗 / TOP1 占比，全部按当前维度重算。 */
@@ -403,14 +405,25 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
             {{ t("cr.empty") }}
           </div>
           <div v-else class="mt-2">
-            <div class="flex h-[132px] items-end gap-[3px] border-b border-border pb-px">
-              <div
-                v-for="(point, index) in chart"
-                :key="`${point.date}-${index}`"
-                class="group relative flex-1 bg-hazard/80 transition-colors hover:bg-hazard"
-                :style="{ height: `${point.height}%` }"
-                :title="`${point.date} · ${fmt(point.usage)}`"
-              />
+            <div class="relative mt-1 h-[132px]">
+              <!-- 三条参考线：让高度可读，不用再加 Y 轴刻度 -->
+              <div class="pointer-events-none absolute inset-x-0 top-0 h-px bg-border/60" />
+              <div class="pointer-events-none absolute inset-x-0 top-1/3 h-px bg-border/40" />
+              <div class="pointer-events-none absolute inset-x-0 top-2/3 h-px bg-border/40" />
+              <div class="flex h-full items-end justify-center gap-[3px] border-b border-border pb-px">
+                <div
+                  v-for="(point, index) in chart"
+                  :key="`${point.date}-${index}`"
+                  class="origin-bottom transition-[background-color,transform] duration-300"
+                  :class="
+                    point.usage > 0 && point.usage === chartMax
+                      ? 'w-full max-w-[46px] bg-hazard hover:bg-hazard/85'
+                      : 'w-full max-w-[46px] bg-foreground/35 hover:bg-foreground/70'
+                  "
+                  :style="{ height: `${point.height}%` }"
+                  :title="`${point.date} · ${fmt(point.usage)}`"
+                />
+              </div>
             </div>
             <div class="readout mt-1 flex justify-between text-[9px] text-faint">
               <span>{{ chart[0]?.date }}</span>
@@ -495,7 +508,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
                 <span class="min-w-0">
                   <span class="block truncate text-foreground" :title="model.name">{{ model.name }}</span>
                   <span class="mt-1 block h-[3px] bg-muted">
-                    <span class="block h-full" :class="index === 0 ? 'bg-hazard' : 'bg-foreground/55'" :style="{ width: `${model.width}%` }" />
+                    <span class="block h-full" :class="index === 0 ? 'bg-foreground/90' : 'bg-foreground/45'" :style="{ width: `${model.width}%` }" />
                   </span>
                 </span>
                 <span class="readout text-right text-foreground">{{ fmt(model.credit) }}</span>
