@@ -1339,15 +1339,27 @@ fn tries_bump(scope: &str, code: &str) {
         .or_insert(0) += 1;
 }
 
+/// 从一次清单快照里取某任务的进度（不再为每个任务重新请求）。
+fn progress_in(tasks: &[Value], code: &str) -> Option<Progress> {
+    tasks
+        .iter()
+        .find(|t| t.get("task_code").and_then(Value::as_str) == Some(code))
+        .map(parse_progress)
+}
+
 /// 是否该推进这个任务：仍有缺口、未跳过、当日尝试未超限。
-async fn gate(account: &Value, scope: &str, code: &str, max_tries: i64) -> bool {
+///
+/// 进度读自本轮开头的 `tasks` 快照——原来每个配方都调 `progress_of`，
+/// 单账号 19 个任务就是 19 次全量清单请求，8 账号 150+ 次，
+/// 这是「点了签到要等几分钟」的真正来源。领奖前的复查仍走实时接口。
+fn gate(scope: &str, code: &str, max_tries: i64, tasks: &[Value]) -> bool {
     if is_skipped(code) || is_manual(code) {
         return false;
     }
     if tries_get(scope, code) >= max_tries {
         return false;
     }
-    match progress_of(account, code).await {
+    match progress_in(tasks, code) {
         Some(p) => needs_work(&p),
         None => false,
     }
@@ -1468,29 +1480,29 @@ pub async fn run_growth_account(account: &Value, cfg: &Value) -> Value {
     }
 
     // 2) 逐配方补缺口（顺序对齐参考实现：轻 → 重）
-    if gate(account, &scope, "Library_read", max_tries).await {
+    if gate(&scope, "Library_read", max_tries, &tasks) {
         t_library(account).await;
         settle(account, "Library_read", &mut results, &mut claimed).await;
     }
-    if gate(account, &scope, "Expert_lighthouse", max_tries).await {
+    if gate(&scope, "Expert_lighthouse", max_tries, &tasks) {
         t_expert_lighthouse(account).await;
         settle(account, "Expert_lighthouse", &mut results, &mut claimed).await;
     }
     // 体验类专家任务（2026-10 批次）：都是「搜索并召唤 XX 专家，完成一次对话」，
     // 统一走真对话闭环；找不到专家时对话仍会发，进度不动则等下一轮再试。
-    if gate(account, &scope, "WorkBuddy_Valorant", max_tries).await {
+    if gate(&scope, "WorkBuddy_Valorant", max_tries, &tasks) {
         t_expert_use(account, "WorkBuddy_Valorant", &["无畏契约"], "无畏契约拼豆专家").await;
         settle(account, "WorkBuddy_Valorant", &mut results, &mut claimed).await;
     }
-    if gate(account, &scope, "expert_use_maidehao", max_tries).await {
+    if gate(&scope, "expert_use_maidehao", max_tries, &tasks) {
         t_expert_use(account, "expert_use_maidehao", &["电商运营"], "中国电商运营专家").await;
         settle(account, "expert_use_maidehao", &mut results, &mut claimed).await;
     }
-    if gate(account, &scope, "expert_use_douyinyin", max_tries).await {
+    if gate(&scope, "expert_use_douyinyin", max_tries, &tasks) {
         t_expert_use(account, "expert_use_douyinyin", &["抖音"], "抖音策略师").await;
         settle(account, "expert_use_douyinyin", &mut results, &mut claimed).await;
     }
-    if gate(account, &scope, "expert_use_shangjia_xuanchuan", max_tries).await {
+    if gate(&scope, "expert_use_shangjia_xuanchuan", max_tries, &tasks) {
         t_expert_use(
             account,
             "expert_use_shangjia_xuanchuan",
@@ -1500,45 +1512,45 @@ pub async fn run_growth_account(account: &Value, cfg: &Value) -> Value {
         .await;
         settle(account, "expert_use_shangjia_xuanchuan", &mut results, &mut claimed).await;
     }
-    if gate(account, &scope, "expert_use_bowangwang", max_tries).await {
+    if gate(&scope, "expert_use_bowangwang", max_tries, &tasks) {
         t_expert_use(account, "expert_use_bowangwang", &["直播电商"], "直播电商教练").await;
         settle(account, "expert_use_bowangwang", &mut results, &mut claimed).await;
     }
-    if gate(account, &scope, "Buddy_App", max_tries).await {
+    if gate(&scope, "Buddy_App", max_tries, &tasks) {
         t_buddy_app(account).await;
         settle(account, "Buddy_App", &mut results, &mut claimed).await;
     }
     // 这一个配方推进三个 task_code，三个都要 settlements。
-    let canvas_due = gate(account, &scope, "create_canvas", max_tries).await
-        || gate(account, &scope, "automation_1", max_tries).await
-        || gate(account, &scope, "playbook_prompt", max_tries).await;
+    let canvas_due = gate(&scope, "create_canvas", max_tries, &tasks)
+        || gate(&scope, "automation_1", max_tries, &tasks)
+        || gate(&scope, "playbook_prompt", max_tries, &tasks);
     if canvas_due {
         t_canvas_automation_playbook(account).await;
         for code in ["create_canvas", "automation_1", "playbook_prompt"] {
             settle(account, code, &mut results, &mut claimed).await;
         }
     }
-    if gate(account, &scope, "skill_1", max_tries).await {
+    if gate(&scope, "skill_1", max_tries, &tasks) {
         t_skill(account).await;
         settle(account, "skill_1", &mut results, &mut claimed).await;
     }
-    if gate(account, &scope, "RichMeow_Chat", max_tries).await {
+    if gate(&scope, "RichMeow_Chat", max_tries, &tasks) {
         t_rich_meow(account).await;
         settle(account, "RichMeow_Chat", &mut results, &mut claimed).await;
     }
-    if gate(account, &scope, "expert_5", max_tries).await {
+    if gate(&scope, "expert_5", max_tries, &tasks) {
         t_expert_5(account).await;
         settle(account, "expert_5", &mut results, &mut claimed).await;
     }
-    if gate(account, &scope, "Expert_team_use_3", max_tries).await {
+    if gate(&scope, "Expert_team_use_3", max_tries, &tasks) {
         t_expert_team_3(account).await;
         settle(account, "Expert_team_use_3", &mut results, &mut claimed).await;
     }
-    if gate(account, &scope, "template_5", max_tries).await {
+    if gate(&scope, "template_5", max_tries, &tasks) {
         t_template_5(account).await;
         settle(account, "template_5", &mut results, &mut claimed).await;
     }
-    if gate(account, &scope, "chat_5", max_tries).await {
+    if gate(&scope, "chat_5", max_tries, &tasks) {
         t_chat_n(
             account,
             "chat_5",
@@ -1554,7 +1566,7 @@ pub async fn run_growth_account(account: &Value, cfg: &Value) -> Value {
         .await;
         settle(account, "chat_5", &mut results, &mut claimed).await;
     }
-    if gate(account, &scope, "Model_chat_GLM5.2", max_tries).await {
+    if gate(&scope, "Model_chat_GLM5.2", max_tries, &tasks) {
         t_chat_n(account, "Model_chat_GLM5.2", 1, &["你好，请介绍一下你自己"]).await;
         settle(account, "Model_chat_GLM5.2", &mut results, &mut claimed).await;
     }
