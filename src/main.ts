@@ -1,9 +1,13 @@
 import { createApp } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { defineElement } from "@lordicon/element";
 
 import App from "./App.vue";
 import "./style.css";
 import { isTauri } from "./lib/tauri-env";
+
+// 注册 <lord-icon> 自定义元素（服务端/无 DOM 时是空操作）。
+defineElement();
 
 createApp(App).mount("#app");
 

@@ -5,7 +5,10 @@ import { onBeforeUnmount, onMounted, ref } from "vue";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { CalendarClock, ChevronDown } from "lucide-vue-next";
 
+import AnimatedIcon from "@/components/ui/AnimatedIcon.vue";
 import { autoDailyGet, autoDailySet, type AutoDailyConfig, type AutoDailyLog } from "@/lib/api";
+import playIcon from "@/assets/lordicon/play.json?url";
+import pauseIcon from "@/assets/lordicon/pause.json?url";
 import { t } from "@/lib/i18n";
 import { isTauri } from "@/lib/tauri-env";
 
@@ -72,11 +75,28 @@ onBeforeUnmount(() => unlisten?.());
 
       <!-- 开关：反白=启用，磷光绿仅用于就绪语义，这里用普通反白避免歧义 -->
       <button
-        class="shrink-0 px-2 py-0.5"
+        class="flex shrink-0 items-center gap-1 px-2 py-0.5"
         :class="enabled ? 'bg-foreground text-background' : 'border border-border text-faint hover:text-foreground'"
         :disabled="saving"
         @click="toggle"
       >
+        <!-- Lordicon：启用=播放动画（每天自动跑），停用=静态暂停 -->
+        <AnimatedIcon
+          v-if="enabled"
+          :src="playIcon"
+          :size="12"
+          trigger="loop"
+          primary="#0a0a0a"
+          secondary="#454540"
+        />
+        <AnimatedIcon
+          v-else
+          :src="pauseIcon"
+          :size="12"
+          trigger="hover"
+          primary="#8a8a85"
+          secondary="#565651"
+        />
         {{ enabled ? t("ad.on") : t("ad.off") }}
       </button>
 

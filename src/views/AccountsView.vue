@@ -6,6 +6,8 @@
  * - 账号新增、导入、导出全部集中在本页；任务页不再提供入口。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { MorphIcon, type IconNode } from "morphicons/vue";
+import { Check, LoaderCircle, RefreshCw } from "lucide";
 import AnimatedNumber from "@/components/ui/AnimatedNumber.vue";
 import {
   ArrowLeftRight,
@@ -15,7 +17,6 @@ import {
   Gauge,
   Loader2,
   Pencil,
-  RefreshCw,
   RotateCw,
   Star,
   Trash2,
@@ -54,6 +55,7 @@ const refreshing = ref(false);
 const tokenRefreshing = ref(false);
 const error = ref("");
 const toast = ref<{ text: string; level: "ok" | "err" } | null>(null);
+const refreshDone = ref(false);
 
 const editingId = ref("");
 const noteDraft = ref("");
@@ -69,6 +71,14 @@ function say(text: string, level: "ok" | "err" = "ok") {
   }, 2600);
 }
 
+/** 刷新按钮图标：静止 → 加载中 → 完成后短暂打勾（morphicons 形变过渡）。 */
+const refreshIcon = computed<IconNode>(() => {
+  if (refreshing.value) return LoaderCircle;
+  if (refreshDone.value) return Check;
+  return RefreshCw;
+});
+let refreshDoneTimer: ReturnType<typeof setTimeout> | null = null;
+
 /** refresh=false 读本地快照；true 拉官方资源包（较慢，页面先显示旧数据）。 */
 async function load(refresh = false) {
   if (refresh) refreshing.value = true;
@@ -79,6 +89,11 @@ async function load(refresh = false) {
     rows.value = result.accounts ?? [];
     mode.value = result.mode ?? "local";
     setAccountCount(rows.value.length);
+    if (refresh && !error.value) {
+      refreshDone.value = true;
+      if (refreshDoneTimer) clearTimeout(refreshDoneTimer);
+      refreshDoneTimer = setTimeout(() => (refreshDone.value = false), 1200);
+    }
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : String(cause);
   } finally {
@@ -295,6 +310,7 @@ watch(packageSheet, (value) => {
 
 onBeforeUnmount(() => {
   if (typeof window !== "undefined") window.removeEventListener("keydown", onKeydown);
+  if (refreshDoneTimer) clearTimeout(refreshDoneTimer);
 });
 
 /** 一键强刷全部账号 token：逐号结果在这里汇总成一句人话。 */
@@ -588,8 +604,15 @@ async function doSwitch() {
           :disabled="refreshing"
           @click="load(true)"
         >
-          <Loader2 v-if="refreshing" class="size-3 animate-spin" />
-          <RefreshCw v-else class="size-3" />
+          <MorphIcon
+            :icon="refreshIcon"
+            :size="12"
+            :stroke-width="1.75"
+            spring="snappy"
+            reduced-motion="user"
+            color="currentColor"
+            :class="refreshing ? 'animate-spin' : ''"
+          />
           {{ t("ac.refresh") }}
         </button>
         <button

@@ -179,6 +179,27 @@ body {
   stroke-width: 1.75;
 }
 
+/* 导航点击：图标弹一下（与 morphicons 的形变叠加，不抢戏） */
+@keyframes wb-nav-pop {
+  0% {
+    transform: scale(1);
+  }
+  45% {
+    transform: scale(1.28);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.wb-nav-pop {
+  animation: wb-nav-pop 260ms ease-out;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wb-nav-pop {
+    animation: none;
+  }
+}
+
 /* 分区切换：120ms 淡入 + 2px 上移，不给每个元素单独做动画 */
 @keyframes wb-view-in {
   from {

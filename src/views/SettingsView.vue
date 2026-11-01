@@ -408,7 +408,7 @@ async function doClear() {
         </section>
 
         <!-- 自动更新：当前 / 最新 / 检查时刻 三格读数 + 一行动作 + 一行设置 -->
-        <section class="border border-border bg-card xl:col-span-2">
+        <section class="border border-border bg-card lg:col-span-2">
           <div class="flex items-center justify-between border-b border-border px-3 py-1.5">
             <div class="flex items-center gap-2">
               <span class="lbl">// {{ t("up.title") }}</span>
@@ -628,7 +628,7 @@ async function doClear() {
         </section>
 
         <!-- 限流自动切换 -->
-        <section class="border border-border bg-card xl:col-span-2">
+        <section class="border border-border bg-card lg:col-span-2">
           <div class="flex items-center justify-between border-b border-border px-3 py-1.5">
             <span class="lbl">// {{ t("st.autoSwitch") }}</span>
             <button
@@ -641,8 +641,8 @@ async function doClear() {
               {{ autoOn ? t("st.autoOn") : t("st.autoOff") }}
             </button>
           </div>
+          <p class="border-b border-border/40 px-3 py-1.5 text-[9px] leading-4 text-faint">{{ t("st.autoSwitchHint") }}</p>
           <div class="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
-            <span class="min-w-0 flex-1 text-[9px] leading-4 text-faint">{{ t("st.autoSwitchHint") }}</span>
             <div class="flex shrink-0 gap-px bg-border">
               <button
                 type="button"
@@ -713,7 +713,7 @@ async function doClear() {
         </section>
 
         <!-- 数据导出 -->
-        <section class="border border-border bg-card xl:col-span-2">
+        <section class="border border-border bg-card lg:col-span-2">
           <div class="border-b border-border px-3 py-1.5">
             <span class="lbl">// {{ t("st.export") }}</span>
           </div>
@@ -754,7 +754,7 @@ async function doClear() {
         </section>
 
         <!-- 维护 -->
-        <section class="border border-border bg-card xl:col-span-2">
+        <section class="border border-border bg-card lg:col-span-2">
           <div class="border-b border-border px-3 py-1.5">
             <span class="lbl">// {{ t("st.maint") }}</span>
           </div>
