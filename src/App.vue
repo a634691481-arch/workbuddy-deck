@@ -64,8 +64,8 @@ const booting = ref(true);
         @select="nav = $event"
       />
 
+      <!-- 注释必须在 KeepAlive 外：里面只允许一个子组件，注释会被当成额外节点 -->
       <KeepAlive>
-        <!-- 首次进入分区 120ms 淡入（KeepAlive 复用 DOM，切回不重播，避免来回闪） -->
         <component :is="activeView" class="wb-view" />
       </KeepAlive>
     </div>
