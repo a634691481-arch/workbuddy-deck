@@ -122,7 +122,7 @@ const zh = {
   "ad.time": "执行时间",
   "ad.lastrun": "最近执行",
   "ad.never": "未执行",
-  "ad.hint": "程序常驻托盘时，每天到点自动执行「全部日常」",
+  "ad.hint": "程序常驻托盘时每天到点自动跑：签到 + 猫猫旅行（每天重置，必跑）；成长任务只在还有可做任务时跑，做完就不再消耗",
   "ad.logs": "自动执行记录",
 
   // 左侧导航
@@ -593,7 +593,7 @@ const en: Record<I18nKey, string> = {
   "ad.time": "AT",
   "ad.lastrun": "LAST RUN",
   "ad.never": "NEVER",
-  "ad.hint": "Runs \"full daily\" at the set time while the app stays in tray",
+  "ad.hint": "While the app sits in the tray it runs on schedule: check-in + cat travel (daily reset, always), growth tasks only when something is left to do",
   "ad.logs": "AUTO RUN LOG",
 
   // nav

@@ -132,6 +132,29 @@ pub fn mark_ran_today() {
     let _ = save_config(&cfg);
 }
 
+/// 成长任务还有没有可做的：全做完（done == total 且无可领）就不再跑。
+///
+/// 签到 / 旅行每天重置、必跑；成长任务是**一次性**的，做完再跑只是空转
+/// （每账号每天还会烧 3 次尝试额度）。所以跑前只花一次只读清单请求判断。
+async fn growth_pending() -> bool {
+    let status = wb_switch_core::modules::growth_tasks::growth_status(None).await;
+    let rows = status
+        .get("accounts")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
+    rows.iter().any(|row| {
+        let total = row.get("total").and_then(Value::as_i64).unwrap_or(0);
+        let done = row.get("done").and_then(Value::as_i64).unwrap_or(0);
+        let claimable = row
+            .get("claimable")
+            .and_then(Value::as_array)
+            .map(|v| !v.is_empty())
+            .unwrap_or(false);
+        claimable || done < total
+    })
+}
+
 async fn tick(app: &tauri::AppHandle) {
     let cfg = load_config();
     if !cfg["enabled"].as_bool().unwrap_or(false) {
@@ -152,34 +175,61 @@ async fn tick(app: &tauri::AppHandle) {
         return;
     }
 
-    // 与手动触发共用执行器；撞车（busy）时不标记已跑，下个 tick 再试。
-    let result = crate::executor::execute("daily", Vec::new()).await;
-    if result["status"].as_str() == Some("busy") {
-        return;
+    // 三段：签到、旅行每天必跑；成长任务只在还有缺口时跑。
+    // 与手动触发共用执行器，撞车（busy）就放弃本轮，下个 tick 再来。
+    let mut runs: Vec<(&str, Value)> = Vec::new();
+    for action in ["checkin", "travel"] {
+        let result = crate::executor::execute(action, Vec::new()).await;
+        if result["status"].as_str() == Some("busy") {
+            return;
+        }
+        runs.push((action, result));
+    }
+    if growth_pending().await {
+        let result = crate::executor::execute("growth", Vec::new()).await;
+        if result["status"].as_str() == Some("busy") {
+            return;
+        }
+        runs.push(("growth", result));
     }
 
     let mut updated = cfg.clone();
     updated["lastRunDate"] = json!(today);
     let _ = save_config(&updated);
 
-    let (total, ok, other) = summarize(&result);
+    let mut total = 0;
+    let mut ok = 0;
+    let mut other = 0;
+    let mut sections: Vec<Value> = Vec::new();
+    for (action, result) in &runs {
+        let (t, o, x) = summarize(result);
+        total += t;
+        ok += o;
+        other += x;
+        sections.push(json!({
+            "action": action,
+            "status": result["status"].clone(),
+            "total": t,
+            "ok": o,
+            "other": x,
+        }));
+    }
+    let growth_skipped = !runs.iter().any(|(a, _)| *a == "growth");
     append_log(&json!({
         "ts": config::utc_iso(),
         "date": today,
         "time": raw_time,
-        "status": result["status"].clone(),
+        "status": "done",
         "total": total,
         "ok": ok,
         "other": other,
+        "sections": sections,
+        "growthSkipped": growth_skipped,
     }));
     eprintln!(
-        "[auto-daily] date={} status={} total={} ok={} other={}",
-        today,
-        result["status"].as_str().unwrap_or("?"),
-        total,
-        ok,
-        other
+        "[auto-daily] date={} total={} ok={} other={} growth_skipped={}",
+        today, total, ok, other, growth_skipped
     );
     // 通知前端：刷新数据 + 写一行日志
-    let _ = app.emit("auto://daily-done", result);
+    let _ = app.emit("auto://daily-done", json!({ "runs": sections, "growthSkipped": growth_skipped }));
 }
