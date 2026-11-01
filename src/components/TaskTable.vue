@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed } from "vue";
-import { Check, CircleAlert, Inbox } from "lucide-vue-next";
+import { Check, CircleAlert, CircleDot, Inbox, Loader, Minus } from "lucide-vue-next";
 import Badge from "@/components/ui/Badge.vue";
 import type { CheckinStatus, GrowthTask } from "@/lib/api";
 import { t } from "@/lib/i18n";
@@ -120,7 +120,12 @@ const GRID = "grid grid-cols-[minmax(0,1fr)_74px_62px_66px_30px] items-center ga
               {{ task.task_desc }}
             </div>
           </div>
-          <div class="border-l border-border/60 px-2 py-1">
+          <div class="flex items-center gap-1 border-l border-border/60 px-2 py-1">
+            <!-- 状态与图标一一对应：看一眼形状就知道处于哪一步 -->
+            <Check v-if="task.accept_status === 'claimed'" class="size-3 shrink-0 text-muted-foreground" />
+            <CircleDot v-else-if="task.accept_status === 'completed'" class="size-3 shrink-0 text-foreground" />
+            <Loader v-else-if="task.accept_status === 'accepted'" class="size-3 shrink-0 text-hazard" />
+            <Minus v-else class="size-3 shrink-0 text-faint" />
             <Badge :tone="statusOf(task).tone">{{ statusOf(task).text }}</Badge>
           </div>
           <div class="readout border-l border-border/60 px-2 py-1 text-right text-muted-foreground">

@@ -355,7 +355,7 @@ async function doClear() {
     </div>
 
     <div class="min-h-0 flex-1 overflow-auto p-3">
-      <div class="grid grid-cols-1 gap-2.5 xl:grid-cols-2">
+      <div class="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
         <!-- 应用信息 -->
         <section class="border border-border bg-card">
           <div class="border-b border-border px-3 py-1.5">

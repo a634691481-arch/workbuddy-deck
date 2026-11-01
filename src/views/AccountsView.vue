@@ -650,8 +650,28 @@ async function doSwitch() {
     </div>
 
     <div class="min-h-0 flex-1 overflow-y-auto p-3">
-      <div v-if="orderedRows.length === 0" class="px-3 py-16 text-center text-[11px] text-faint">
-        {{ loading ? "···" : t("ac.empty") }}
+      <!-- 首次加载：骨架卡（呼吸块）比一个「···」更像在干活 -->
+      <div
+        v-if="orderedRows.length === 0 && loading"
+        class="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3"
+      >
+        <div
+          v-for="n in 6"
+          :key="n"
+          class="flex h-[172px] flex-col gap-2 border border-border bg-card p-3"
+        >
+          <div class="flex items-center gap-2">
+            <div class="size-1.5 bg-border-strong" />
+            <div class="h-2.5 w-24 animate-pulse bg-border-strong" />
+            <div class="ml-auto h-3 w-10 animate-pulse bg-border" />
+          </div>
+          <div class="mt-1 h-5 w-32 animate-pulse bg-border-strong" />
+          <div class="h-[3px] w-full bg-border" />
+          <div class="mt-auto h-2 w-4/5 animate-pulse bg-border" />
+        </div>
+      </div>
+      <div v-else-if="orderedRows.length === 0" class="px-3 py-16 text-center text-[11px] text-faint">
+        {{ t("ac.empty") }}
       </div>
 
       <div v-else class="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">
@@ -749,17 +769,17 @@ async function doSwitch() {
               <!-- 预测放右列首行：余额行只留「数字 / 容量」，窄卡片下不会互相挤压 -->
               <span
                 v-if="forecastLabel(forecastOf(row.accountId))"
-                class="readout whitespace-nowrap text-[9px] leading-none"
+                class="readout whitespace-nowrap text-[11px] leading-none"
                 :class="forecastTone(forecastOf(row.accountId))"
                 :title="forecastTitle(forecastOf(row.accountId))"
               >
                 {{ forecastLabel(forecastOf(row.accountId)) }}
               </span>
-              <span class="readout text-[9px] text-muted-foreground">
+              <!-- 次级信息合成一行：三行 9px 堆叠读不出主次 -->
+              <span class="readout whitespace-nowrap text-[9px] leading-none text-faint">
                 {{ row.packages }} {{ t("ac.packages") }}
-              </span>
-              <span class="readout text-[9px] text-faint" :title="`${t('ac.updated')} ${fmtTime(row.updatedAt)}`">
-                {{ fmtTime(row.updatedAt) }}
+                <span class="px-0.5">·</span>
+                <span :title="`${t('ac.updated')} ${fmtTime(row.updatedAt)}`">{{ fmtTime(row.updatedAt) }}</span>
               </span>
             </div>
           </div>

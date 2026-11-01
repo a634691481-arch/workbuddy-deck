@@ -658,3 +658,10 @@ decision(forced-on) = Skip("当前账号未被限流")
 - [x] 分类维度过滤 0 消耗行（15 项里 4 项是 0，白占行）
 - [x] 图标统一 stroke-width 1.75；分区首次进入 120ms 淡入（respects reduced-motion）
 - [x] 失败条/未完成条出现时淡入；操作条确认提示固定宽度不再挤压按钮
+
+## 2026-11-01 界面工艺收尾（4 项全做）
+- [x] 骨架屏：账号页首次加载出 6 张呼吸骨架卡（替代一个「···」）
+- [x] 设置页重排：`xl:grid-cols-2` → `lg:grid-cols-2`，1280~1360 宽不再单列把值顶到千像素外
+- [x] 卡片小字分层：预测升 11px 正文色，积分包数 + 更新时间合并成一行 9px faint
+- [x] 状态列补图标：claimed=✓ / completed=◎ / accepted=⟳(红) / 未接取=−，与 Badge 并列
+- KeepAlive 报错修复（注释不能放在 KeepAlive 内）
