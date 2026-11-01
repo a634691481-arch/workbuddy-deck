@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import AnimatedNumber from "@/components/ui/AnimatedNumber.vue";
 /**
  * 遥测读数带：6 格关键指标，用 1px 缝分隔（skill §8「grid gap:1px + 对比底色造分割线」）。
  *
@@ -27,12 +28,6 @@ const props = defineProps<{
 
 const pad = (n: number) => String(n).padStart(3, "0");
 
-const fmt = (value: number | null, loading: boolean) => {
-  if (loading) return "···";
-  if (typeof value !== "number") return "—";
-  // 积分是离散点数，不显示小数：带 .9 / .78 只会让人以为精度更高
-  return value.toLocaleString("zh-CN", { maximumFractionDigits: 0 });
-};
 </script>
 
 <template>
@@ -74,7 +69,7 @@ const fmt = (value: number | null, loading: boolean) => {
           <span v-if="props.totalFailed > 0" class="text-hazard">⚠{{ props.totalFailed }}</span>
         </div>
         <div class="readout mt-0.5 text-[22px] leading-none text-foreground">
-          {{ fmt(props.totalCredit, props.totalLoading) }}
+          <AnimatedNumber :value="props.totalCredit" :placeholder="props.totalLoading ? '···' : '—'" />
         </div>
         <div class="lbl mt-1 text-faint">{{ t("tm.allAccts") }}</div>
       </div>
@@ -83,7 +78,7 @@ const fmt = (value: number | null, loading: boolean) => {
       <div class="bg-card px-3 py-2">
         <div class="lbl">{{ t("tm.thisUnit") }}</div>
         <div class="readout mt-1 text-[17px] leading-none text-foreground">
-          {{ fmt(props.balance, props.balanceLoading) }}
+          <AnimatedNumber :value="props.balance" :placeholder="props.balanceLoading ? '···' : '—'" />
         </div>
         <div class="lbl mt-1 text-faint">{{ t("tm.credit") }}</div>
       </div>

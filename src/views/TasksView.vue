@@ -230,6 +230,8 @@ watch(
           :error="detailError"
           :checkin="detail?.checkin ?? null"
           :has-account="!!activeAccount"
+          :running="run.running"
+          :running-label="run.current"
         />
 
         <ActionBar

@@ -6,6 +6,7 @@
  * - 账号新增、导入、导出全部集中在本页；任务页不再提供入口。
  */
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import AnimatedNumber from "@/components/ui/AnimatedNumber.vue";
 import {
   ArrowLeftRight,
   CircleAlert,
@@ -738,7 +739,7 @@ async function doSwitch() {
             <div class="flex min-w-0 items-baseline gap-1.5 overflow-hidden">
               <Zap class="size-3.5 shrink-0 self-center text-hazard" />
               <span class="readout text-[24px] leading-none text-foreground">
-                {{ row.ok ? fmt(row.remaining) : "—" }}
+                <AnimatedNumber :value="row.ok ? row.remaining : null" :decimals="2" />
               </span>
               <span class="lbl whitespace-nowrap text-faint">
                 / {{ fmt(row.capacity) }}

@@ -12,6 +12,9 @@ const props = defineProps<{
   error: string;
   checkin: CheckinStatus | null;
   hasAccount: boolean;
+  /** 批量执行中：页签栏右侧显示脉冲指示，跑的是哪个账号 */
+  running?: boolean;
+  runningLabel?: string;
 }>();
 
 const tab = defineModel<"tasks" | "checkin" | "raw">({ default: "tasks" });
@@ -46,6 +49,13 @@ const GRID = "grid grid-cols-[minmax(0,1fr)_74px_62px_66px_30px] items-center ga
       >
         {{ t(item.labelKey) }}
       </button>
+      <!-- 执行中：一个脉冲方块 + 当前账号，替代整屏转圈 -->
+      <span v-if="props.running" class="ml-auto flex items-center gap-1.5 pr-3">
+        <i class="block size-1.5 animate-pulse bg-hazard" />
+        <span class="lbl truncate text-hazard">
+          {{ props.runningLabel || t("ab.running") }}
+        </span>
+      </span>
       <span
         v-if="tab === 'tasks' && tasks.length > 0"
         class="lbl readout ml-auto flex items-center pr-3 text-faint"
