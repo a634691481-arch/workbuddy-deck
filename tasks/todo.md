@@ -665,3 +665,19 @@ decision(forced-on) = Skip("当前账号未被限流")
 - [x] 卡片小字分层：预测升 11px 正文色，积分包数 + 更新时间合并成一行 9px faint
 - [x] 状态列补图标：claimed=✓ / completed=◎ / accepted=⟳(红) / 未接取=−，与 Badge 并列
 - KeepAlive 报错修复（注释不能放在 KeepAlive 内）
+
+## 2026-11-02 成长任务「成功 0 / 失败 7」排查
+- [x] 复现：逐号拉 `/v2/activity/growth/tasks`，19 个任务里只有 4 个未完成
+      （Library_read / Buddy_App / wb_wechat_oa_subscribe_task 需手动 + **expert_use_douyinyin 0/1**）
+- [x] 根因：`关键词「抖音」→ 市场搜索第一个命中「抖音爆款内容专家」，不是任务要的
+      「斗音音 / 抖音策略师」`。对话发给了错的人 → 进度恒 0/1 → `result=partial` →
+      7 个账号全判失败，1 个账号无缺口判跳过
+- [x] 修复：任务的 `jump_url` 自带权威 `expertId`（`expertId=ex_FbY5nlWTqDod`），
+      新增 `expert_id_of()` 解析（含 percent-decode），优先按 id 选人；
+      无 id 的老任务改 `pick_expert()` 打分（精确 > 包含），不再取第一个命中
+- [x] 验证：沙箱实跑首账号 → douyinyin 0/1 → 1/1 claimed（+50 分），账号 result=success
+- [x] 单测 3 条（jump_url 解析 / 打分优先级 / 解码不吞字符）+ lib clippy 0 警告
+
+### 回顾
+- 任务定义里的 `jump_url` 是权威元数据，能解析就别猜关键词
+- 判定「失败」只看 claimed=0 会把「选错人」和「接口挂了」混为一谈，日志需带任务 code

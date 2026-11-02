@@ -777,13 +777,104 @@ async fn featured_experts(account: &Value) -> Vec<Value> {
     out
 }
 
+/// 专家结构里的 id（不同接口字段名不一致，统一走这里）。
+fn expert_id(expert: &Value) -> Option<&str> {
+    expert.get("id").and_then(Value::as_str)
+}
+
+/// 关键词打分选专家：职业名/昵称**完全等于**关键词 > id 完全等于 > 包含。
+///
+/// 同分取更长的关键词（越具体越可信）。不用 `find` 取第一个：`抖音` 这类短词
+/// 会先撞上「抖音爆款内容专家」，把对话发给了错的人。
+fn pick_expert(list: Vec<Value>, keywords: &[&str]) -> Option<Value> {
+    let mut best: Option<(i32, Value)> = None;
+    for expert in list {
+        let name = expert.get("name").and_then(Value::as_str).unwrap_or("");
+        let profession = expert
+            .get("profession")
+            .and_then(Value::as_str)
+            .unwrap_or("");
+        let id = expert.get("id").and_then(Value::as_str).unwrap_or("");
+        let mut score = 0;
+        for kw in keywords {
+            let weight = kw.chars().count() as i32;
+            let hit = if profession == *kw || name == *kw {
+                100 + weight
+            } else if id.eq_ignore_ascii_case(kw) {
+                80 + weight
+            } else if profession.contains(kw) || name.contains(kw) {
+                50 + weight
+            } else if id.to_lowercase().contains(&kw.to_lowercase()) {
+                20 + weight
+            } else {
+                0
+            };
+            score = score.max(hit);
+        }
+        if score > 0 && best.as_ref().is_none_or(|(top, _)| score > *top) {
+            best = Some((score, expert));
+        }
+    }
+    best.map(|(_, expert)| expert)
+}
+
+/// `%3D` → `=`：任务深链把内层 URL 整段编码过（`deeplink=workbuddy%3A%2F%2F...`）。
+fn percent_decode(input: &str) -> String {
+    let bytes = input.as_bytes();
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'%' && i + 2 < bytes.len() {
+            if let Ok(hex) = std::str::from_utf8(&bytes[i + 1..i + 3]) {
+                if let Ok(byte) = u8::from_str_radix(hex, 16) {
+                    out.push(byte);
+                    i += 3;
+                    continue;
+                }
+            }
+        }
+        out.push(bytes[i]);
+        i += 1;
+    }
+    String::from_utf8_lossy(&out).into_owned()
+}
+
+/// 任务定义里的权威专家 id：`jump_url` 形如
+/// `...?deeplink=workbuddy%3A%2F%2Fexperts%3FexpertId%3Dex_xxx&buddy_type=...`。
+///
+/// 官方「去完成」按钮就用这个 id 打开专家页，比任何关键词都可靠。
+fn expert_id_of(tasks: &[Value], code: &str) -> Option<String> {
+    let url = tasks
+        .iter()
+        .find(|t| t.get("task_code").and_then(Value::as_str) == Some(code))
+        .and_then(|t| t.get("jump_url").and_then(Value::as_str))?;
+    let decoded = percent_decode(url);
+    let start = decoded.find("expertId=")? + "expertId=".len();
+    let id: String = decoded[start..]
+        .chars()
+        .take_while(|c| c.is_ascii_alphanumeric() || *c == '_' || *c == '-')
+        .collect();
+    (!id.is_empty()).then_some(id)
+}
+
 /// 体验指定专家的通用配方（`Expert_lighthouse` / `WorkBuddy_Valorant` / `expert_use_*`）。
 ///
 /// 与专家团同款闭环：**必须真发对话并带 `_meta` growthEvent**，只发埋点进度不动
 /// （2026-10 批次任务描述均为「搜索并召唤 XX 专家，完成一次对话」）。
-/// 找专家的顺序：精选活动名单（真实 expert_id）→ 市场服务端搜索 → 市场配置按名过滤
-/// → 伪 id 兜底。
-async fn t_expert_use(account: &Value, code: &str, keywords: &[&str], fallback_name: &str) {
+///
+/// 选人优先级（2026-11 修正）：
+/// 1. 任务 `jump_url` 里的 `expertId`——官方自己给的就是这一位，最权威。只靠关键词
+///    会挑到「长得像」的人：`抖音` 命中的是「抖音爆款内容专家」，不是「斗音音 /
+///    抖音策略师」，对话发出去进度仍 0/1，7 个账号每天白跑。
+/// 2. 精选活动名单 / 市场服务端搜索 / 市场全量，按关键词**打分**选（精确 > 包含）。
+/// 3. 伪 id 兜底（老任务没有 expertId 时）。
+async fn t_expert_use(
+    account: &Value,
+    code: &str,
+    keywords: &[&str],
+    fallback_name: &str,
+    preferred_id: Option<String>,
+) {
     let uid = uid_of(account);
     let prompt = "你好，请简单介绍一下你能帮我做什么，回答OK即可";
     for _ in 0..2 {
@@ -793,42 +884,39 @@ async fn t_expert_use(account: &Value, code: &str, keywords: &[&str], fallback_n
         if !needs_work(&p) {
             return;
         }
-        let name_hit = |expert: &Value| {
-            let name = expert.get("name").and_then(Value::as_str).unwrap_or("");
-            // 市场配置的 name 是昵称（如「斗音音」），职业名（如「抖音策略师」）在
-            // profession 字段里——关键词必须连它一起匹配，否则只会命中精选名单。
-            let profession = expert
-                .get("profession")
-                .and_then(Value::as_str)
-                .unwrap_or("");
-            let id = expert
-                .get("id")
-                .and_then(Value::as_str)
-                .unwrap_or("")
-                .to_lowercase();
-            keywords
-                .iter()
-                .any(|kw| name.contains(kw) || profession.contains(kw) || id.contains(&kw.to_lowercase()))
-        };
-        let mut found = featured_experts(account)
-            .await
-            .into_iter()
-            .find(&name_hit);
-        // 市场服务端搜索（market/expert/list，免 template_id）——无畏契约等
-        // 活动专家只在这里有真实 expert_id。
+        // 1) 任务深链给的 expertId：在候选池里核对，不猜。
+        let mut found: Option<Value> = None;
+        if let Some(id) = preferred_id.as_deref() {
+            let mut pool = featured_experts(account).await;
+            if !pool.iter().any(|e| expert_id(e) == Some(id)) {
+                for kw in keywords {
+                    pool.extend(search_experts(account, kw, 10).await);
+                }
+            }
+            if !pool.iter().any(|e| expert_id(e) == Some(id)) {
+                pool.extend(normal_experts(300).await);
+            }
+            found = pool.into_iter().find(|e| expert_id(e) == Some(id));
+        }
+        // 2) 没有 expertId（老任务）→ 关键词打分，精确命中优先。
+        if found.is_none() {
+            found = pick_expert(featured_experts(account).await, keywords);
+        }
         if found.is_none() {
             for kw in keywords {
-                if let Some(hit) = search_experts(account, kw, 5).await.into_iter().find(&name_hit) {
+                if let Some(hit) = pick_expert(search_experts(account, kw, 10).await, keywords) {
                     found = Some(hit);
                     break;
                 }
             }
         }
         if found.is_none() {
-            found = normal_experts(300).await.into_iter().find(&name_hit);
+            found = pick_expert(normal_experts(300).await, keywords);
         }
-        let expert = found.unwrap_or_else(|| {
-            json!({ "id": format!("expert-{}", short_uuid()), "name": fallback_name, "profession": "" })
+        let expert = found.unwrap_or_else(|| match preferred_id.as_deref() {
+            // 有官方 id 就照它发：埋点按 id 计数，名字只用于展示。
+            Some(id) => json!({ "id": id, "name": fallback_name, "profession": fallback_name }),
+            None => json!({ "id": format!("expert-{}", short_uuid()), "name": fallback_name, "profession": "" }),
         });
         let request_id = uuid::Uuid::new_v4().to_string();
         let message_id = format!("cmb-{}", uuid::Uuid::new_v4());
@@ -904,6 +992,7 @@ async fn t_expert_lighthouse(account: &Value) {
         "Expert_lighthouse",
         &["轻量云", "轻量", "lighthouse"],
         "腾讯轻量云专家",
+        None,
     )
     .await;
 }
@@ -1491,15 +1580,36 @@ pub async fn run_growth_account(account: &Value, cfg: &Value) -> Value {
     // 体验类专家任务（2026-10 批次）：都是「搜索并召唤 XX 专家，完成一次对话」，
     // 统一走真对话闭环；找不到专家时对话仍会发，进度不动则等下一轮再试。
     if gate(&scope, "WorkBuddy_Valorant", max_tries, &tasks) {
-        t_expert_use(account, "WorkBuddy_Valorant", &["无畏契约"], "无畏契约拼豆专家").await;
+        t_expert_use(
+            account,
+            "WorkBuddy_Valorant",
+            &["无畏契约"],
+            "无畏契约拼豆专家",
+            expert_id_of(&tasks, "WorkBuddy_Valorant"),
+        )
+        .await;
         settle(account, "WorkBuddy_Valorant", &mut results, &mut claimed).await;
     }
     if gate(&scope, "expert_use_maidehao", max_tries, &tasks) {
-        t_expert_use(account, "expert_use_maidehao", &["电商运营"], "中国电商运营专家").await;
+        t_expert_use(
+            account,
+            "expert_use_maidehao",
+            &["电商运营"],
+            "中国电商运营专家",
+            expert_id_of(&tasks, "expert_use_maidehao"),
+        )
+        .await;
         settle(account, "expert_use_maidehao", &mut results, &mut claimed).await;
     }
     if gate(&scope, "expert_use_douyinyin", max_tries, &tasks) {
-        t_expert_use(account, "expert_use_douyinyin", &["抖音"], "抖音策略师").await;
+        t_expert_use(
+            account,
+            "expert_use_douyinyin",
+            &["抖音策略师", "斗音音"],
+            "抖音策略师",
+            expert_id_of(&tasks, "expert_use_douyinyin"),
+        )
+        .await;
         settle(account, "expert_use_douyinyin", &mut results, &mut claimed).await;
     }
     if gate(&scope, "expert_use_shangjia_xuanchuan", max_tries, &tasks) {
@@ -1508,12 +1618,20 @@ pub async fn run_growth_account(account: &Value, cfg: &Value) -> Value {
             "expert_use_shangjia_xuanchuan",
             &["商家宣传"],
             "商家宣传页与海报设计师",
+            expert_id_of(&tasks, "expert_use_shangjia_xuanchuan"),
         )
         .await;
         settle(account, "expert_use_shangjia_xuanchuan", &mut results, &mut claimed).await;
     }
     if gate(&scope, "expert_use_bowangwang", max_tries, &tasks) {
-        t_expert_use(account, "expert_use_bowangwang", &["直播电商"], "直播电商教练").await;
+        t_expert_use(
+            account,
+            "expert_use_bowangwang",
+            &["直播电商"],
+            "直播电商教练",
+            expert_id_of(&tasks, "expert_use_bowangwang"),
+        )
+        .await;
         settle(account, "expert_use_bowangwang", &mut results, &mut claimed).await;
     }
     if gate(&scope, "Buddy_App", max_tries, &tasks) {
@@ -1771,6 +1889,40 @@ pub fn cycle_interval() -> Duration {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn expert_id_comes_from_task_jump_url() {
+        let tasks = vec![json!({
+            "task_code": "expert_use_douyinyin",
+            "jump_url": "https://www.workbuddy.cn/work/launch/?deeplink=workbuddy%3A%2F%2Fexperts%3FexpertId%3Dex_FbY5nlWTqDod&buddy_type=workbuddy",
+        })];
+        assert_eq!(
+            expert_id_of(&tasks, "expert_use_douyinyin").as_deref(),
+            Some("ex_FbY5nlWTqDod")
+        );
+        // 老任务只给 workbuddy://expert，没有 id → None，回退关键词。
+        let plain = vec![json!({ "task_code": "WorkBuddy_Valorant", "jump_url": "workbuddy://expert" })];
+        assert_eq!(expert_id_of(&plain, "WorkBuddy_Valorant"), None);
+    }
+
+    #[test]
+    fn pick_expert_prefers_exact_profession_over_contains() {
+        let pool = vec![
+            // 关键词「抖音策略师」时，这个名字里也带「抖音」但不是任务要的人。
+            json!({ "id": "ex_FiBtbqM8myL5", "name": "抖音爆款内容专家", "profession": "抖音爆款内容制造专家" }),
+            json!({ "id": "ex_FbY5nlWTqDod", "name": "斗音音", "profession": "抖音策略师" }),
+        ];
+        let hit = pick_expert(pool, &["抖音策略师", "斗音音"]).unwrap();
+        assert_eq!(expert_id(&hit), Some("ex_FbY5nlWTqDod"));
+    }
+
+    #[test]
+    fn percent_decode_keeps_plain_text() {
+        assert_eq!(percent_decode("a%3Db%26c"), "a=b&c");
+        assert_eq!(percent_decode("no-escape"), "no-escape");
+        // 不完整的百分号序列原样保留，不能吞字符。
+        assert_eq!(percent_decode("100%"), "100%");
+    }
 
     #[test]
     fn progress_needs_work_semantics() {
