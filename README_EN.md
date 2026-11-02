@@ -170,7 +170,7 @@ Design choices worth knowing:
 
 ## Known limitations
 
-- Ships for Windows, macOS and Linux. Windows needs the WebView2 runtime; the macOS build is unsigned, so right-click → Open on first launch.
+- Ships for Windows, macOS and Linux. Windows needs the WebView2 runtime. The macOS build is **ad-hoc signed** (not notarized), so the first launch is blocked once: allow it in System Settings → Privacy & Security, or right-click the app → Open. If macOS reports the app is damaged, run `sudo xattr -cr "/Applications/WorkBuddy Deck.app"` and open it again.
 - Auto-update rides on GitHub Releases: direct access can be slow in some regions, so the Settings card takes a mirror prefix.
 - No automated test pipeline beyond unit tests; type checking and clippy run locally via `npm run verify`, CI only builds releases.
 - UI copy is Chinese-first. i18n with an English switch is built in, but English strings are still being filled in.

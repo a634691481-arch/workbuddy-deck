@@ -167,7 +167,7 @@ npx vite --port 1421
 
 ## 已知限制
 
-- 三平台发版（Windows / macOS / Linux）。Windows 依赖 WebView2；macOS 包未签名，首次打开需右键 → 打开。
+- 三平台发版（Windows / macOS / Linux）。Windows 依赖 WebView2；macOS 包用 **ad-hoc 签名**（未走 Apple 公证），首次打开会被拦一次：到「系统设置 → 隐私与安全性」点「仍要打开」，或右键 App → 打开。若提示「已损坏」，执行 `sudo xattr -cr "/Applications/WorkBuddy Deck.app"` 后再打开。
 - 自动更新依赖 GitHub Releases：国内直连可能慢，需在设置里填镜像前缀。
 - 尚无单元测试之外的自动化测试流水线；类型检查与 clippy 由本地 `npm run verify` 执行，CI 只负责构建发版。
 - 界面文案中文为主，i18n 已内置中英切换，英文文案仍在补。
