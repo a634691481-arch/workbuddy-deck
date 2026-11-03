@@ -4,6 +4,7 @@ import { defineElement } from "@lordicon/element";
 
 import App from "./App.vue";
 import "./style.css";
+import "./lib/prefs"; // 显示偏好（主题/圆角）在挂载前应用，避免首屏闪错主题
 import { isTauri } from "./lib/tauri-env";
 
 // 注册 <lord-icon> 自定义元素（服务端/无 DOM 时是空操作）。

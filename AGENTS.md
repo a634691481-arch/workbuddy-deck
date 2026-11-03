@@ -21,8 +21,11 @@
 **风格原型：Tactical Telemetry / CRT（深色），不与 Swiss Print 浅色混用。**
 
 铁律（违反其一整块就不成立）：
-1. **圆角恒为 0**（`style.css` 已全局 `border-radius: 0 !important`）。
-2. **强调色只有航空红 `--color-hazard`**；磷光绿 `--color-success` 只允许出现在 READY 指示器。
+1. **圆角默认 0**（`style.css` 全局 `border-radius: var(--app-radius) !important`）；
+   用户可在标题栏「圆角」滑块调 0–16px，值由 `lib/prefs.ts` 写 `<html>` 内联变量，持久化 localStorage。
+2. **强调色 = `--accent`（默认航空红）**：`--color-hazard/danger/warning` 全部派生自 `--accent`
+   （`color-mix` 混合），标题栏「颜色」格子弹窗可换；磷光绿 `--color-success` 只允许出现在 READY 指示器。
+   主题（暗/亮）也在 `lib/prefs.ts`：`html.light` 覆盖 `--color-*` 变量，组件零改动。
 3. 不用渐变 / 柔光投影 / 半透明玻璃；层次靠 1px 实线分隔。
 4. 数据一律「等宽 + 大写 + 正字距」，中文模式用短词保持同样节奏。
 5. 分隔线优先用 `grid gap-px` + 父子异色（skill §8），不逐条写 border。

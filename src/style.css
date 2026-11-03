@@ -55,6 +55,69 @@
   --font-display: "Archivo Black", "Arial Black", sans-serif;
 }
 
+/*
+ * 强调色：默认航空红；主题色选择器只写 <html> 内联 --accent，
+ * hazard/danger/warning 全部派生自它（软底自动随背景明暗混合）。
+ * 放在 @theme 之后，同特异性后者胜。
+ */
+:root {
+  --accent: #e61919;
+  --color-hazard: var(--accent);
+  --color-hazard-dim: color-mix(in srgb, var(--accent) 55%, #000);
+  --color-hazard-soft: color-mix(in srgb, var(--accent) 10%, var(--color-background));
+  --color-danger: var(--accent);
+  --color-danger-soft: var(--color-hazard-soft);
+  --color-danger-border: color-mix(in srgb, var(--accent) 45%, var(--color-background));
+  --color-warning: var(--accent);
+  --color-warning-soft: var(--color-hazard-soft);
+  --color-warning-border: var(--color-danger-border);
+}
+
+/*
+ * 白天主题：覆盖同名变量。Tailwind v4 的 utility 引用的是 var(--color-*)，
+ * 在 html.light 上覆盖即全局生效，无需改任何组件。
+ * 强调色不在覆盖之列——它派生自 --accent，随背景自动适配明暗。
+ */
+html.light {
+  --color-background: #e8e8e6;
+  --color-card: #f4f4f2;
+  --color-panel: #eeeeec;
+  --color-muted: #dededb;
+  --color-foreground: #1a1a18;
+  --color-muted-foreground: #57574f;
+  --color-faint: #9a9a92;
+
+  --color-border: #c6c6c2;
+  --color-border-strong: #a0a09a;
+
+  --color-primary: #1a1a18;
+  --color-primary-soft: #e2e2df;
+  --color-primary-border: #a0a09a;
+  --color-primary-foreground: #f4f4f2;
+
+  --color-titlebar: #dcdcd8;
+
+  --color-success: #178a17;
+  --color-success-soft: #e7f3e7;
+  --color-success-border: #86c286;
+
+  scrollbar-color: #a0a09a #e8e8e6;
+}
+
+html.light *::-webkit-scrollbar-track {
+  background: #e8e8e6;
+  border-left-color: #d0d0cc;
+}
+
+html.light *::-webkit-scrollbar-thumb {
+  background: #b4b4ae;
+  border-color: #e8e8e6;
+}
+
+html.light *::-webkit-scrollbar-thumb:hover {
+  background: #a0a09a;
+}
+
 html,
 body,
 #app {
@@ -71,9 +134,14 @@ body {
   -webkit-font-smoothing: antialiased;
 }
 
-/* 全局直角：任何组件都不得有圆角 */
+/* 圆角默认直角；实际值由 prefs.ts 写在 <html> 内联变量上（0–16px 可调） */
+:root {
+  --app-radius: 0px;
+}
+
+/* 全局统一圆角：任何组件随偏好整体切换 */
 * {
-  border-radius: 0 !important;
+  border-radius: var(--app-radius) !important;
   scrollbar-width: thin;
   scrollbar-color: #454540 #0a0a0a;
 }
@@ -124,12 +192,12 @@ body {
   letter-spacing: -0.02em;
 }
 
-/* 危险条纹：用于错误横幅与顶部告警带 */
+/* 危险条纹：用于错误横幅与顶部告警带（随主题色走） */
 .hazard-stripes {
   background-image: repeating-linear-gradient(
     -45deg,
-    #e61919 0 6px,
-    #0a0a0a 6px 12px
+    var(--color-hazard) 0 6px,
+    var(--color-background) 6px 12px
   );
 }
 
@@ -146,6 +214,15 @@ body {
     transparent 1px 3px
   );
   opacity: 0.5;
+}
+
+/* 白天下扫描线再淡一档，否则亮底上像蒙灰 */
+html.light .crt::before {
+  background: repeating-linear-gradient(
+    0deg,
+    rgb(0 0 0 / 0.07) 0 1px,
+    transparent 1px 3px
+  );
 }
 
 /* 机械噪点：SVG 静态噪声，统一全局颗粒感 */

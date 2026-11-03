@@ -9,6 +9,7 @@ import { MorphIcon } from "morphicons/vue";
 
 import AnimatedIcon from "@/components/ui/AnimatedIcon.vue";
 import { t } from "@/lib/i18n";
+import { accent } from "@/lib/prefs";
 import { NAV_ICONS, type NavKey } from "@/lib/nav";
 import playIcon from "@/assets/lordicon/play.json?url";
 
@@ -99,8 +100,8 @@ const items: { key: NavKey; idx: string; labelKey: LabelKey }[] = [
           :src="playIcon"
           :size="12"
           trigger="loop"
-          primary="#e61919"
-          secondary="#7a1010"
+          :primary="accent"
+          :secondary="accent"
         />
         <span v-else class="size-1.5 shrink-0 bg-success" aria-hidden="true" />
         <span class="readout text-[10px]" :class="running ? 'text-hazard' : 'text-success'">

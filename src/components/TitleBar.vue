@@ -1,13 +1,23 @@
 <script setup lang="ts">
 // 窗口控制依赖 Tauri 宿主；浏览器预览时 win 为 null，按钮照常渲染但不生效（不白屏）。
-import { computed, onMounted } from "vue";
+import { computed, onMounted, ref } from "vue";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Eye, EyeOff, Minus, Square, X } from "lucide-vue-next";
+import { Eye, EyeOff, Minus, Moon, Square, Sun, X } from "lucide-vue-next";
 
 import { locale, setLocale, t } from "@/lib/i18n";
 import { loadingBar } from "@/lib/loading-bar";
 import { isTauri } from "@/lib/tauri-env";
 import { maskAll, setMaskAll } from "@/lib/task-meta";
+import {
+  ACCENTS,
+  RADIUS_MAX,
+  accent,
+  radius,
+  setAccent,
+  setRadius,
+  setTheme,
+  theme,
+} from "@/lib/prefs";
 import { useShell } from "@/composables/useShell";
 import { useUpdate } from "@/composables/useUpdate";
 
@@ -17,6 +27,12 @@ const { current: rev, hasUpdate, loadConfig } = useUpdate();
 
 /** 有 IPC 在飞（或刚结束的收尾窗口）就显示滑动态。 */
 const busy = computed(() => loadingBar.inflight.value > 0 || loadingBar.tail.value);
+
+// 标题栏弹出面板：圆角滑块 / 主题色格子；点空白处关闭
+const panel = ref<"" | "radius" | "accent">("");
+function togglePanel(name: "radius" | "accent") {
+  panel.value = panel.value === name ? "" : name;
+}
 
 // 标题栏先拿到本机版本号（设置页没打开过也要显示对），不额外发检查请求。
 onMounted(() => void loadConfig());
@@ -44,6 +60,39 @@ onMounted(() => void loadConfig());
     </div>
 
     <div class="flex items-stretch self-stretch">
+      <!-- 主题开关：暗色显示太阳（点了变白天），白天显示月亮 -->
+      <button
+        class="flex items-center gap-1 border-l border-border px-2 text-[10px] uppercase tracking-[0.1em]"
+        :class="theme === 'light' ? 'text-hazard' : 'text-faint hover:text-foreground'"
+        :title="theme === 'light' ? t('tb.toDark') : t('tb.toLight')"
+        @click="setTheme(theme === 'light' ? 'dark' : 'light')"
+      >
+        <Sun v-if="theme === 'dark'" class="size-3" />
+        <Moon v-else class="size-3" />
+        {{ t("tb.theme") }}
+      </button>
+
+      <!-- 圆角：点击弹出滑块，0 = 直角，实时生效并记忆 -->
+      <button
+        class="flex items-center border-l border-border px-2 text-[10px] uppercase tracking-[0.1em]"
+        :class="radius > 0 ? 'text-hazard' : 'text-faint hover:text-foreground'"
+        :title="t('tb.roundSize')"
+        @click="togglePanel('radius')"
+      >
+        {{ t("tb.round") }}
+      </button>
+
+      <!-- 主题色：色块 + 格子弹窗 -->
+      <button
+        class="flex items-center gap-1.5 border-l border-border px-2 text-[10px] uppercase tracking-[0.1em]"
+        :class="accent === ACCENTS[0].value ? 'text-faint hover:text-foreground' : 'text-hazard'"
+        :title="t('tb.colorTitle')"
+        @click="togglePanel('accent')"
+      >
+        <i class="size-2.5 border border-border-strong" :style="{ background: accent }" />
+        {{ t("tb.color") }}
+      </button>
+
       <!-- 名称脱敏开关：开 = 眼睛闭合（已隐藏），点一下切明文 -->
       <button
         class="flex items-center gap-1 border-l border-border px-2 text-[10px] uppercase tracking-[0.1em]"
@@ -95,6 +144,53 @@ onMounted(() => void loadConfig());
       >
         <X class="size-4" />
       </button>
+    </div>
+
+    <!-- 弹出面板：透明背板点击关闭 -->
+    <div v-if="panel" class="fixed inset-0 z-40" @click="panel = ''" />
+    <div
+      v-if="panel === 'radius'"
+      class="absolute right-24 top-full z-50 w-56 border border-border-strong bg-card p-3"
+    >
+      <div class="lbl mb-2 flex items-center justify-between">
+        <span>{{ t("tb.roundSize") }}</span>
+        <span class="readout text-[11px]" :class="radius > 0 ? 'text-hazard' : 'text-faint'">
+          {{ radius > 0 ? `${radius}px` : t("tb.roundZero") }}
+        </span>
+      </div>
+      <input
+        :value="radius"
+        type="range"
+        min="0"
+        :max="RADIUS_MAX"
+        step="1"
+        class="w-full accent-hazard"
+        @input="setRadius(($event.target as HTMLInputElement).valueAsNumber)"
+      />
+      <div class="mt-1 flex justify-between text-[9px] text-faint">
+        <span>{{ t("tb.roundZero") }}</span>
+        <span>{{ RADIUS_MAX }}px</span>
+      </div>
+    </div>
+    <div
+      v-if="panel === 'accent'"
+      class="absolute right-16 top-full z-50 w-48 border border-border-strong bg-card p-3"
+    >
+      <div class="lbl mb-2">{{ t("tb.colorTitle") }}</div>
+      <div class="grid grid-cols-5 gap-1.5">
+        <button
+          v-for="c in ACCENTS"
+          :key="c.value"
+          type="button"
+          class="relative grid size-7 place-items-center border transition-colors"
+          :class="accent === c.value ? 'border-foreground' : 'border-transparent hover:border-border-strong'"
+          :title="locale === 'zh' ? c.zh : c.en"
+          @click="setAccent(c.value)"
+        >
+          <i class="size-4" :style="{ background: c.value }" />
+          <i v-if="accent === c.value" class="absolute size-1.5 bg-background" />
+        </button>
+      </div>
     </div>
 
     <!-- 加载条：占位就是原来那 2px 红线。空闲 = 满格；有在飞请求 = 滑块巡游 -->
