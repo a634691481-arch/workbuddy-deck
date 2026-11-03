@@ -32,8 +32,9 @@ pub fn set_backdrop(app: tauri::AppHandle, kind: String) -> Value {
     {
         use window_vibrancy::{NSVisualEffectMaterial, NSVisualEffectState};
         if kind == "off" {
+            // macOS 的 clear_vibrancy 返回 Result<bool>：bool 表示是否真的清掉过
             return match window_vibrancy::clear_vibrancy(&win) {
-                Ok(()) => json!({ "ok": true }),
+                Ok(_) => json!({ "ok": true }),
                 Err(err) => json!({ "ok": false, "error": err.to_string() }),
             };
         }
