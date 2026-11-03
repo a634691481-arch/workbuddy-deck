@@ -783,7 +783,8 @@ async function doSwitch() {
           <div class="mt-2 flex items-end justify-between gap-2 px-3">
             <div class="flex min-w-0 items-baseline gap-1.5 overflow-hidden">
               <Zap class="size-3.5 shrink-0 self-center text-hazard" />
-              <span class="readout text-[24px] leading-none text-foreground">
+              <span v-if="refreshing && row.ok" class="mb-1 inline-block h-[18px] w-24 animate-pulse bg-border-strong" />
+              <span v-else class="readout text-[24px] leading-none text-foreground">
                 <AnimatedNumber :value="row.ok ? row.remaining : null" :decimals="2" />
               </span>
               <span class="lbl whitespace-nowrap text-faint">
@@ -801,7 +802,8 @@ async function doSwitch() {
                 {{ forecastLabel(forecastOf(row.accountId)) }}
               </span>
               <!-- 次级信息合成一行：三行 9px 堆叠读不出主次 -->
-              <span class="readout whitespace-nowrap text-[9px] leading-none text-faint">
+              <span v-if="refreshing" class="inline-block h-2 w-28 animate-pulse bg-border" />
+              <span v-else class="readout whitespace-nowrap text-[9px] leading-none text-faint">
                 {{ row.packages }} {{ t("ac.packages") }}
                 <span class="px-0.5">·</span>
                 <span :title="`${t('ac.updated')} ${fmtTime(row.updatedAt)}`">{{ fmtTime(row.updatedAt) }}</span>
@@ -824,8 +826,9 @@ async function doSwitch() {
           <!-- 近期到期：一行摘要（几个包 · 最近到期），明细进弹框 -->
           <div class="mt-2 flex flex-1 items-center gap-2 border-t border-border px-3 py-1.5">
             <span class="lbl shrink-0">// {{ t("ac.expiring") }}</span>
+            <span v-if="refreshing" class="inline-block h-2.5 w-full max-w-48 animate-pulse bg-border" />
             <p
-              v-if="!row.ok"
+              v-else-if="!row.ok"
               class="min-w-0 flex-1 truncate text-[10px] text-hazard"
               :title="row.error || t('ac.noSnapshot')"
             >
