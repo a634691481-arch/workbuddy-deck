@@ -74,7 +74,7 @@
 ## 快速开始
 
 **装现成的**：到 [Releases](https://github.com/a634691481-arch/workbuddy-deck/releases) 下最新的
-`*_x64-setup.exe`（Windows）/ `*.dmg`（macOS）/ `*.AppImage` 或 `*.deb`（Linux），装完直接运行。
+`*_x64-setup.exe`（Windows）/ `*_aarch64.dmg`（macOS，Apple Silicon）/ `*.AppImage` 或 `*.deb`（Linux），装完直接运行。
 应用内的「系统设置 → 自动更新」会自动发现后续版本。
 
 **从源码构建**：
@@ -167,7 +167,7 @@ npx vite --port 1421
 
 ## 已知限制
 
-- 三平台发版（Windows / macOS / Linux）。Windows 依赖 WebView2；macOS 包用 **ad-hoc 签名**（未走 Apple 公证），首次打开会被拦一次：到「系统设置 → 隐私与安全性」点「仍要打开」，或右键 App → 打开。若提示「已损坏」，执行 `sudo xattr -cr "/Applications/WorkBuddy Deck.app"` 后再打开。
+- 三平台发版（Windows / macOS / Linux）。macOS 只发 Apple Silicon（aarch64）；Intel 机型不再出包。Windows 依赖 WebView2；macOS 包用 **ad-hoc 签名**（未走 Apple 公证），首次打开会被拦一次：到「系统设置 → 隐私与安全性」点「仍要打开」，或右键 App → 打开。若提示「已损坏」，执行 `sudo xattr -cr "/Applications/WorkBuddy Deck.app"` 后再打开。
 - 自动更新依赖 GitHub Releases：国内直连可能慢，需在设置里填镜像前缀。
 - 尚无单元测试之外的自动化测试流水线；类型检查与 clippy 由本地 `npm run verify` 执行，CI 只负责构建发版。
 - 界面文案中文为主，i18n 已内置中英切换，英文文案仍在补。
