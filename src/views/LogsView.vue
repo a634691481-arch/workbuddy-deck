@@ -297,7 +297,7 @@ async function doClear() {
     </div>
 
     <!-- 四指标 -->
-    <section class="shrink-0 border-b border-border bg-border">
+    <section class="mx-3 mt-3 shrink-0 border border-border bg-border">
       <div class="grid grid-cols-4 gap-px">
         <div class="bg-card px-3 py-2.5">
           <div class="lbl">{{ t("rl.total") }}</div>
@@ -327,7 +327,7 @@ async function doClear() {
     </section>
 
     <!-- 来源分布 + 24H 分布 -->
-    <section class="grid shrink-0 grid-cols-1 gap-px border-b border-border bg-border lg:grid-cols-2">
+    <section class="mx-3 mt-3 grid shrink-0 grid-cols-1 gap-px border border-border bg-border lg:grid-cols-2">
       <div class="bg-card px-3 py-2.5">
         <div class="flex items-baseline justify-between">
           <span class="lbl">{{ t("rl.sourceDist") }}</span>
@@ -377,7 +377,7 @@ async function doClear() {
     </section>
 
     <!-- 切换台账：只在「切换记录」筛选下出现，给出总量与失败构成 -->
-    <section v-if="filter === 'switch'" class="shrink-0 border-b border-border bg-border">
+    <section v-if="filter === 'switch'" class="mx-3 mt-3 shrink-0 border border-border bg-border">
       <div class="grid grid-cols-4 gap-px">
         <div class="bg-card px-3 py-2">
           <div class="lbl">{{ t("rl.swTotal") }}</div>
@@ -416,7 +416,7 @@ async function doClear() {
     </section>
 
     <!-- 筛选 + 搜索 -->
-    <section class="flex shrink-0 flex-wrap items-center justify-between gap-2 border-b border-border bg-panel px-3 py-1.5">
+    <section class="mt-3 flex shrink-0 flex-wrap items-center justify-between gap-2 border-y border-border bg-panel px-3 py-1.5">
       <div class="flex flex-wrap items-center gap-1">
         <button
           v-for="item in FILTERS"

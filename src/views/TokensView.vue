@@ -375,7 +375,7 @@ const cellColor = (level: number) =>
     </div>
 
     <!-- 八项总量：两行四列 -->
-    <section class="shrink-0 border-b border-border bg-border">
+    <section class="mx-3 mt-3 shrink-0 border border-border bg-border">
       <div class="grid grid-cols-4 gap-px">
         <div class="bg-card px-3 py-2">
           <div class="lbl">{{ t("tk.total") }}</div>
@@ -417,9 +417,9 @@ const cellColor = (level: number) =>
       </div>
     </section>
 
-    <div class="min-h-0 flex-1 overflow-y-auto">
+    <div class="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
       <!-- 消耗构成 -->
-      <section class="bg-card px-3 py-2.5">
+      <section class="border border-border bg-card px-3 py-2.5">
         <div class="flex items-baseline justify-between gap-2">
           <span class="lbl">// {{ t("tk.mix") }}</span>
           <span class="readout text-[9px] text-faint">Σ {{ compact(mix.sum) }}</span>
@@ -442,7 +442,7 @@ const cellColor = (level: number) =>
       </section>
 
       <!-- 数据源 -->
-      <section class="mt-px bg-card">
+      <section class="border border-border bg-card">
         <div class="lbl border-b border-border px-3 py-2">// SOURCE</div>
         <div v-if="sources.length === 0" class="px-3 py-8 text-center text-[11px] text-faint">
           {{ loading ? "···" : t("tk.empty") }}
@@ -469,9 +469,9 @@ const cellColor = (level: number) =>
         </div>
       </section>
 
-      <div class="mt-px grid grid-cols-[1fr_300px] gap-px bg-border">
+      <div class="grid grid-cols-[1fr_300px] gap-3">
         <!-- 每日 -->
-        <section class="bg-card px-3 py-2.5">
+        <section class="border border-border bg-card px-3 py-2.5">
           <div class="lbl">// {{ t("tk.daily") }}</div>
           <div v-if="daily.length === 0" class="py-10 text-center text-[11px] text-faint">{{ t("tk.empty") }}</div>
           <div v-else class="mt-2">
@@ -493,7 +493,7 @@ const cellColor = (level: number) =>
         </section>
 
         <!-- 模型 -->
-        <section class="bg-card px-3 py-2.5">
+        <section class="border border-border bg-card px-3 py-2.5">
           <div class="lbl">// {{ t("tk.models") }}</div>
           <ul v-if="models.length > 0" class="mt-2 space-y-1.5">
             <li v-for="model in models" :key="model.name" class="min-w-0">
@@ -513,9 +513,9 @@ const cellColor = (level: number) =>
         </section>
       </div>
 
-      <div class="mt-px grid grid-cols-[1fr_300px] gap-px bg-border">
+      <div class="grid grid-cols-[1fr_300px] gap-3">
         <!-- 项目分布 -->
-        <section class="bg-card px-3 py-2.5">
+        <section class="border border-border bg-card px-3 py-2.5">
           <div class="lbl">// {{ t("tk.projects") }}</div>
           <ul v-if="projects.length > 0" class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5">
             <li v-for="project in projects" :key="project.name" class="min-w-0">
@@ -532,7 +532,7 @@ const cellColor = (level: number) =>
         </section>
 
         <!-- 周 × 时热力 -->
-        <section class="bg-card px-3 py-2.5">
+        <section class="border border-border bg-card px-3 py-2.5">
           <div class="flex items-baseline justify-between gap-2">
             <span class="lbl">// {{ t("tk.hours") }}</span>
             <span class="readout text-[9px] text-faint">MAX {{ compact(hourGrid.max) }}</span>
@@ -562,7 +562,7 @@ const cellColor = (level: number) =>
       </div>
 
       <!-- 效率指标 -->
-      <section class="mt-px bg-border">
+      <section class="border border-border bg-border">
         <div class="bg-card px-3 pt-2">
           <span class="lbl">// {{ t("tk.eff") }}</span>
         </div>
@@ -595,7 +595,7 @@ const cellColor = (level: number) =>
       </section>
 
       <!-- 会话 TOP / 调用明细 -->
-      <section class="mt-px bg-card">
+      <section class="border border-border bg-card">
         <div class="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
           <span class="lbl">// {{ t("tk.recent") }}</span>
           <div class="flex gap-px bg-border">

@@ -367,7 +367,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
     </div>
 
     <!-- 四指标 -->
-    <section class="shrink-0 border-b border-border bg-border">
+    <section class="mx-3 mt-3 shrink-0 border border-border bg-border">
       <div class="grid grid-cols-4 gap-px">
         <div class="bg-card px-3 py-2.5">
           <div class="lbl">{{ t("cr.left") }}</div>
@@ -396,10 +396,10 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
       </div>
     </section>
 
-    <div class="min-h-0 flex-1 overflow-y-auto">
-      <div class="grid grid-cols-[1fr_260px] gap-px bg-border">
+    <div class="min-h-0 flex-1 space-y-3 overflow-y-auto p-3">
+      <div class="grid grid-cols-[1fr_260px] gap-3">
         <!-- 每日消耗 -->
-        <section class="bg-card px-3 py-2.5">
+        <section class="border border-border bg-card px-3 py-2.5">
           <div class="lbl">// {{ t("cr.daily") }}</div>
           <div v-if="chart.length === 0" class="py-10 text-center text-[11px] text-faint">
             {{ t("cr.empty") }}
@@ -434,7 +434,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
         </section>
 
         <!-- 账号余额 -->
-        <section class="bg-card px-3 py-2.5">
+        <section class="border border-border bg-card px-3 py-2.5">
           <div class="lbl">// {{ t("cr.remain") }}</div>
           <ul v-if="topBalances.length > 0" class="mt-1.5 space-y-1">
             <li
@@ -456,7 +456,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
       </div>
 
       <!-- 分类维度：模型 / 客户端 / 账号 -->
-      <section class="mt-px bg-card">
+      <section class="border border-border bg-card">
         <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
           <div class="flex items-center gap-2">
             <span class="lbl">// {{ t("cr.dim") }}</span>
@@ -566,7 +566,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
       </section>
 
       <!-- 积分明细 -->
-      <section class="mt-px bg-card">
+      <section class="border border-border bg-card">
         <div class="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
           <span class="lbl">// {{ t("cr.detail") }}</span>
           <div class="flex gap-px bg-border">
