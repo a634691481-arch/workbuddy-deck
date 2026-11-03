@@ -56,7 +56,7 @@ const items: { key: NavKey; idx: string; labelKey: LabelKey }[] = [
 </script>
 
 <template>
-  <nav class="flex w-[148px] shrink-0 flex-col border-r border-border bg-panel">
+  <nav class="flex w-[148px] shrink-0 flex-col border-r border-border bg-panel wb-flat">
     <div class="lbl px-3 pb-2 pt-3 text-faint">{{ t("nav.section") }}</div>
 
     <button

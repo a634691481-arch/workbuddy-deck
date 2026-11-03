@@ -53,10 +53,10 @@ const booting = ref(true);
 </script>
 
 <template>
-  <div class="crt flex h-full min-h-0 flex-col bg-background">
+  <div class="crt flex h-full min-h-0 flex-col bg-background wb-flat">
     <TitleBar />
 
-    <div class="flex min-h-0 flex-1">
+    <div class="flex min-h-0 flex-1 wb-flat">
       <AppSidebar
         :current="nav"
         :account-count="accountCount"

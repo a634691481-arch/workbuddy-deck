@@ -252,7 +252,7 @@ async function doClear() {
 <template>
   <div class="flex min-h-0 flex-1 flex-col">
     <!-- 页头 -->
-    <header class="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-panel px-4 py-2">
+    <header class="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-panel px-4 py-2 wb-flat">
       <div class="min-w-0">
         <h1 class="text-[13px] tracking-[0.12em] text-foreground">{{ t("rl.title") }}</h1>
         <div class="readout mt-0.5 text-[9px] text-faint">
@@ -297,8 +297,8 @@ async function doClear() {
     </div>
 
     <!-- 四指标 -->
-    <section class="mx-3 mt-3 shrink-0 border border-border bg-border">
-      <div class="grid grid-cols-4 gap-px">
+    <section class="mx-3 mt-3 shrink-0 border border-border bg-border wb-cells">
+      <div class="grid grid-cols-4 gap-px wb-cells">
         <div class="bg-card px-3 py-2.5">
           <div class="lbl">{{ t("rl.total") }}</div>
           <div class="readout mt-1 text-[20px] leading-none text-foreground">
@@ -327,7 +327,7 @@ async function doClear() {
     </section>
 
     <!-- 来源分布 + 24H 分布 -->
-    <section class="mx-3 mt-3 grid shrink-0 grid-cols-1 gap-px border border-border bg-border lg:grid-cols-2">
+    <section class="mx-3 mt-3 grid shrink-0 grid-cols-1 gap-px border border-border bg-border lg:grid-cols-2 wb-cells">
       <div class="bg-card px-3 py-2.5">
         <div class="flex items-baseline justify-between">
           <span class="lbl">{{ t("rl.sourceDist") }}</span>
@@ -356,7 +356,7 @@ async function doClear() {
           <span class="lbl">{{ t("rl.hourDist") }}</span>
           <span class="readout text-[9px] text-faint">00 → 23</span>
         </div>
-        <div class="mt-2 grid h-8 grid-cols-[repeat(24,minmax(0,1fr))] items-end gap-px">
+        <div class="mt-2 grid h-8 grid-cols-[repeat(24,minmax(0,1fr))] items-end gap-px wb-cells">
           <div
             v-for="slot in hourly"
             :key="`h-${slot.hour}`"
@@ -378,7 +378,7 @@ async function doClear() {
 
     <!-- 切换台账：只在「切换记录」筛选下出现，给出总量与失败构成 -->
     <section v-if="filter === 'switch'" class="mx-3 mt-3 shrink-0 border border-border bg-border">
-      <div class="grid grid-cols-4 gap-px">
+      <div class="grid grid-cols-4 gap-px wb-cells">
         <div class="bg-card px-3 py-2">
           <div class="lbl">{{ t("rl.swTotal") }}</div>
           <div class="readout mt-1 text-[16px] leading-none text-foreground">

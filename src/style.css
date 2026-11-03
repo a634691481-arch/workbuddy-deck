@@ -146,6 +146,34 @@ body {
   scrollbar-color: #454540 #0a0a0a;
 }
 
+/*
+ * 1px 分隔网格（gap-px + 父级 bg-border 透出分隔线）里，格子必须恒直角：
+ * 跟随圆角会让缝隙露成月牙/蝴蝶形缺口。容器裁切溢出，圆角只留在最外层卡片上。
+ */
+.wb-cells,
+.wb-cells > * {
+  border-radius: 0 !important;
+}
+
+.wb-cells {
+  overflow: hidden;
+}
+
+/*
+ * 页头 / 工具栏：满幅贴边，圆角会把四角咬出缺口，所以容器恒直角；
+ * 内部按钮不受影响，仍跟随圆角偏好（选择器只命中容器本身）。
+ */
+.wb-flat {
+  border-radius: 0 !important;
+}
+
+/* 窗口级根节点永远直角：满幅贴边，圆角只会在四角咬出缺口 */
+html,
+body,
+#app {
+  border-radius: 0 !important;
+}
+
 *::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -290,6 +318,8 @@ html.light .crt::before {
 }
 .wb-view {
   animation: wb-view-in 120ms ease-out;
+  /* 分区容器满幅贴边，不跟随圆角；内部卡片/按钮照常圆 */
+  border-radius: 0 !important;
 }
 @media (prefers-reduced-motion: reduce) {
   .wb-view {

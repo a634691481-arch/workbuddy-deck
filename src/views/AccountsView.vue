@@ -587,7 +587,7 @@ async function doSwitch() {
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col">
-    <header class="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-panel px-4 py-2">
+    <header class="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-panel px-4 py-2 wb-flat">
       <div class="min-w-0">
         <h1 class="text-[13px] tracking-[0.12em] text-foreground">{{ t("ac.title") }}</h1>
         <div class="readout mt-0.5 flex flex-wrap items-center gap-x-3 text-[9px] text-faint">
@@ -912,7 +912,7 @@ async function doSwitch() {
         @click.self="dismissCollected"
       >
         <div class="w-full max-w-[420px] border border-border-strong bg-card">
-          <header class="flex shrink-0 items-start justify-between gap-3 border-b border-border px-3 py-2">
+          <header class="flex shrink-0 items-start justify-between gap-3 border-b border-border px-3 py-2 wb-flat">
             <div class="min-w-0">
               <div class="text-[13px] text-foreground">{{ t("ac.oauthTitle") }}</div>
               <div class="mt-0.5 text-[10px] leading-4 text-muted-foreground">{{ t("ac.oauthDesc") }}</div>
@@ -952,7 +952,7 @@ async function doSwitch() {
         @click.self="closePackages"
       >
         <div class="flex max-h-[80vh] w-full max-w-[560px] flex-col border border-border-strong bg-card shadow-none">
-          <header class="flex shrink-0 items-start justify-between gap-3 border-b border-border px-3 py-2">
+          <header class="flex shrink-0 items-start justify-between gap-3 border-b border-border px-3 py-2 wb-flat">
             <div class="min-w-0">
               <div class="lbl">// {{ t("ac.allPackages") }}</div>
               <div class="mt-0.5 truncate text-[12px] text-foreground" :title="mask(packageSheet.label)">
@@ -1030,7 +1030,7 @@ async function doSwitch() {
         @click.self="closeSwitch"
       >
         <div class="flex max-h-[85vh] w-full max-w-[480px] flex-col border border-border-strong bg-card">
-          <header class="flex shrink-0 items-start justify-between gap-3 border-b border-border px-3 py-2">
+          <header class="flex shrink-0 items-start justify-between gap-3 border-b border-border px-3 py-2 wb-flat">
             <div class="min-w-0">
               <div class="text-[13px] text-foreground">
                 {{ t("ac.switchTitle") }}「{{ mask(switchTarget.label) }}」

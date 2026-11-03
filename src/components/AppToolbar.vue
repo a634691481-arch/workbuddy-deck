@@ -21,7 +21,7 @@ const btnClass =
 </script>
 
 <template>
-  <header class="flex h-10 shrink-0 items-stretch border-b border-border bg-card">
+  <header class="flex h-10 shrink-0 items-stretch border-b border-border bg-card wb-flat">
     <!-- 左：模块标识（ASCII 括号是工业风的语法装饰） -->
     <div class="flex items-center gap-2 border-r border-border px-3">
       <span class="lbl text-hazard">[</span>

@@ -338,7 +338,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
 <template>
   <div class="flex min-h-0 flex-1 flex-col">
     <!-- 页头 -->
-    <header class="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-panel px-4 py-2">
+    <header class="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-panel px-4 py-2 wb-flat">
       <div class="min-w-0">
         <h1 class="text-[13px] tracking-[0.12em] text-foreground">{{ t("cr.title") }}</h1>
         <div class="readout mt-0.5 text-[9px] text-faint">
@@ -367,8 +367,8 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
     </div>
 
     <!-- 四指标 -->
-    <section class="mx-3 mt-3 shrink-0 border border-border bg-border">
-      <div class="grid grid-cols-4 gap-px">
+    <section class="mx-3 mt-3 shrink-0 border border-border bg-border wb-cells">
+      <div class="grid grid-cols-4 gap-px wb-cells">
         <div class="bg-card px-3 py-2.5">
           <div class="lbl">{{ t("cr.left") }}</div>
           <div class="readout mt-1 text-[20px] leading-none text-foreground">
@@ -460,7 +460,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
         <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
           <div class="flex items-center gap-2">
             <span class="lbl">// {{ t("cr.dim") }}</span>
-            <div class="flex gap-px bg-border">
+            <div class="flex gap-px bg-border wb-cells">
               <button
                 v-for="option in dimensionOptions"
                 :key="option.key"
@@ -569,7 +569,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
       <section class="border border-border bg-card">
         <div class="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
           <span class="lbl">// {{ t("cr.detail") }}</span>
-          <div class="flex gap-px bg-border">
+          <div class="flex gap-px bg-border wb-cells">
             <button
               v-for="tab in (['accounts', 'flow'] as const)"
               :key="tab"
@@ -585,7 +585,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
 
         <!-- 账号口径 -->
         <template v-if="detailTab === 'accounts'">
-          <div class="grid grid-cols-[1fr_70px_78px_78px_88px_64px] gap-px bg-border text-[10px]">
+          <div class="grid grid-cols-[1fr_70px_78px_78px_88px_64px] gap-px bg-border text-[10px] wb-cells">
             <div class="lbl bg-card px-3 py-1.5">{{ t("cr.acct") }}</div>
             <div class="lbl bg-card px-2 py-1.5 text-right">{{ t("cr.remain") }}</div>
             <div class="lbl bg-card px-2 py-1.5 text-right">{{ t("cr.today") }}</div>
@@ -630,7 +630,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
               <CircleAlert class="size-3 shrink-0" />
               {{ t("cr.flowTrunc") }} {{ official.detailLimitPerAccount }} {{ t("cr.flowRows") }}
             </div>
-            <div class="grid grid-cols-[92px_1fr_68px_150px_90px] gap-px bg-border text-[10px]">
+            <div class="grid grid-cols-[92px_1fr_68px_150px_90px] gap-px bg-border text-[10px] wb-cells">
               <button
                 type="button"
                 class="lbl flex items-center gap-1 bg-card px-3 py-1.5 text-left transition-colors hover:text-foreground"
@@ -677,7 +677,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
               class="readout flex items-center justify-between gap-2 border-t border-border px-3 py-1.5 text-[9px] text-faint"
             >
               <span>{{ flowRange }}</span>
-              <div class="flex items-center gap-px bg-border">
+              <div class="flex items-center gap-px bg-border wb-cells">
                 <button
                   type="button"
                   class="bg-card px-2 py-0.5 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"

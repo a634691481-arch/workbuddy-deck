@@ -324,7 +324,7 @@ const cellColor = (level: number) =>
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col">
-    <header class="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-panel px-4 py-2">
+    <header class="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-panel px-4 py-2 wb-flat">
       <div class="min-w-0">
         <h1 class="text-[13px] tracking-[0.12em] text-foreground">{{ t("tk.title") }}</h1>
         <div class="readout mt-0.5 text-[9px] text-faint">
@@ -341,7 +341,7 @@ const cellColor = (level: number) =>
         <span v-if="loading && stats" class="readout text-[9px] uppercase tracking-[0.14em] text-hazard">
           scanning…
         </span>
-        <div class="flex gap-px bg-border">
+        <div class="flex gap-px bg-border wb-cells">
           <button
             v-for="range in RANGES"
             :key="range.key"
@@ -375,8 +375,8 @@ const cellColor = (level: number) =>
     </div>
 
     <!-- 八项总量：两行四列 -->
-    <section class="mx-3 mt-3 shrink-0 border border-border bg-border">
-      <div class="grid grid-cols-4 gap-px">
+    <section class="mx-3 mt-3 shrink-0 border border-border bg-border wb-cells">
+      <div class="grid grid-cols-4 gap-px wb-cells">
         <div class="bg-card px-3 py-2">
           <div class="lbl">{{ t("tk.total") }}</div>
           <div class="readout mt-1 text-[19px] leading-none text-foreground">
@@ -424,7 +424,7 @@ const cellColor = (level: number) =>
           <span class="lbl">// {{ t("tk.mix") }}</span>
           <span class="readout text-[9px] text-faint">Σ {{ compact(mix.sum) }}</span>
         </div>
-        <div class="mt-2 flex h-[10px] gap-px bg-border">
+        <div class="mt-2 flex h-[10px] gap-px bg-border wb-cells">
           <div
             v-for="segment in mix.segments"
             :key="segment.key"
@@ -540,7 +540,7 @@ const cellColor = (level: number) =>
           <div class="mt-2 space-y-px">
             <div v-for="row in hourGrid.rows" :key="row.label" class="flex items-center gap-1">
               <span class="readout w-[22px] shrink-0 text-[8px] text-faint">{{ row.label }}</span>
-              <div class="grid flex-1 grid-cols-[repeat(24,minmax(0,1fr))] gap-px">
+              <div class="grid flex-1 grid-cols-[repeat(24,minmax(0,1fr))] gap-px wb-cells">
                 <div
                   v-for="cell in row.cells"
                   :key="cell.hour"
@@ -562,11 +562,11 @@ const cellColor = (level: number) =>
       </div>
 
       <!-- 效率指标 -->
-      <section class="border border-border bg-border">
+      <section class="border border-border bg-border wb-cells">
         <div class="bg-card px-3 pt-2">
           <span class="lbl">// {{ t("tk.eff") }}</span>
         </div>
-        <div class="mt-1.5 grid grid-cols-5 gap-px">
+        <div class="mt-1.5 grid grid-cols-5 gap-px wb-cells">
           <div class="bg-card px-3 py-2">
             <div class="lbl">{{ t("tk.avgDay") }}</div>
             <div class="readout mt-1 text-[14px] leading-none text-foreground">{{ compact(efficiency.avgDay) }}</div>
@@ -598,7 +598,7 @@ const cellColor = (level: number) =>
       <section class="border border-border bg-card">
         <div class="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
           <span class="lbl">// {{ t("tk.recent") }}</span>
-          <div class="flex gap-px bg-border">
+          <div class="flex gap-px bg-border wb-cells">
             <button
               v-for="tab in (['sessions', 'calls'] as const)"
               :key="tab"
@@ -613,7 +613,7 @@ const cellColor = (level: number) =>
         </div>
 
         <template v-if="detailTab === 'sessions'">
-          <div class="grid grid-cols-[1fr_130px_104px_80px] gap-px bg-border text-[10px]">
+          <div class="grid grid-cols-[1fr_130px_104px_80px] gap-px bg-border text-[10px] wb-cells">
             <div class="lbl bg-card px-3 py-1.5">TITLE</div>
             <div class="lbl bg-card px-2 py-1.5">{{ t("tk.callProject") }}</div>
             <div class="lbl bg-card px-2 py-1.5">SOURCE</div>
@@ -642,7 +642,7 @@ const cellColor = (level: number) =>
             {{ loading ? "···" : t("tk.noDetail") }}
           </div>
           <template v-else>
-            <div class="grid grid-cols-[86px_1fr_1fr_62px_62px_62px_70px] gap-px bg-border text-[10px]">
+            <div class="grid grid-cols-[86px_1fr_1fr_62px_62px_62px_70px] gap-px bg-border text-[10px] wb-cells">
               <div class="lbl bg-card px-3 py-1.5">{{ t("tk.callTime") }}</div>
               <div class="lbl bg-card px-2 py-1.5">{{ t("tk.callModel") }}</div>
               <div class="lbl bg-card px-2 py-1.5">{{ t("tk.callProject") }}</div>

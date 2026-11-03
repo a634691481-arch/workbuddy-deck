@@ -329,7 +329,7 @@ async function doClear() {
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col">
-    <header class="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-panel px-4 py-2">
+    <header class="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-panel px-4 py-2 wb-flat">
       <div class="min-w-0">
         <h1 class="text-[13px] tracking-[0.12em] text-foreground">{{ t("st.title") }}</h1>
         <div class="readout mt-0.5 truncate text-[9px] text-faint">
@@ -431,7 +431,7 @@ async function doClear() {
             </button>
           </div>
 
-          <div class="grid grid-cols-3 gap-px bg-border">
+          <div class="grid grid-cols-3 gap-px bg-border wb-cells">
             <div class="bg-card px-3 py-2">
               <div class="lbl">{{ t("up.current") }}</div>
               <div class="readout mt-0.5 text-[13px] text-foreground">
@@ -643,7 +643,7 @@ async function doClear() {
           </div>
           <p class="border-b border-border/40 px-3 py-1.5 text-[9px] leading-4 text-faint">{{ t("st.autoSwitchHint") }}</p>
           <div class="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
-            <div class="flex shrink-0 gap-px bg-border">
+            <div class="flex shrink-0 gap-px bg-border wb-cells">
               <button
                 type="button"
                 class="px-2 py-1 text-[10px] transition-colors disabled:opacity-40"

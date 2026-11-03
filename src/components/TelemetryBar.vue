@@ -31,8 +31,8 @@ const pad = (n: number) => String(n).padStart(3, "0");
 </script>
 
 <template>
-  <section class="shrink-0 border-b border-border bg-border">
-    <div class="grid min-w-0 grid-cols-6 gap-px">
+  <section class="shrink-0 border-b border-border bg-border wb-cells">
+    <div class="grid min-w-0 grid-cols-6 gap-px wb-cells">
       <!-- 01 账号总量 -->
       <div class="min-w-0 bg-card px-3 py-2">
         <div class="lbl">{{ t("tm.accts") }}</div>
