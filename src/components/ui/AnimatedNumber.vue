@@ -7,6 +7,8 @@
  */
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 
+import { fmtNum } from "@/lib/prefs";
+
 const props = withDefaults(
   defineProps<{
     value: number | null | undefined;
@@ -51,6 +53,8 @@ onBeforeUnmount(() => cancelAnimationFrame(raf));
 
 const text = computed(() => {
   if (typeof props.value !== "number") return props.placeholder;
+  // 整数读数跟随「外观 → 数字」（千分位 / 紧凑），带小数时保持原样
+  if (props.decimals === 0) return fmtNum(shown.value);
   return shown.value.toLocaleString("zh-CN", {
     minimumFractionDigits: props.decimals,
     maximumFractionDigits: props.decimals,

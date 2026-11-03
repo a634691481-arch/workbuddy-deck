@@ -594,7 +594,7 @@ async function doSwitch() {
         <h1 class="text-[13px] tracking-[0.12em] text-foreground">{{ t("ac.title") }}</h1>
         <div class="readout mt-0.5 flex flex-wrap items-center gap-x-3 text-[9px] text-faint">
           <span>{{ t("ac.count") }} {{ String(rows.length).padStart(2, "0") }}</span>
-          <span>Σ {{ fmt(totalRemaining) }}</span>
+          <span class="flex items-center gap-1">Σ <AnimatedNumber :value="totalRemaining" /></span>
           <span>{{ mode === "official" ? t("ac.officialMode") : t("ac.localMode") }}</span>
           <span v-if="failedCount > 0" class="text-hazard">{{ t("ac.failed") }} {{ failedCount }}</span>
         </div>
@@ -785,7 +785,7 @@ async function doSwitch() {
               <Zap class="size-3.5 shrink-0 self-center text-hazard" />
               <span v-if="refreshing && row.ok" class="mb-1 inline-block h-[18px] w-24 animate-pulse bg-border-strong" />
               <span v-else class="readout text-[24px] leading-none text-foreground">
-                <AnimatedNumber :value="row.ok ? row.remaining : null" :decimals="2" />
+                <AnimatedNumber :value="row.ok ? row.remaining : null" :decimals="0" />
               </span>
               <span class="lbl whitespace-nowrap text-faint">
                 / {{ fmt(row.capacity) }}
@@ -971,7 +971,7 @@ async function doSwitch() {
             </div>
             <div class="flex shrink-0 items-center gap-2">
               <div class="readout text-right text-[9px] text-faint">
-                <div>Σ {{ fmt(packageSheet.remaining) }} / {{ fmt(packageSheet.capacity) }}</div>
+                <div class="flex items-center gap-1">Σ <AnimatedNumber :value="packageSheet.remaining" /> / {{ fmt(packageSheet.capacity) }}</div>
                 <div>{{ sheetPackages.length }} {{ t("ac.packages") }}</div>
               </div>
               <button
