@@ -327,7 +327,7 @@ async function doClear() {
     </section>
 
     <!-- 来源分布 + 24H 分布 -->
-    <section class="mx-3 mt-3 grid shrink-0 grid-cols-1 gap-px border border-border bg-border lg:grid-cols-2 wb-cells">
+    <section class="mx-3 mt-3 grid shrink-0 grid-cols-1 gap-3 lg:grid-cols-2">
       <div class="border border-border bg-card px-3 py-2.5">
         <div class="flex items-baseline justify-between">
           <span class="lbl">{{ t("rl.sourceDist") }}</span>
