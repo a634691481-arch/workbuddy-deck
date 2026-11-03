@@ -150,7 +150,10 @@ StatusBar   24px  ● READY · 最近刷新 · 账号数 · 日志数
   ① **版本基线只认本应用 `env!("CARGO_PKG_VERSION")`**，不许再借 core 的 `APP_VERSION`
   （core 是 0.1.62，一比就错，标题栏曾因此硬编码显示 0.1.62）；
   ② 签名校验失败必须中止，不做「先装后补签」；
-  ③ 安装只在用户点确认后发生，后台轮询**只提示不安装**。
+  ③ **静默更新（2026-11-03 用户改口径）**：检测到新版本直接下载安装并重启，不弹提示；
+     标题栏不显示「有新版本」角标。唯一让步：`useShell().running` 为真（批量任务在跑）时
+     每 15s 复查，等空闲再装，绝不掐断正在跑的批次。同一版本只自动装一次，失败不重试
+     （防坏包把应用卡进重启循环）。设置页保留手动「检查 / 下载并安装」兜底。
   发版闭环：`npm run bump X.Y.Z --tag` → CI 构建签名 → Release → 客户端 8s 首查 / 每 6h 轮询。
   `bundle.createUpdaterArtifacts=true` 意味着**本地打安装包必须带 `TAURI_SIGNING_PRIVATE_KEY`**，
   只想要 exe 时用 `npm run tauri build -- --no-bundle`（不触发签名）。

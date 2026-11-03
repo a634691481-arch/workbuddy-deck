@@ -35,12 +35,10 @@ import {
   sidebar,
   theme,
 } from "@/lib/prefs";
-import { useShell } from "@/composables/useShell";
 import { useUpdate } from "@/composables/useUpdate";
 
 const win = isTauri() ? getCurrentWindow() : null;
-const { go } = useShell();
-const { current: rev, hasUpdate, loadConfig } = useUpdate();
+const { current: rev, loadConfig } = useUpdate();
 
 /** 有 IPC 在飞（或刚结束的收尾窗口）就显示滑动态。 */
 const busy = computed(() => loadingBar.inflight.value > 0 || loadingBar.tail.value);
@@ -86,15 +84,6 @@ async function toggleBackdrop(next: "off" | "on") {
       <span class="display text-[15px] text-foreground">WorkBuddy</span>
       <span class="lbl tracking-[0.18em] text-muted-foreground">{{ t("app.subtitle") }}</span>
       <span class="lbl text-faint">REV {{ rev || "0.1.0" }}</span>
-      <!-- 有新版本：一个红方块，点进设置页（唯一能安装更新的地方） -->
-      <button
-        v-if="hasUpdate"
-        class="flex items-center gap-1 border border-hazard bg-hazard-soft px-1 text-[9px] uppercase tracking-[0.1em] text-hazard"
-        :title="t('up.newBadge')"
-        @click="go('settings')"
-      >
-        {{ t("up.newBadge") }}
-      </button>
     </div>
 
     <div class="flex items-stretch self-stretch">

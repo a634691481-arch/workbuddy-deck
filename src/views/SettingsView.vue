@@ -101,6 +101,8 @@ const {
   autoCheck: upAuto,
   mirror: upMirror,
   current: upCurrent,
+  silent: upSilent,
+  setSilent: setSilentUpdate,
   hasUpdate: upHasUpdate,
   loadConfig: loadUpdateConfig,
   check: checkUpdate,
@@ -518,6 +520,17 @@ async function doClear() {
               @click="toggleAutoCheck()"
             >
               {{ t("up.auto") }} {{ upAuto ? t("st.on") : t("st.off") }}
+            </button>
+
+            <!-- 静默更新：开后检测到新版本直接下载安装，不再弹任何提示 -->
+            <button
+              type="button"
+              class="readout shrink-0 border px-1.5 py-1 text-[9px] uppercase transition-colors"
+              :class="upSilent ? 'border-hazard bg-hazard-soft text-hazard' : 'border-border-strong text-faint hover:text-foreground'"
+              :title="t('up.silentHint')"
+              @click="setSilentUpdate(!upSilent)"
+            >
+              {{ t("up.silent") }} {{ upSilent ? t("st.on") : t("st.off") }}
             </button>
 
             <label class="flex min-w-[200px] flex-1 items-center gap-1 text-[9px] text-faint">
