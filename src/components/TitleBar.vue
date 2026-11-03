@@ -10,11 +10,19 @@ import { isTauri } from "@/lib/tauri-env";
 import { maskAll, setMaskAll } from "@/lib/task-meta";
 import {
   ACCENTS,
+  DENSITIES,
   RADIUS_MAX,
+  SCANS,
   accent,
+  density,
+  numberFormat,
   radius,
+  scan,
   setAccent,
+  setDensity,
+  setNumberFormat,
   setRadius,
+  setScan,
   setTheme,
   theme,
 } from "@/lib/prefs";
@@ -28,9 +36,18 @@ const { current: rev, hasUpdate, loadConfig } = useUpdate();
 /** 有 IPC 在飞（或刚结束的收尾窗口）就显示滑动态。 */
 const busy = computed(() => loadingBar.inflight.value > 0 || loadingBar.tail.value);
 
-// 标题栏弹出面板：圆角滑块 / 主题色格子；点空白处关闭
-const panel = ref<"" | "radius" | "accent">("");
-function togglePanel(name: "radius" | "accent") {
+// 标题栏「外观」弹层：主题 / 圆角 / 主题色 / 密度 / 扫描线 / 数字格式
+const panel = ref<"" | "appearance">("");
+/** 只要不是默认外观（亮色或改过色/圆角/密度/扫描线），按钮就高亮，方便看出当前非默认 */
+const appearanceDirty = computed(
+  () =>
+    theme.value === "light" ||
+    radius.value > 0 ||
+    accent.value !== "#e61919" ||
+    density.value !== "normal" ||
+    scan.value !== 0.5,
+);
+function togglePanel(name: "appearance") {
   panel.value = panel.value === name ? "" : name;
 }
 
@@ -60,37 +77,17 @@ onMounted(() => void loadConfig());
     </div>
 
     <div class="flex items-stretch self-stretch">
-      <!-- 主题开关：暗色显示太阳（点了变白天），白天显示月亮 -->
+      <!-- 外观：主题 / 圆角 / 主题色 / 密度 / 扫描线 / 数字格式 统一入口 -->
       <button
-        class="flex items-center gap-1 border-l border-border px-2 text-[10px] uppercase tracking-[0.1em]"
-        :class="theme === 'light' ? 'text-hazard' : 'text-faint hover:text-foreground'"
-        :title="theme === 'light' ? t('tb.toDark') : t('tb.toLight')"
-        @click="setTheme(theme === 'light' ? 'dark' : 'light')"
+        class="flex items-center gap-1.5 border-l border-border px-2 text-[10px] uppercase tracking-[0.1em]"
+        :class="appearanceDirty ? 'text-hazard' : 'text-faint hover:text-foreground'"
+        :title="t('tb.appearance')"
+        @click="togglePanel('appearance')"
       >
         <Sun v-if="theme === 'dark'" class="size-3" />
         <Moon v-else class="size-3" />
-        {{ t("tb.theme") }}
-      </button>
-
-      <!-- 圆角：点击弹出滑块，0 = 直角，实时生效并记忆 -->
-      <button
-        class="flex items-center border-l border-border px-2 text-[10px] uppercase tracking-[0.1em]"
-        :class="radius > 0 ? 'text-hazard' : 'text-faint hover:text-foreground'"
-        :title="t('tb.roundSize')"
-        @click="togglePanel('radius')"
-      >
-        {{ t("tb.round") }}
-      </button>
-
-      <!-- 主题色：色块 + 格子弹窗 -->
-      <button
-        class="flex items-center gap-1.5 border-l border-border px-2 text-[10px] uppercase tracking-[0.1em]"
-        :class="accent === ACCENTS[0].value ? 'text-faint hover:text-foreground' : 'text-hazard'"
-        :title="t('tb.colorTitle')"
-        @click="togglePanel('accent')"
-      >
         <i class="size-2.5 border border-border-strong" :style="{ background: accent }" />
-        {{ t("tb.color") }}
+        {{ t("tb.appearance") }}
       </button>
 
       <!-- 名称脱敏开关：开 = 眼睛闭合（已隐藏），点一下切明文 -->
@@ -146,50 +143,138 @@ onMounted(() => void loadConfig());
       </button>
     </div>
 
-    <!-- 弹出面板：透明背板点击关闭 -->
+    <!-- 外观面板：透明背板点击关闭 -->
     <div v-if="panel" class="fixed inset-0 z-40" @click="panel = ''" />
     <div
-      v-if="panel === 'radius'"
-      class="absolute right-24 top-full z-50 w-56 border border-border-strong bg-card p-3"
+      v-if="panel === 'appearance'"
+      class="absolute right-24 top-full z-50 w-64 space-y-2.5 border border-border-strong bg-card p-3"
     >
-      <div class="lbl mb-2 flex items-center justify-between">
-        <span>{{ t("tb.roundSize") }}</span>
-        <span class="readout text-[11px]" :class="radius > 0 ? 'text-hazard' : 'text-faint'">
-          {{ radius > 0 ? `${radius}px` : t("tb.roundZero") }}
-        </span>
+      <!-- 主题 -->
+      <div class="flex items-center justify-between gap-2">
+        <span class="lbl">{{ t("tb.theme") }}</span>
+        <div class="flex border border-border-strong wb-seg">
+          <button
+            type="button"
+            class="px-2 py-0.5 text-[10px] uppercase tracking-[0.1em]"
+            :class="theme === 'dark' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'"
+            @click="setTheme('dark')"
+          >
+            {{ t("tb.dark") }}
+          </button>
+          <button
+            type="button"
+            class="px-2 py-0.5 text-[10px] uppercase tracking-[0.1em]"
+            :class="theme === 'light' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'"
+            @click="setTheme('light')"
+          >
+            {{ t("tb.light") }}
+          </button>
+        </div>
       </div>
-      <input
-        :value="radius"
-        type="range"
-        min="0"
-        :max="RADIUS_MAX"
-        step="1"
-        class="w-full accent-hazard"
-        @input="setRadius(($event.target as HTMLInputElement).valueAsNumber)"
-      />
-      <div class="mt-1 flex justify-between text-[9px] text-faint">
-        <span>{{ t("tb.roundZero") }}</span>
-        <span>{{ RADIUS_MAX }}px</span>
+
+      <!-- 圆角 -->
+      <div>
+        <div class="mb-1 flex items-center justify-between">
+          <span class="lbl">{{ t("tb.roundSize") }}</span>
+          <span class="readout text-[11px]" :class="radius > 0 ? 'text-hazard' : 'text-faint'">
+            {{ radius > 0 ? `${radius}px` : t("tb.roundZero") }}
+          </span>
+        </div>
+        <input
+          :value="radius"
+          type="range"
+          min="0"
+          :max="RADIUS_MAX"
+          step="1"
+          class="w-full accent-hazard"
+          @input="setRadius(($event.target as HTMLInputElement).valueAsNumber)"
+        />
       </div>
-    </div>
-    <div
-      v-if="panel === 'accent'"
-      class="absolute right-16 top-full z-50 w-48 border border-border-strong bg-card p-3"
-    >
-      <div class="lbl mb-2">{{ t("tb.colorTitle") }}</div>
-      <div class="grid grid-cols-5 gap-1.5">
-        <button
-          v-for="c in ACCENTS"
-          :key="c.value"
-          type="button"
-          class="relative grid size-7 place-items-center border transition-colors"
-          :class="accent === c.value ? 'border-foreground' : 'border-transparent hover:border-border-strong'"
-          :title="locale === 'zh' ? c.zh : c.en"
-          @click="setAccent(c.value)"
-        >
-          <i class="size-4" :style="{ background: c.value }" />
-          <i v-if="accent === c.value" class="absolute size-1.5 bg-background" />
-        </button>
+
+      <!-- 主题色：预设 9 色 + 任意取色 -->
+      <div>
+        <div class="mb-1 flex items-center justify-between">
+          <span class="lbl">{{ t("tb.colorTitle") }}</span>
+          <label class="flex items-center gap-1 text-[9px] text-faint">
+            {{ t("tb.custom") }}
+            <input
+              :value="accent"
+              type="color"
+              class="size-4 cursor-pointer border border-border-strong bg-transparent p-0"
+              @input="setAccent(($event.target as HTMLInputElement).value)"
+            />
+          </label>
+        </div>
+        <div class="grid grid-cols-9 gap-1">
+          <button
+            v-for="c in ACCENTS"
+            :key="c.value"
+            type="button"
+            class="relative grid h-5 place-items-center border transition-colors"
+            :class="accent.toLowerCase() === c.value ? 'border-foreground' : 'border-transparent hover:border-border-strong'"
+            :title="locale === 'zh' ? c.zh : c.en"
+            @click="setAccent(c.value)"
+          >
+            <i class="size-3.5" :style="{ background: c.value }" />
+          </button>
+        </div>
+      </div>
+
+      <!-- 界面密度 -->
+      <div class="flex items-center justify-between gap-2">
+        <span class="lbl">{{ t("tb.density") }}</span>
+        <div class="flex border border-border-strong wb-seg">
+          <button
+            v-for="d in DENSITIES"
+            :key="d.key"
+            type="button"
+            class="px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em]"
+            :class="density === d.key ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'"
+            @click="setDensity(d.key)"
+          >
+            {{ locale === "zh" ? d.zh : d.en }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 扫描线 -->
+      <div class="flex items-center justify-between gap-2">
+        <span class="lbl">{{ t("tb.scan") }}</span>
+        <div class="flex border border-border-strong wb-seg">
+          <button
+            v-for="s in SCANS"
+            :key="s.key"
+            type="button"
+            class="px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em]"
+            :class="scan === s.key ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'"
+            @click="setScan(s.key)"
+          >
+            {{ locale === "zh" ? s.zh : s.en }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 数字格式 -->
+      <div class="flex items-center justify-between gap-2">
+        <span class="lbl">{{ t("tb.number") }}</span>
+        <div class="flex border border-border-strong wb-seg">
+          <button
+            type="button"
+            class="px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em]"
+            :class="numberFormat === 'group' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'"
+            @click="setNumberFormat('group')"
+          >
+            35,312
+          </button>
+          <button
+            type="button"
+            class="px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em]"
+            :class="numberFormat === 'compact' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'"
+            @click="setNumberFormat('compact')"
+          >
+            35.3K
+          </button>
+        </div>
       </div>
     </div>
 

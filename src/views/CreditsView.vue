@@ -10,6 +10,7 @@ import { ArrowDown, ArrowUp, CircleAlert, Loader2, RefreshCw } from "lucide-vue-
 
 import { creditStatistics, type CreditOfficialUsage, type CreditStatistics } from "@/lib/api";
 import { t } from "@/lib/i18n";
+import { fmtNum } from "@/lib/prefs";
 import { mask } from "@/lib/task-meta";
 
 const stats = ref<CreditStatistics | null>(null);
@@ -30,10 +31,8 @@ async function load(refresh = false) {
 
 onMounted(() => void load(false));
 
-const fmt = (value: number | null | undefined) => {
-  if (value === null || value === undefined || !Number.isFinite(value)) return "—";
-  return value.toLocaleString("zh-CN", { maximumFractionDigits: 0 });
-};
+// 读数格式跟随「外观 → 数字」（千分位 / 紧凑）
+const fmt = (value: number | null | undefined) => fmtNum(value);
 
 const pct = (ratio: number | null | undefined) => {
   if (ratio === null || ratio === undefined || !Number.isFinite(ratio)) return "—";

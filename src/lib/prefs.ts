@@ -1,5 +1,5 @@
 /**
- * 显示偏好：主题（暗/亮）、圆角大小（0–16px）、主题色（强调色）。
+ * 显示偏好：主题（暗/亮）、圆角大小（0–16px）、主题色、界面密度、扫描线、数字格式。
  * 模块级 ref + localStorage 持久化；import 副作用即应用，
  * 在 createApp 挂载前执行，首屏不会闪错主题。
  */
@@ -8,6 +8,9 @@ import { ref } from "vue";
 const THEME_KEY = "wb-ta/theme";
 const RADIUS_KEY = "wb-ta/radius";
 const ACCENT_KEY = "wb-ta/accent";
+const DENSITY_KEY = "wb-ta/density";
+const SCAN_KEY = "wb-ta/scan";
+const NUM_KEY = "wb-ta/numformat";
 
 export type Theme = "dark" | "light";
 
@@ -34,6 +37,27 @@ export const radius = ref(loadRadius());
 export const DEFAULT_ACCENT = ACCENTS[0].value;
 export const accent = ref(loadAccent());
 
+/** 界面密度：只缩放 rem 间距（字号是 px，不跟着变），紧凑模式一屏能多放 2–3 行。 */
+export type Density = "compact" | "normal" | "comfy";
+export const DENSITIES = [
+  { key: "compact", zh: "紧凑", en: "COMPACT", size: "14px" },
+  { key: "normal", zh: "标准", en: "NORMAL", size: "16px" },
+  { key: "comfy", zh: "宽松", en: "COMFY", size: "17px" },
+] as const;
+export const density = ref<Density>(loadDensity());
+
+/** 扫描线强度：0 关 / 0.25 淡 / 0.5 标准。 */
+export const SCANS = [
+  { key: 0, zh: "关", en: "OFF" },
+  { key: 0.25, zh: "淡", en: "SOFT" },
+  { key: 0.5, zh: "标准", en: "STD" },
+] as const;
+export const scan = ref<number>(loadScan());
+
+/** 数字格式：grouped = 35,312；compact = 35.3K。 */
+export type NumFormat = "group" | "compact";
+export const numberFormat = ref<NumFormat>(localStorage.getItem(NUM_KEY) === "compact" ? "compact" : "group");
+
 function loadRadius(): number {
   const n = Number(localStorage.getItem(RADIUS_KEY) ?? "0");
   if (!Number.isFinite(n)) return 0;
@@ -45,6 +69,18 @@ function loadAccent(): string {
   return /^#[0-9a-fA-F]{6}$/.test(v) ? v : DEFAULT_ACCENT;
 }
 
+function loadDensity(): Density {
+  const v = localStorage.getItem(DENSITY_KEY);
+  return v === "compact" || v === "comfy" ? v : "normal";
+}
+
+function loadScan(): number {
+  const raw = localStorage.getItem(SCAN_KEY);
+  if (raw === null) return 0.5;
+  const n = Number(raw);
+  return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.5;
+}
+
 function apply() {
   const el = document.documentElement;
   el.classList.toggle("light", theme.value === "light");
@@ -52,6 +88,8 @@ function apply() {
   el.classList.toggle("round", radius.value > 0);
   el.style.setProperty("--app-radius", `${radius.value}px`);
   el.style.setProperty("--accent", accent.value);
+  el.style.setProperty("--scan-opacity", String(scan.value));
+  el.dataset.density = density.value;
 }
 
 export function setTheme(next: Theme) {
@@ -71,6 +109,36 @@ export function setAccent(hex: string) {
   accent.value = hex;
   localStorage.setItem(ACCENT_KEY, hex);
   apply();
+}
+
+export function setDensity(next: Density) {
+  density.value = next;
+  localStorage.setItem(DENSITY_KEY, next);
+  apply();
+}
+
+export function setScan(next: number) {
+  scan.value = Math.min(1, Math.max(0, next));
+  localStorage.setItem(SCAN_KEY, String(scan.value));
+  apply();
+}
+
+export function setNumberFormat(next: NumFormat) {
+  numberFormat.value = next;
+  localStorage.setItem(NUM_KEY, next);
+}
+
+/**
+ * 统一数字读数：grouped = 千分位，compact = 1.2M / 34.5K。
+ * 非有限值一律给 "—"，绝不显示 NaN。
+ */
+export function fmtNum(value: number | null | undefined): string {
+  if (value === null || value === undefined || !Number.isFinite(value)) return "—";
+  if (numberFormat.value === "compact") {
+    if (Math.abs(value) >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
+    if (Math.abs(value) >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
+  }
+  return value.toLocaleString("zh-CN", { maximumFractionDigits: 0 });
 }
 
 apply();

@@ -194,6 +194,15 @@ body,
   border-radius: 0 !important;
 }
 
+/* 界面密度：调根字号 → 所有 rem 间距/行高同比缩放；文字是 px，保持可读 */
+html[data-density="compact"] {
+  font-size: 14px;
+}
+
+html[data-density="comfy"] {
+  font-size: 17px;
+}
+
 *::-webkit-scrollbar {
   width: 10px;
   height: 10px;
@@ -261,7 +270,7 @@ body,
     rgb(0 0 0 / 0.22) 0 1px,
     transparent 1px 3px
   );
-  opacity: 0.5;
+  opacity: var(--scan-opacity, 0.5);
 }
 
 /* 白天下扫描线再淡一档，否则亮底上像蒙灰 */

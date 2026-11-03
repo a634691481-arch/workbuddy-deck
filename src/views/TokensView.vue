@@ -10,6 +10,7 @@ import { Loader2, RefreshCw } from "lucide-vue-next";
 
 import { tokenStatistics, type TokenStatistics } from "@/lib/api";
 import { t } from "@/lib/i18n";
+import { fmtNum } from "@/lib/prefs";
 
 const stats = ref<TokenStatistics | null>(null);
 const loading = ref(true);
@@ -58,12 +59,9 @@ function pick(daysValue: number) {
   void load();
 }
 
-/** 1.2M / 34.5K —— 终端风格紧凑读数。 */
+/** 读数格式跟随「外观 → 数字」：千分位或 1.2M / 34.5K 紧凑。 */
 function compact(value: number | null | undefined): string {
-  if (value === null || value === undefined || !Number.isFinite(value)) return "—";
-  if (value >= 1_000_000) return `${(value / 1_000_000).toFixed(2)}M`;
-  if (value >= 1_000) return `${(value / 1_000).toFixed(1)}K`;
-  return String(value);
+  return fmtNum(value);
 }
 
 const sources = computed(() => (stats.value?.sources ?? []).filter((source) => source.summary.total > 0));
