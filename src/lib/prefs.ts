@@ -11,6 +11,8 @@ const ACCENT_KEY = "wb-ta/accent";
 const DENSITY_KEY = "wb-ta/density";
 const SCAN_KEY = "wb-ta/scan";
 const NUM_KEY = "wb-ta/numformat";
+const MOTION_KEY = "wb-ta/motion";
+const SIDEBAR_KEY = "wb-ta/sidebar";
 
 export type Theme = "dark" | "light";
 
@@ -58,6 +60,14 @@ export const scan = ref<number>(loadScan());
 export type NumFormat = "group" | "compact";
 export const numberFormat = ref<NumFormat>(localStorage.getItem(NUM_KEY) === "compact" ? "compact" : "group");
 
+/** 动效强度：full = 正常；none = 关掉所有过渡与动画（等同 forced reduced-motion）。 */
+export type Motion = "full" | "none";
+export const motion = ref<Motion>(localStorage.getItem(MOTION_KEY) === "none" ? "none" : "full");
+
+/** 侧栏形态：full = 编号+图标+文字（148px）；compact = 仅图标（56px）。 */
+export type SidebarMode = "full" | "compact";
+export const sidebar = ref<SidebarMode>(localStorage.getItem(SIDEBAR_KEY) === "compact" ? "compact" : "full");
+
 function loadRadius(): number {
   const n = Number(localStorage.getItem(RADIUS_KEY) ?? "0");
   if (!Number.isFinite(n)) return 0;
@@ -90,6 +100,8 @@ function apply() {
   el.style.setProperty("--accent", accent.value);
   el.style.setProperty("--scan-opacity", String(scan.value));
   el.dataset.density = density.value;
+  el.classList.toggle("no-motion", motion.value === "none");
+  el.dataset.sidebar = sidebar.value;
 }
 
 export function setTheme(next: Theme) {
@@ -126,6 +138,18 @@ export function setScan(next: number) {
 export function setNumberFormat(next: NumFormat) {
   numberFormat.value = next;
   localStorage.setItem(NUM_KEY, next);
+}
+
+export function setMotion(next: Motion) {
+  motion.value = next;
+  localStorage.setItem(MOTION_KEY, next);
+  apply();
+}
+
+export function setSidebar(next: SidebarMode) {
+  sidebar.value = next;
+  localStorage.setItem(SIDEBAR_KEY, next);
+  apply();
 }
 
 /**

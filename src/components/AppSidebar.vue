@@ -9,7 +9,7 @@ import { MorphIcon } from "morphicons/vue";
 
 import AnimatedIcon from "@/components/ui/AnimatedIcon.vue";
 import { t } from "@/lib/i18n";
-import { accent } from "@/lib/prefs";
+import { accent, sidebar } from "@/lib/prefs";
 import { NAV_ICONS, type NavKey } from "@/lib/nav";
 import playIcon from "@/assets/lordicon/play.json?url";
 
@@ -56,23 +56,29 @@ const items: { key: NavKey; idx: string; labelKey: LabelKey }[] = [
 </script>
 
 <template>
-  <nav class="flex w-[148px] shrink-0 flex-col border-r border-border bg-panel wb-flat">
-    <div class="lbl px-3 pb-2 pt-3 text-faint">{{ t("nav.section") }}</div>
+  <nav
+    class="flex shrink-0 flex-col border-r border-border bg-panel wb-flat"
+    :class="sidebar === 'compact' ? 'w-[56px]' : 'w-[148px]'"
+  >
+    <div v-if="sidebar === 'full'" class="lbl px-3 pb-2 pt-3 text-faint">{{ t("nav.section") }}</div>
+    <div v-else class="h-3" />
 
     <button
       v-for="item in items"
       :key="item.key"
       type="button"
-      class="relative flex items-center gap-1.5 border-l-[3px] py-2.5 pl-3 pr-2 text-left text-[11px] tracking-[0.08em] transition-colors"
-      :class="
+      class="relative flex items-center border-l-[3px] py-2.5 text-left text-[11px] tracking-[0.08em] transition-colors"
+      :class="[
+        sidebar === 'compact' ? 'justify-center pl-0 pr-0' : 'gap-1.5 pl-3 pr-2',
         current === item.key
           ? 'border-l-hazard bg-card text-foreground'
-          : 'border-l-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground'
-      "
+          : 'border-l-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground',
+      ]"
       :aria-current="current === item.key ? 'page' : undefined"
+      :title="sidebar === 'compact' ? t(item.labelKey) : undefined"
       @click="select(item.key)"
     >
-      <span class="readout text-[9px] text-faint">{{ item.idx }}</span>
+      <span v-if="sidebar === 'full'" class="readout text-[9px] text-faint">{{ item.idx }}</span>
       <!-- morphicons：未选中 → 选中 做弹簧形变；点击时再叠一层 pop -->
       <span
         class="block shrink-0"
@@ -88,12 +94,12 @@ const items: { key: NavKey; idx: string; labelKey: LabelKey }[] = [
           color="currentColor"
         />
       </span>
-      <span class="truncate">{{ t(item.labelKey) }}</span>
+      <span v-if="sidebar === 'full'" class="truncate">{{ t(item.labelKey) }}</span>
     </button>
 
-    <div class="mt-auto border-t border-border px-3 py-3">
-      <div class="lbl text-faint">// STATUS</div>
-      <div class="mt-1.5 flex items-center gap-1.5">
+    <div class="mt-auto border-t border-border" :class="sidebar === 'compact' ? 'px-1 py-2 text-center' : 'px-3 py-3'">
+      <div v-if="sidebar === 'full'" class="lbl text-faint">// STATUS</div>
+      <div class="flex items-center gap-1.5" :class="sidebar === 'full' ? 'mt-1.5' : 'justify-center'">
         <!-- Lordicon：跑任务时播一次循环动画，就绪时回到静态磷光绿点 -->
         <AnimatedIcon
           v-if="running"
@@ -104,11 +110,11 @@ const items: { key: NavKey; idx: string; labelKey: LabelKey }[] = [
           :secondary="accent"
         />
         <span v-else class="size-1.5 shrink-0 bg-success" aria-hidden="true" />
-        <span class="readout text-[10px]" :class="running ? 'text-hazard' : 'text-success'">
+        <span v-if="sidebar === 'full'" class="readout text-[10px]" :class="running ? 'text-hazard' : 'text-success'">
           {{ running ? "RUNNING" : "READY" }}
         </span>
       </div>
-      <div class="readout mt-1 text-[10px] text-faint">
+      <div v-if="sidebar === 'full'" class="readout mt-1 text-[10px] text-faint">
         ACCTS {{ String(accountCount).padStart(2, "0") }}
       </div>
     </div>

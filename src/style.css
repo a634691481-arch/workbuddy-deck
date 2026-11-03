@@ -194,6 +194,15 @@ body,
   border-radius: 0 !important;
 }
 
+/* 动效强度 = 关：一切过渡与动画归零（含数字滚动、脉冲、入场） */
+html.no-motion *,
+html.no-motion *::before,
+html.no-motion *::after {
+  animation-duration: 0.001ms !important;
+  animation-iteration-count: 1 !important;
+  transition-duration: 0.001ms !important;
+}
+
 /* 界面密度：调根字号 → 所有 rem 间距/行高同比缩放；文字是 px，保持可读 */
 html[data-density="compact"] {
   font-size: 14px;

@@ -20,10 +20,14 @@ import {
   scan,
   setAccent,
   setDensity,
+  setMotion,
   setNumberFormat,
   setRadius,
   setScan,
+  setSidebar,
   setTheme,
+  motion,
+  sidebar,
   theme,
 } from "@/lib/prefs";
 import { useShell } from "@/composables/useShell";
@@ -45,7 +49,9 @@ const appearanceDirty = computed(
     radius.value > 0 ||
     accent.value !== "#e61919" ||
     density.value !== "normal" ||
-    scan.value !== 0.5,
+    scan.value !== 0.5 ||
+    motion.value !== "full" ||
+    sidebar.value !== "full",
 );
 function togglePanel(name: "appearance") {
   panel.value = panel.value === name ? "" : name;
@@ -250,6 +256,52 @@ onMounted(() => void loadConfig());
             @click="setScan(s.key)"
           >
             {{ locale === "zh" ? s.zh : s.en }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 动效 -->
+      <div class="flex items-center justify-between gap-2">
+        <span class="lbl">{{ t("tb.motion") }}</span>
+        <div class="flex border border-border-strong wb-seg">
+          <button
+            type="button"
+            class="px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em]"
+            :class="motion === 'full' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'"
+            @click="setMotion('full')"
+          >
+            {{ t("tb.motionOn") }}
+          </button>
+          <button
+            type="button"
+            class="px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em]"
+            :class="motion === 'none' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'"
+            @click="setMotion('none')"
+          >
+            {{ t("tb.motionOff") }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 侧栏形态 -->
+      <div class="flex items-center justify-between gap-2">
+        <span class="lbl">{{ t("tb.sidebar") }}</span>
+        <div class="flex border border-border-strong wb-seg">
+          <button
+            type="button"
+            class="px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em]"
+            :class="sidebar === 'full' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'"
+            @click="setSidebar('full')"
+          >
+            {{ t("tb.sideFull") }}
+          </button>
+          <button
+            type="button"
+            class="px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em]"
+            :class="sidebar === 'compact' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'"
+            @click="setSidebar('compact')"
+          >
+            {{ t("tb.sideCompact") }}
           </button>
         </div>
       </div>
