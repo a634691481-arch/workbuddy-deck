@@ -410,7 +410,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
               <div class="pointer-events-none absolute inset-x-0 top-0 h-px bg-border/60" />
               <div class="pointer-events-none absolute inset-x-0 top-1/3 h-px bg-border/40" />
               <div class="pointer-events-none absolute inset-x-0 top-2/3 h-px bg-border/40" />
-              <div class="flex h-full items-end justify-center gap-[3px] border-b border-border pb-px wb-cells">
+              <div class="flex h-full items-end justify-center gap-[3px] border-b border-border pb-px wb-bars">
                 <div
                   v-for="(point, index) in chart"
                   :key="`${point.date}-${index}`"

@@ -30,8 +30,7 @@ import {
   type SystemInfo,
 } from "@/lib/api";
 import { useShell } from "@/composables/useShell";
-import { locale, setLocale, t } from "@/lib/i18n";
-import { maskAll, setMaskAll } from "@/lib/task-meta";
+import { t } from "@/lib/i18n";
 
 const { go } = useShell();
 
@@ -355,7 +354,7 @@ async function doClear() {
     </div>
 
     <div class="min-h-0 flex-1 overflow-auto p-3">
-      <div class="grid grid-cols-1 gap-2.5 lg:grid-cols-2">
+      <div class="grid grid-cols-1 gap-3 lg:grid-cols-2">
         <!-- 应用信息 -->
         <section class="border border-border bg-card">
           <div class="border-b border-border px-3 py-1.5">
@@ -404,6 +403,42 @@ async function doClear() {
                 {{ info?.storeDir ?? "—" }}
               </div>
             </div>
+          </div>
+        </section>
+
+        <!-- 数据规模 -->
+        <section class="border border-border bg-card">
+          <div class="border-b border-border px-3 py-1.5">
+            <span class="lbl">// {{ t("st.data") }}</span>
+          </div>
+          <div class="grid grid-cols-[minmax(90px,1fr)_56px_64px_56px] items-center gap-2 border-b border-border/60 px-3 py-1">
+            <span class="lbl">FILE</span>
+            <span class="lbl text-right">{{ t("st.rows") }}</span>
+            <span class="lbl text-right">SIZE</span>
+            <span class="lbl text-right">STATE</span>
+          </div>
+          <div
+            v-for="file in fileRows"
+            :key="file.key"
+            class="grid grid-cols-[minmax(90px,1fr)_56px_64px_56px] items-center gap-2 border-b border-border/40 px-3 py-1.5 last:border-b-0"
+          >
+            <span class="truncate text-[11px] text-foreground">{{ t(file.labelKey) }}</span>
+            <span class="readout text-right text-[11px] text-foreground">{{ file.rows }}</span>
+            <span class="readout text-right text-[10px] text-muted-foreground">{{ file.stat.human }}</span>
+            <span
+              class="readout text-right text-[9px]"
+              :class="file.stat.exists ? 'text-muted-foreground' : 'text-faint'"
+            >
+              {{ file.stat.exists ? "OK" : t("st.missing") }}
+            </span>
+          </div>
+
+          <!-- 归档任务：只读读数，删除入口在「归档任务」分区 -->
+          <div class="flex items-center justify-between gap-2 border-t border-border px-3 py-1.5" :title="t('pz.statHint')">
+            <span class="text-[11px] text-foreground">{{ t("pz.row") }}</span>
+            <span class="readout text-[10px]" :class="archived?.count ? 'text-hazard' : 'text-muted-foreground'">
+              {{ purgeReadout }}
+            </span>
           </div>
         </section>
 
@@ -511,88 +546,6 @@ async function doClear() {
           </div>
         </section>
 
-        <!-- 数据规模 -->
-        <section class="border border-border bg-card">
-          <div class="border-b border-border px-3 py-1.5">
-            <span class="lbl">// {{ t("st.data") }}</span>
-          </div>
-          <div class="grid grid-cols-[minmax(90px,1fr)_56px_64px_56px] items-center gap-2 border-b border-border/60 px-3 py-1">
-            <span class="lbl">FILE</span>
-            <span class="lbl text-right">{{ t("st.rows") }}</span>
-            <span class="lbl text-right">SIZE</span>
-            <span class="lbl text-right">STATE</span>
-          </div>
-          <div
-            v-for="file in fileRows"
-            :key="file.key"
-            class="grid grid-cols-[minmax(90px,1fr)_56px_64px_56px] items-center gap-2 border-b border-border/40 px-3 py-1.5 last:border-b-0"
-          >
-            <span class="truncate text-[11px] text-foreground">{{ t(file.labelKey) }}</span>
-            <span class="readout text-right text-[11px] text-foreground">{{ file.rows }}</span>
-            <span class="readout text-right text-[10px] text-muted-foreground">{{ file.stat.human }}</span>
-            <span
-              class="readout text-right text-[9px]"
-              :class="file.stat.exists ? 'text-muted-foreground' : 'text-faint'"
-            >
-              {{ file.stat.exists ? "OK" : t("st.missing") }}
-            </span>
-          </div>
-
-          <!-- 归档任务：只读读数，删除入口在「归档任务」分区 -->
-          <div class="flex items-center justify-between gap-2 border-t border-border px-3 py-1.5" :title="t('pz.statHint')">
-            <span class="text-[11px] text-foreground">{{ t("pz.row") }}</span>
-            <span class="readout text-[10px]" :class="archived?.count ? 'text-hazard' : 'text-muted-foreground'">
-              {{ purgeReadout }}
-            </span>
-          </div>
-        </section>
-
-        <!-- 显示偏好 -->
-        <section class="border border-border bg-card">
-          <div class="border-b border-border px-3 py-1.5">
-            <span class="lbl">// {{ t("st.display") }}</span>
-          </div>
-          <div class="flex items-start justify-between gap-3 border-b border-border/60 px-3 py-2.5">
-            <div class="min-w-0">
-              <div class="text-[11px] text-foreground">{{ t("st.mask") }}</div>
-              <div class="mt-0.5 text-[9px] text-faint">{{ t("st.maskDesc") }}</div>
-            </div>
-            <button
-              type="button"
-              class="flex shrink-0 items-center gap-1.5 border px-2 py-1 text-[10px] uppercase tracking-[0.1em] transition-colors"
-              :class="maskAll ? 'border-hazard text-hazard' : 'border-border-strong text-muted-foreground hover:text-foreground'"
-              @click="setMaskAll(!maskAll)"
-            >
-              <span class="size-1.5" :class="maskAll ? 'bg-hazard' : 'bg-border-strong'" />
-              {{ maskAll ? t("st.on") : t("st.off") }}
-            </button>
-          </div>
-          <div class="flex items-center justify-between gap-3 px-3 py-2.5">
-            <div class="min-w-0">
-              <div class="text-[11px] text-foreground">{{ t("st.lang") }}</div>
-              <div class="mt-0.5 text-[9px] text-faint">{{ t("st.langDesc") }}</div>
-            </div>
-            <div class="flex shrink-0 items-center">
-              <button
-                type="button"
-                class="border border-border-strong px-2 py-0.5 text-[10px] uppercase tracking-[0.1em]"
-                :class="locale === 'zh' ? 'bg-foreground text-background' : 'text-faint hover:text-foreground'"
-                @click="setLocale('zh')"
-              >
-                中
-              </button>
-              <button
-                type="button"
-                class="-ml-px border border-border-strong px-2 py-0.5 text-[10px] uppercase tracking-[0.1em]"
-                :class="locale === 'en' ? 'bg-foreground text-background' : 'text-faint hover:text-foreground'"
-                @click="setLocale('en')"
-              >
-                EN
-              </button>
-            </div>
-          </div>
-        </section>
-
         <!-- 自动化摘要 -->
         <section class="border border-border bg-card">
           <div class="flex items-center justify-between border-b border-border px-3 py-1.5">
@@ -628,7 +581,7 @@ async function doClear() {
         </section>
 
         <!-- 限流自动切换 -->
-        <section class="border border-border bg-card lg:col-span-2">
+        <section class="border border-border bg-card">
           <div class="flex items-center justify-between border-b border-border px-3 py-1.5">
             <span class="lbl">// {{ t("st.autoSwitch") }}</span>
             <button

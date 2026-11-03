@@ -151,7 +151,13 @@ body {
  * 跟随圆角会让缝隙露成月牙/蝴蝶形缺口。容器裁切溢出，圆角只留在最外层卡片上。
  */
 .wb-cells,
-.wb-cells * {
+.wb-cells > * {
+  border-radius: 0 !important;
+}
+
+/* 柱状条 / 分段条：内部一层层都是色块，递归直角，否则细柱子会变成圆点 */
+.wb-bars,
+.wb-bars * {
   border-radius: 0 !important;
 }
 

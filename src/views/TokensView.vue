@@ -424,7 +424,7 @@ const cellColor = (level: number) =>
           <span class="lbl">// {{ t("tk.mix") }}</span>
           <span class="readout text-[9px] text-faint">Σ {{ compact(mix.sum) }}</span>
         </div>
-        <div class="mt-2 flex h-[10px] gap-px bg-border wb-cells">
+        <div class="mt-2 flex h-[10px] gap-px bg-border wb-bars">
           <div
             v-for="segment in mix.segments"
             :key="segment.key"
@@ -540,7 +540,7 @@ const cellColor = (level: number) =>
           <div class="mt-2 space-y-px">
             <div v-for="row in hourGrid.rows" :key="row.label" class="flex items-center gap-1">
               <span class="readout w-[22px] shrink-0 text-[8px] text-faint">{{ row.label }}</span>
-              <div class="grid flex-1 grid-cols-[repeat(24,minmax(0,1fr))] gap-px wb-cells">
+              <div class="grid flex-1 grid-cols-[repeat(24,minmax(0,1fr))] gap-px wb-bars">
                 <div
                   v-for="cell in row.cells"
                   :key="cell.hour"

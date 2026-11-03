@@ -333,7 +333,7 @@ async function doClear() {
           <span class="lbl">{{ t("rl.sourceDist") }}</span>
           <span class="readout text-[9px] text-faint">{{ stats.total }} EVENTS</span>
         </div>
-        <div class="mt-2 flex h-2 w-full overflow-hidden bg-muted wb-cells">
+        <div class="mt-2 flex h-2 w-full overflow-hidden bg-muted wb-bars">
           <div
             v-for="seg in distribution"
             :key="seg.key"
@@ -356,7 +356,7 @@ async function doClear() {
           <span class="lbl">{{ t("rl.hourDist") }}</span>
           <span class="readout text-[9px] text-faint">00 → 23</span>
         </div>
-        <div class="mt-2 grid h-8 grid-cols-[repeat(24,minmax(0,1fr))] items-end gap-px wb-cells">
+        <div class="mt-2 grid h-8 grid-cols-[repeat(24,minmax(0,1fr))] items-end gap-px wb-bars">
           <div
             v-for="slot in hourly"
             :key="`h-${slot.hour}`"
