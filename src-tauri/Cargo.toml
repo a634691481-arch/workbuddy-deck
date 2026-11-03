@@ -38,3 +38,5 @@ wb-switch-core = { path = "../crates/wb-switch-core" }
 # 归档任务清理：读写 WorkBuddy 会话库 workbuddy.db。
 # 与 core 同版本同 feature（bundled+backup），共享编译产物不增加构建时间。
 rusqlite = { version = "0.32", features = ["bundled", "backup"] }
+# 窗口毛玻璃：Windows acrylic / macOS vibrancy，纯原生效果，关掉即恢复不透明
+window-vibrancy = "0.6"

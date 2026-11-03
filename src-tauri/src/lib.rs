@@ -13,6 +13,7 @@ mod scheduler;
 mod token_cache;
 mod tray;
 mod update;
+mod vibrancy;
 
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
@@ -84,6 +85,7 @@ pub fn run() {
             commands::archived_tasks_list,
             commands::purge_archived_tasks,
             commands::app_ready,
+            vibrancy::set_backdrop,
         ])
         .setup(|app| {
             // 托盘菜单：快捷执行在上，退出压到最下面并与其他项分隔。

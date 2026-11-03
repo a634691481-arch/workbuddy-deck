@@ -8,6 +8,7 @@ import { locale, setLocale, t } from "@/lib/i18n";
 import { loadingBar } from "@/lib/loading-bar";
 import { isTauri } from "@/lib/tauri-env";
 import { maskAll, setMaskAll } from "@/lib/task-meta";
+import { setWindowBackdrop } from "@/lib/api";
 import {
   ACCENTS,
   DENSITIES,
@@ -20,7 +21,9 @@ import {
   scan,
   setAccent,
   setDensity,
+  backdrop,
   chartStyle,
+  setBackdrop,
   setChartStyle,
   setMotion,
   setNumberFormat,
@@ -53,14 +56,24 @@ const appearanceDirty = computed(
     density.value !== "normal" ||
     scan.value !== 0.5 ||
     motion.value !== "full" ||
-    sidebar.value !== "full",
+    sidebar.value !== "full" ||
+    backdrop.value === "on",
 );
 function togglePanel(name: "appearance") {
   panel.value = panel.value === name ? "" : name;
 }
 
 // 标题栏先拿到本机版本号（设置页没打开过也要显示对），不额外发检查请求。
-onMounted(() => void loadConfig());
+onMounted(() => {
+  void loadConfig();
+  // 毛玻璃是原生窗口特效，不随 localStorage 恢复，启动时重放一次
+  if (isTauri() && backdrop.value === "on") void setWindowBackdrop("acrylic");
+});
+
+async function toggleBackdrop(next: "off" | "on") {
+  setBackdrop(next);
+  if (isTauri()) await setWindowBackdrop(next === "on" ? "acrylic" : "off");
+}
 </script>
 
 <template>
@@ -224,6 +237,29 @@ onMounted(() => void loadConfig());
             @click="setAccent(c.value)"
           >
             <i class="size-3.5" :style="{ background: c.value }" />
+          </button>
+        </div>
+      </div>
+
+      <!-- 窗口背景 -->
+      <div class="flex items-center justify-between gap-2">
+        <span class="lbl">{{ t("tb.backdrop") }}</span>
+        <div class="flex border border-border-strong wb-seg">
+          <button
+            type="button"
+            class="px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em]"
+            :class="backdrop === 'off' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'"
+            @click="toggleBackdrop('off')"
+          >
+            {{ t("tb.backdropOff") }}
+          </button>
+          <button
+            type="button"
+            class="px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em]"
+            :class="backdrop === 'on' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'"
+            @click="toggleBackdrop('on')"
+          >
+            {{ t("tb.backdropOn") }}
           </button>
         </div>
       </div>

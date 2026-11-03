@@ -194,6 +194,21 @@ body,
   border-radius: 0 !important;
 }
 
+/* 毛玻璃：系统特效在窗口后面，这里把表面调成半透明，文字仍用原色保持对比 */
+html.backdrop {
+  --color-background: rgba(10, 10, 10, 0.55);
+  --color-panel: rgba(14, 14, 14, 0.6);
+  --color-card: rgba(20, 20, 20, 0.55);
+  --color-titlebar: rgba(5, 5, 5, 0.5);
+}
+
+html.backdrop.light {
+  --color-background: rgba(236, 236, 234, 0.6);
+  --color-panel: rgba(248, 248, 246, 0.62);
+  --color-card: rgba(252, 252, 250, 0.62);
+  --color-titlebar: rgba(226, 226, 224, 0.6);
+}
+
 /* 动效强度 = 关：一切过渡与动画归零（含数字滚动、脉冲、入场） */
 html.no-motion *,
 html.no-motion *::before,

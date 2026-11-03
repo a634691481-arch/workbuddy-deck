@@ -836,6 +836,10 @@ export const archivedTasksList = () => invoke<ArchivedList>("archived_tasks_list
  * 一键清理归档：自动关 WorkBuddy → 清理 → 自动拉起（默认）。
  * 进度走事件 `purge-progress`，与切换账号同一套路。
  */
+/** 窗口背景特效：off = 不透明；acrylic = 系统毛玻璃（Windows acrylic / macOS vibrancy）。 */
+export const setWindowBackdrop = (kind: "off" | "acrylic") =>
+  invoke<{ ok: boolean; error?: string }>("set_backdrop", { kind });
+
 export const purgeArchivedTasks = (relaunch = true) =>
   invoke<PurgeResult>("purge_archived_tasks", { relaunch });
 

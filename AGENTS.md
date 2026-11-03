@@ -27,6 +27,10 @@
    （`color-mix` 混合），标题栏「颜色」格子弹窗可换；磷光绿 `--color-success` 只允许出现在 READY 指示器。
    主题（暗/亮）也在 `lib/prefs.ts`：`html.light` 覆盖 `--color-*` 变量，组件零改动。
 3. 不用渐变 / 柔光投影 / 半透明玻璃；层次靠 1px 实线分隔。
+   **例外**：用户显式开启「外观 → 背景 = 毛玻璃」时，`html.backdrop` 才把 background/panel/card/titlebar
+   换成 rgba 半透明（原生 acrylic/vibrancy 在窗口后面）。默认实底，不改设计基线。
+   外观偏好全部在 `src/lib/prefs.ts`（主题/圆角/主题色/密度/扫描线/图表/动效/侧栏/数字/背景），
+   标题栏「外观」弹层是唯一入口；`html` 上的 class + 内联变量是唯一生效方式，组件不各写一套。
 4. 数据一律「等宽 + 大写 + 正字距」，中文模式用短词保持同样节奏。
 5. 分隔线优先用 `grid gap-px` + 父子异色（skill §8），不逐条写 border。
 

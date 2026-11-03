@@ -14,6 +14,7 @@ const NUM_KEY = "wb-ta/numformat";
 const MOTION_KEY = "wb-ta/motion";
 const SIDEBAR_KEY = "wb-ta/sidebar";
 const CHART_KEY = "wb-ta/chart";
+const BACKDROP_KEY = "wb-ta/backdrop";
 
 export type Theme = "dark" | "light";
 
@@ -73,6 +74,9 @@ export const sidebar = ref<SidebarMode>(localStorage.getItem(SIDEBAR_KEY) === "c
 export type ChartStyle = "bar" | "line";
 export const chartStyle = ref<ChartStyle>(localStorage.getItem(CHART_KEY) === "line" ? "line" : "bar");
 
+/** 窗口背景：off = 实底；on = 系统毛玻璃（需原生窗口特效，重启后由启动流程重新应用）。 */
+export const backdrop = ref<"off" | "on">(localStorage.getItem(BACKDROP_KEY) === "on" ? "on" : "off");
+
 function loadRadius(): number {
   const n = Number(localStorage.getItem(RADIUS_KEY) ?? "0");
   if (!Number.isFinite(n)) return 0;
@@ -106,6 +110,7 @@ function apply() {
   el.style.setProperty("--scan-opacity", String(scan.value));
   el.dataset.density = density.value;
   el.classList.toggle("no-motion", motion.value === "none");
+  el.classList.toggle("backdrop", backdrop.value === "on");
   el.dataset.sidebar = sidebar.value;
 }
 
@@ -154,6 +159,12 @@ export function setMotion(next: Motion) {
 export function setSidebar(next: SidebarMode) {
   sidebar.value = next;
   localStorage.setItem(SIDEBAR_KEY, next);
+  apply();
+}
+
+export function setBackdrop(next: "off" | "on") {
+  backdrop.value = next;
+  localStorage.setItem(BACKDROP_KEY, next);
   apply();
 }
 
