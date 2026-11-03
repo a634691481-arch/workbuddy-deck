@@ -85,7 +85,7 @@ const unitNo = (index: number) => String(index + 1).padStart(2, "0");
 
 <template>
   <aside
-    class="relative flex shrink-0 flex-col border-r border-border bg-panel"
+    class="relative flex shrink-0 flex-col border border-border bg-panel"
     :style="{ width: `${width}px` }"
   >
     <!-- 检索框：方形、聚焦描红 -->

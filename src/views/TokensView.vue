@@ -341,7 +341,7 @@ const cellColor = (level: number) =>
         <span v-if="loading && stats" class="readout text-[9px] uppercase tracking-[0.14em] text-hazard">
           scanning…
         </span>
-        <div class="flex gap-px bg-border wb-cells">
+        <div class="flex gap-px bg-border overflow-hidden">
           <button
             v-for="range in RANGES"
             :key="range.key"
@@ -375,40 +375,40 @@ const cellColor = (level: number) =>
     </div>
 
     <!-- 八项总量：两行四列 -->
-    <section class="mx-3 mt-3 shrink-0 border border-border bg-border wb-cells">
-      <div class="grid grid-cols-4 gap-px wb-cells">
-        <div class="bg-card px-3 py-2">
+    <section class="mx-3 mt-3 shrink-0">
+      <div class="grid grid-cols-4 gap-2">
+        <div class="border border-border bg-card px-3 py-2">
           <div class="lbl">{{ t("tk.total") }}</div>
           <div class="readout mt-1 text-[19px] leading-none text-foreground">
             {{ loading && !stats ? "···" : compact(totals.total) }}
           </div>
         </div>
-        <div class="bg-card px-3 py-2">
+        <div class="border border-border bg-card px-3 py-2">
           <div class="lbl">{{ t("tk.input") }}</div>
           <div class="readout mt-1 text-[19px] leading-none text-foreground">{{ compact(totals.input) }}</div>
         </div>
-        <div class="bg-card px-3 py-2">
+        <div class="border border-border bg-card px-3 py-2">
           <div class="lbl">{{ t("tk.output") }}</div>
           <div class="readout mt-1 text-[19px] leading-none text-foreground">{{ compact(totals.output) }}</div>
         </div>
-        <div class="bg-card px-3 py-2">
+        <div class="border border-border bg-card px-3 py-2">
           <div class="lbl">{{ t("tk.records") }}</div>
           <div class="readout mt-1 text-[19px] leading-none text-foreground">{{ compact(totals.records) }}</div>
         </div>
 
-        <div class="bg-card px-3 py-2">
+        <div class="border border-border bg-card px-3 py-2">
           <div class="lbl">{{ t("tk.cache") }}</div>
           <div class="readout mt-1 text-[19px] leading-none text-foreground">{{ compact(totals.cacheRead) }}</div>
         </div>
-        <div class="bg-card px-3 py-2">
+        <div class="border border-border bg-card px-3 py-2">
           <div class="lbl">{{ t("tk.cacheWrite") }}</div>
           <div class="readout mt-1 text-[19px] leading-none text-foreground">{{ compact(totals.cacheWrite) }}</div>
         </div>
-        <div class="bg-card px-3 py-2">
+        <div class="border border-border bg-card px-3 py-2">
           <div class="lbl">{{ t("tk.uncached") }}</div>
           <div class="readout mt-1 text-[19px] leading-none text-foreground">{{ compact(totals.uncachedInput) }}</div>
         </div>
-        <div class="bg-card px-3 py-2">
+        <div class="border border-border bg-card px-3 py-2">
           <div class="lbl">{{ t("tk.hitRate") }}</div>
           <div class="readout mt-1 text-[19px] leading-none text-hazard">
             {{ cacheRate === null ? "—" : `${Math.round(cacheRate * 100)}%` }}
@@ -562,32 +562,32 @@ const cellColor = (level: number) =>
       </div>
 
       <!-- 效率指标 -->
-      <section class="border border-border bg-border wb-cells">
-        <div class="bg-card px-3 pt-2">
+      <section class="border border-border bg-card">
+        <div class="px-3 pt-2">
           <span class="lbl">// {{ t("tk.eff") }}</span>
         </div>
-        <div class="mt-1.5 grid grid-cols-5 gap-px wb-cells">
-          <div class="bg-card px-3 py-2">
+        <div class="mt-1.5 grid grid-cols-5 gap-2 p-2">
+          <div class="border border-border bg-card px-3 py-2">
             <div class="lbl">{{ t("tk.avgDay") }}</div>
             <div class="readout mt-1 text-[14px] leading-none text-foreground">{{ compact(efficiency.avgDay) }}</div>
             <div v-if="wowLabel" class="readout mt-0.5 text-[9px]" :class="wowTone" :title="t('tk.wowTitle')">
               {{ wowLabel }} <span class="text-faint">{{ t("tk.wow") }}</span>
             </div>
           </div>
-          <div class="bg-card px-3 py-2">
+          <div class="border border-border bg-card px-3 py-2">
             <div class="lbl">{{ t("tk.peakDay") }}</div>
             <div class="readout mt-1 text-[14px] leading-none text-foreground">{{ compact(efficiency.peakTotal) }}</div>
             <div class="readout mt-0.5 text-[9px] text-faint">{{ efficiency.peakDate }}</div>
           </div>
-          <div class="bg-card px-3 py-2">
+          <div class="border border-border bg-card px-3 py-2">
             <div class="lbl">{{ t("tk.perReq") }}</div>
             <div class="readout mt-1 text-[14px] leading-none text-foreground">{{ compact(efficiency.perRequest) }}</div>
           </div>
-          <div class="bg-card px-3 py-2">
+          <div class="border border-border bg-card px-3 py-2">
             <div class="lbl">{{ t("tk.sessionCount") }}</div>
             <div class="readout mt-1 text-[14px] leading-none text-foreground">{{ compact(efficiency.sessionCount) }}</div>
           </div>
-          <div class="bg-card px-3 py-2">
+          <div class="border border-border bg-card px-3 py-2">
             <div class="lbl">{{ t("tk.projCount") }}</div>
             <div class="readout mt-1 text-[14px] leading-none text-foreground">{{ compact(efficiency.projectCount) }}</div>
           </div>
@@ -598,7 +598,7 @@ const cellColor = (level: number) =>
       <section class="border border-border bg-card">
         <div class="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
           <span class="lbl">// {{ t("tk.recent") }}</span>
-          <div class="flex gap-px bg-border wb-cells">
+          <div class="flex gap-px bg-border overflow-hidden">
             <button
               v-for="tab in (['sessions', 'calls'] as const)"
               :key="tab"

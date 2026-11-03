@@ -28,7 +28,7 @@ const levelClass = (level: LogLine["level"]) =>
 </script>
 
 <template>
-  <section class="shrink-0 border-t border-border bg-background">
+  <section class="mx-3 mb-1 shrink-0 border border-border bg-background">
     <div class="flex h-6 items-center gap-3 border-b border-border px-2">
       <button
         class="flex items-center gap-1"

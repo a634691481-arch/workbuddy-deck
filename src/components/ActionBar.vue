@@ -61,7 +61,7 @@ onBeforeUnmount(clearPending);
 </script>
 
 <template>
-  <div class="flex h-10 shrink-0 items-stretch border-t border-border bg-panel">
+  <div class="flex h-10 shrink-0 items-stretch border border-border bg-panel">
     <!-- 作用域：分段按钮，选中项反白 -->
     <div class="flex items-center gap-1 border-r border-border px-2">
       <button

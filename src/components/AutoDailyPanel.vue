@@ -68,7 +68,7 @@ onBeforeUnmount(() => unlisten?.());
 </script>
 
 <template>
-  <div class="shrink-0 border-t border-border bg-panel">
+  <div class="shrink-0 border border-border bg-panel">
     <div class="flex h-9 items-center gap-2 whitespace-nowrap px-2 text-[10px] uppercase tracking-[0.1em]">
       <CalendarClock class="size-3 shrink-0 text-faint" />
       <span class="shrink-0 text-faint">{{ t("ad.title") }}</span>

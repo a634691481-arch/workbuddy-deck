@@ -29,7 +29,7 @@ const checkinError = () =>
 </script>
 
 <template>
-  <section class="flex h-10 shrink-0 items-stretch border-b border-border bg-card">
+  <section class="flex h-10 shrink-0 items-stretch border border-border bg-card">
     <div class="flex items-center gap-2 border-r border-border px-2">
       <span class="lbl text-hazard">[</span>
       <span class="lbl lbl-ink">{{ t("ah.unit") }}</span>

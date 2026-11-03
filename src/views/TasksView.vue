@@ -121,7 +121,7 @@ watch(
       @refresh="refreshAll"
     />
 
-    <div class="flex min-h-0 flex-1">
+    <div class="flex min-h-0 flex-1 gap-3 p-3">
       <AccountList
         :accounts="accounts"
         :selected="selected"
@@ -137,7 +137,7 @@ watch(
       />
 
       <!-- min-w-0：允许整列收缩到窗口剩余宽度，内容不把面板撑出屏幕 -->
-      <main class="flex min-h-0 min-w-0 flex-1 flex-col bg-card">
+      <main class="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
         <AccountHeader
           :detail="detail"
           :account-label="mask(activeAccount?.label ?? '')"
@@ -163,7 +163,7 @@ watch(
           :running="run.running"
         />
 
-        <div v-if="failures.length > 0" class="wb-view shrink-0 border-b border-hazard bg-hazard-soft px-2 py-1">
+        <div v-if="failures.length > 0" class="wb-view shrink-0 border border-hazard bg-hazard-soft px-2 py-1">
           <button
             class="flex w-full items-center gap-1.5 text-[10px] uppercase tracking-[0.1em] text-hazard"
             @click="showFailures = !showFailures"
@@ -187,7 +187,7 @@ watch(
         </div>
 
         <!-- 没做哪些、为什么：与失败分开展示（失败是错的，这里是「有缺口但没推进」） -->
-        <div v-if="pendingRows.length > 0" class="wb-view shrink-0 border-b border-border bg-panel px-2 py-1">
+        <div v-if="pendingRows.length > 0" class="wb-view shrink-0 border border-border bg-panel px-2 py-1">
           <button
             class="flex w-full items-center gap-1.5 text-[10px] uppercase tracking-[0.1em] text-muted-foreground"
             @click="showPending = !showPending"

@@ -160,8 +160,9 @@ async function doPurge() {
     </div>
 
     <!-- 台账表：粘性表头 + 行滚动，排序与口径都由后端定（归档时刻倒序） -->
-    <div class="min-h-0 flex-1 overflow-y-auto">
-      <div class="sticky top-0 z-10 grid grid-cols-[36px_minmax(0,1fr)_150px_72px] items-center gap-2 border-b border-border bg-card px-3 py-1.5">
+    <div class="min-h-0 flex-1 overflow-y-auto p-3">
+      <div class="overflow-hidden border border-border bg-card">
+      <div class="sticky top-0 z-10 grid grid-cols-[36px_minmax(0,1fr)_150px_72px] items-center gap-2 wb-cells border-b border-border bg-card px-3 py-1.5">
         <span class="lbl">#</span>
         <span class="lbl">{{ t("ar.colTask") }}</span>
         <span class="lbl text-right">{{ t("ar.colDate") }}</span>
@@ -171,7 +172,7 @@ async function doPurge() {
       <div
         v-for="(row, index) in data?.rows ?? []"
         :key="row.id"
-        class="grid grid-cols-[36px_minmax(0,1fr)_150px_72px] items-center gap-2 border-b border-border/40 px-3 py-1.5"
+        class="grid grid-cols-[36px_minmax(0,1fr)_150px_72px] items-center gap-2 wb-cells border-b border-border/40 px-3 py-1.5"
       >
         <span class="readout text-[9px] text-faint">{{ String(index + 1).padStart(2, "0") }}</span>
         <span class="truncate text-[11px] text-foreground" :title="row.title">{{ row.title }}</span>
@@ -183,6 +184,7 @@ async function doPurge() {
 
       <div v-if="!loading && !data?.total" class="grid place-items-center py-16 text-[11px] text-faint">
         {{ t("ar.empty") }}
+      </div>
       </div>
     </div>
 

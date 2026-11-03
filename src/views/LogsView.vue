@@ -297,27 +297,27 @@ async function doClear() {
     </div>
 
     <!-- 四指标 -->
-    <section class="mx-3 mt-3 shrink-0 border border-border bg-border wb-cells">
-      <div class="grid grid-cols-4 gap-px wb-cells">
-        <div class="bg-card px-3 py-2.5">
+    <section class="mx-3 mt-3 shrink-0">
+      <div class="grid grid-cols-4 gap-2">
+        <div class="border border-border bg-card px-3 py-2.5">
           <div class="lbl">{{ t("rl.total") }}</div>
           <div class="readout mt-1 text-[20px] leading-none text-foreground">
             {{ loading && !data ? "···" : stats.total }}
           </div>
         </div>
-        <div class="bg-card px-3 py-2.5">
+        <div class="border border-border bg-card px-3 py-2.5">
           <div class="lbl">{{ t("rl.today") }}</div>
           <div class="readout mt-1 text-[20px] leading-none text-foreground">
             {{ loading && !data ? "···" : stats.today }}
           </div>
         </div>
-        <div class="bg-card px-3 py-2.5">
+        <div class="border border-border bg-card px-3 py-2.5">
           <div class="lbl">{{ t("rl.warn") }}</div>
           <div class="readout mt-1 text-[20px] leading-none" :class="stats.warning > 0 ? 'text-hazard' : 'text-foreground'">
             {{ loading && !data ? "···" : stats.warning }}
           </div>
         </div>
-        <div class="bg-card px-3 py-2.5">
+        <div class="border border-border bg-card px-3 py-2.5">
           <div class="lbl">{{ t("rl.error") }}</div>
           <div class="readout mt-1 text-[20px] leading-none" :class="stats.error > 0 ? 'text-hazard' : 'text-foreground'">
             {{ loading && !data ? "···" : stats.error }}
@@ -328,12 +328,12 @@ async function doClear() {
 
     <!-- 来源分布 + 24H 分布 -->
     <section class="mx-3 mt-3 grid shrink-0 grid-cols-1 gap-px border border-border bg-border lg:grid-cols-2 wb-cells">
-      <div class="bg-card px-3 py-2.5">
+      <div class="border border-border bg-card px-3 py-2.5">
         <div class="flex items-baseline justify-between">
           <span class="lbl">{{ t("rl.sourceDist") }}</span>
           <span class="readout text-[9px] text-faint">{{ stats.total }} EVENTS</span>
         </div>
-        <div class="mt-2 flex h-2 w-full overflow-hidden bg-muted">
+        <div class="mt-2 flex h-2 w-full overflow-hidden bg-muted wb-cells">
           <div
             v-for="seg in distribution"
             :key="seg.key"
@@ -351,7 +351,7 @@ async function doClear() {
         </div>
       </div>
 
-      <div class="bg-card px-3 py-2.5">
+      <div class="border border-border bg-card px-3 py-2.5">
         <div class="flex items-baseline justify-between">
           <span class="lbl">{{ t("rl.hourDist") }}</span>
           <span class="readout text-[9px] text-faint">00 → 23</span>
@@ -378,8 +378,8 @@ async function doClear() {
 
     <!-- 切换台账：只在「切换记录」筛选下出现，给出总量与失败构成 -->
     <section v-if="filter === 'switch'" class="mx-3 mt-3 shrink-0 border border-border bg-border">
-      <div class="grid grid-cols-4 gap-px wb-cells">
-        <div class="bg-card px-3 py-2">
+      <div class="grid grid-cols-4 gap-2">
+        <div class="border border-border bg-card px-3 py-2">
           <div class="lbl">{{ t("rl.swTotal") }}</div>
           <div class="readout mt-1 text-[16px] leading-none text-foreground">
             {{ historyLoading && !history ? "···" : historyStats.total }}
@@ -388,13 +388,13 @@ async function doClear() {
             {{ t("rl.swAvgCost") }} {{ historyStats.avgCost.toFixed(1) }}s
           </div>
         </div>
-        <div class="bg-card px-3 py-2">
+        <div class="border border-border bg-card px-3 py-2">
           <div class="lbl">{{ t("rl.swOk") }}</div>
           <div class="readout mt-1 text-[16px] leading-none text-foreground">
             {{ historyLoading && !history ? "···" : historyStats.ok }}
           </div>
         </div>
-        <div class="bg-card px-3 py-2">
+        <div class="border border-border bg-card px-3 py-2">
           <div class="lbl">{{ t("rl.swRolledBack") }}</div>
           <div
             class="readout mt-1 text-[16px] leading-none"
@@ -403,7 +403,7 @@ async function doClear() {
             {{ historyLoading && !history ? "···" : historyStats.rolledBack }}
           </div>
         </div>
-        <div class="bg-card px-3 py-2">
+        <div class="border border-border bg-card px-3 py-2">
           <div class="lbl">{{ t("rl.swBlocked") }}</div>
           <div
             class="readout mt-1 text-[16px] leading-none"
@@ -416,7 +416,7 @@ async function doClear() {
     </section>
 
     <!-- 筛选 + 搜索 -->
-    <section class="mt-3 flex shrink-0 flex-wrap items-center justify-between gap-2 border-y border-border bg-panel px-3 py-1.5">
+    <section class="mx-3 mt-3 flex shrink-0 flex-wrap items-center justify-between gap-2 border border-border bg-panel px-3 py-1.5">
       <div class="flex flex-wrap items-center gap-1">
         <button
           v-for="item in FILTERS"
@@ -448,8 +448,8 @@ async function doClear() {
     </section>
 
     <!-- 日志表 -->
-    <div class="min-h-0 flex-1 overflow-auto">
-      <div class="grid grid-cols-[92px_76px_72px_minmax(160px,1fr)_minmax(200px,1.4fr)] items-center gap-2 border-b border-border bg-panel px-3 py-1">
+    <div class="mx-3 mb-3 mt-3 min-h-0 flex-1 overflow-auto border border-border bg-card">
+      <div class="grid grid-cols-[92px_76px_72px_minmax(160px,1fr)_minmax(200px,1.4fr)] items-center gap-2 wb-cells border-b border-border bg-panel px-3 py-1">
         <span class="lbl">{{ t("rl.time") }}</span>
         <span class="lbl">{{ t("rl.source") }}</span>
         <span class="lbl">LEVEL</span>
@@ -469,7 +469,7 @@ async function doClear() {
       <div
         v-for="(row, index) in rows"
         :key="`${row.at}-${index}`"
-        class="grid grid-cols-[92px_76px_72px_minmax(160px,1fr)_minmax(200px,1.4fr)] items-center gap-2 border-b border-border/60 px-3 py-1.5"
+        class="grid grid-cols-[92px_76px_72px_minmax(160px,1fr)_minmax(200px,1.4fr)] items-center gap-2 wb-cells border-b border-border/60 px-3 py-1.5"
       >
         <div class="flex min-w-0 items-center gap-1.5">
           <span class="h-3 w-0.5 shrink-0" :class="levelBar(row.level)" />

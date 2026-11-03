@@ -29,11 +29,11 @@ const rawText = computed(() => JSON.stringify(props.checkin?.raw ?? {}, null, 2)
 const tasksText = computed(() => JSON.stringify(props.tasks, null, 2));
 
 /** 列宽集中一处：名称自适应，数值列定宽右对齐才好纵向比较。 */
-const GRID = "grid grid-cols-[minmax(0,1fr)_74px_62px_66px_30px] items-center gap-0";
+const GRID = "grid grid-cols-[minmax(0,1fr)_74px_62px_66px_30px] items-center gap-0 wb-cells";
 </script>
 
 <template>
-  <div class="flex min-h-0 flex-1 flex-col">
+  <div class="flex min-h-0 flex-1 flex-col border border-border bg-card">
     <!-- 页签：ASCII 风格，选中项底部压红线 -->
     <div class="flex h-8 shrink-0 items-stretch border-b border-border bg-panel" role="tablist">
       <button

@@ -367,27 +367,27 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
     </div>
 
     <!-- 四指标 -->
-    <section class="mx-3 mt-3 shrink-0 border border-border bg-border wb-cells">
-      <div class="grid grid-cols-4 gap-px wb-cells">
-        <div class="bg-card px-3 py-2.5">
+    <section class="mx-3 mt-3 shrink-0">
+      <div class="grid grid-cols-4 gap-2">
+        <div class="border border-border bg-card px-3 py-2.5">
           <div class="lbl">{{ t("cr.left") }}</div>
           <div class="readout mt-1 text-[20px] leading-none text-foreground">
             {{ loading && !stats ? "···" : fmt(summary.currentRemaining) }}
           </div>
         </div>
-        <div class="bg-card px-3 py-2.5">
+        <div class="border border-border bg-card px-3 py-2.5">
           <div class="lbl">{{ t("cr.today") }}</div>
           <div class="readout mt-1 text-[20px] leading-none text-foreground">
             {{ loading && !stats ? "···" : fmt(summary.usageToday) }}
           </div>
         </div>
-        <div class="bg-card px-3 py-2.5">
+        <div class="border border-border bg-card px-3 py-2.5">
           <div class="lbl">{{ t("cr.d7") }}</div>
           <div class="readout mt-1 text-[20px] leading-none text-foreground">
             {{ loading && !stats ? "···" : fmt(summary.usage7Days) }}
           </div>
         </div>
-        <div class="bg-card px-3 py-2.5">
+        <div class="border border-border bg-card px-3 py-2.5">
           <div class="lbl">{{ t("cr.month") }}</div>
           <div class="readout mt-1 text-[20px] leading-none text-foreground">
             {{ loading && !stats ? "···" : fmt(summary.usageThisMonth) }}
@@ -410,7 +410,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
               <div class="pointer-events-none absolute inset-x-0 top-0 h-px bg-border/60" />
               <div class="pointer-events-none absolute inset-x-0 top-1/3 h-px bg-border/40" />
               <div class="pointer-events-none absolute inset-x-0 top-2/3 h-px bg-border/40" />
-              <div class="flex h-full items-end justify-center gap-[3px] border-b border-border pb-px">
+              <div class="flex h-full items-end justify-center gap-[3px] border-b border-border pb-px wb-cells">
                 <div
                   v-for="(point, index) in chart"
                   :key="`${point.date}-${index}`"
@@ -460,7 +460,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
         <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
           <div class="flex items-center gap-2">
             <span class="lbl">// {{ t("cr.dim") }}</span>
-            <div class="flex gap-px bg-border wb-cells">
+            <div class="flex gap-px bg-border overflow-hidden">
               <button
                 v-for="option in dimensionOptions"
                 :key="option.key"
@@ -569,7 +569,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
       <section class="border border-border bg-card">
         <div class="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
           <span class="lbl">// {{ t("cr.detail") }}</span>
-          <div class="flex gap-px bg-border wb-cells">
+          <div class="flex gap-px bg-border overflow-hidden">
             <button
               v-for="tab in (['accounts', 'flow'] as const)"
               :key="tab"
@@ -677,7 +677,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
               class="readout flex items-center justify-between gap-2 border-t border-border px-3 py-1.5 text-[9px] text-faint"
             >
               <span>{{ flowRange }}</span>
-              <div class="flex items-center gap-px bg-border wb-cells">
+              <div class="flex items-center gap-px bg-border overflow-hidden">
                 <button
                   type="button"
                   class="bg-card px-2 py-0.5 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"
