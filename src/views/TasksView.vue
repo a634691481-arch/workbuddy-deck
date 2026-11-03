@@ -136,7 +136,8 @@ watch(
         @resize="resizeSidebar"
       />
 
-      <main class="flex min-h-0 flex-1 flex-col bg-card">
+      <!-- min-w-0：允许整列收缩到窗口剩余宽度，内容不把面板撑出屏幕 -->
+      <main class="flex min-h-0 min-w-0 flex-1 flex-col bg-card">
         <AccountHeader
           :detail="detail"
           :account-label="mask(activeAccount?.label ?? '')"

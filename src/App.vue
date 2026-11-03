@@ -65,8 +65,9 @@ const booting = ref(true);
       />
 
       <!-- 注释必须在 KeepAlive 外：里面只允许一个子组件，注释会被当成额外节点 -->
+      <!-- min-w-0：分区视图可收缩，内部宽内容不允许把窗口撑出横向溢出 -->
       <KeepAlive>
-        <component :is="activeView" class="wb-view" />
+        <component :is="activeView" class="wb-view min-w-0 flex-1" />
       </KeepAlive>
     </div>
 
