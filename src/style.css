@@ -297,6 +297,28 @@ html[data-density="comfy"] {
   background: #4d4d46;
 }
 
+/* 可点元素统一手型：浏览器对 <button> 默认是箭头，看起来像不可点 */
+button:not(:disabled),
+[role="button"]:not([aria-disabled="true"]),
+a[href],
+summary,
+label[for],
+select:not(:disabled),
+input[type="checkbox"]:not(:disabled),
+input[type="radio"]:not(:disabled),
+input[type="color"]:not(:disabled),
+input[type="range"]:not(:disabled),
+input[type="file"]:not(:disabled) {
+  cursor: pointer;
+}
+
+button:disabled,
+input:disabled,
+select:disabled,
+[aria-disabled="true"] {
+  cursor: not-allowed;
+}
+
 /* 微排版：所有 metadata 一律大写 + 正字距 */
 .lbl {
   font-size: 10px;

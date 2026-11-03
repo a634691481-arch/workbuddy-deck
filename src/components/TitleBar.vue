@@ -166,7 +166,7 @@ async function toggleBackdrop(next: "off" | "on") {
 
     <!-- 外观面板：透明背板点击关闭；面板淡入淡出，不做位移（贴窗口边缘会露缝） -->
     <Transition name="wb-pop">
-      <div v-if="panel" class="fixed inset-0 z-40" @click="panel = ''" />
+      <div v-if="panel" class="fixed inset-0 z-40 cursor-default" @click="panel = ''" />
     </Transition>
     <Transition name="wb-pop">
     <div
