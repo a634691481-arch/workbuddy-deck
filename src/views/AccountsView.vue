@@ -783,9 +783,18 @@ async function doSwitch() {
           <div class="mt-2 flex items-end justify-between gap-2 px-3">
             <div class="flex min-w-0 items-baseline gap-1.5 overflow-hidden">
               <Zap class="size-3.5 shrink-0 self-center text-hazard" />
-              <span v-if="refreshing && row.ok" class="mb-1 inline-block h-[18px] w-24 animate-pulse bg-border-strong" />
-              <span v-else class="readout text-[24px] leading-none text-foreground">
-                <AnimatedNumber :value="row.ok ? row.remaining : null" :decimals="0" />
+              <!-- 骨架只做遮罩，不卸载数字组件：卸载后重挂会直接显示终值，滚动动画就丢了 -->
+              <span class="relative inline-flex min-w-[6rem] items-baseline">
+                <span
+                  class="readout text-[24px] leading-none text-foreground"
+                  :class="refreshing && row.ok ? 'opacity-0' : ''"
+                >
+                  <AnimatedNumber :value="row.ok ? row.remaining : null" :decimals="0" />
+                </span>
+                <span
+                  v-if="refreshing && row.ok"
+                  class="absolute inset-y-0 left-0 my-auto h-[18px] w-24 animate-pulse bg-border-strong"
+                />
               </span>
               <span class="lbl whitespace-nowrap text-faint">
                 / {{ fmt(row.capacity) }}
