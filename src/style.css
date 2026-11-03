@@ -196,16 +196,23 @@ body,
 
 /* 弹框：遮罩淡入 + 卡片轻微上浮；关闭反向更快（120ms），不等它慢慢退场 */
 .wb-modal-enter-active {
-  transition: opacity 180ms ease-out;
+  transition:
+    opacity 180ms ease-out,
+    backdrop-filter 180ms ease-out;
+  backdrop-filter: blur(3px);
 }
 
 .wb-modal-leave-active {
-  transition: opacity 140ms ease-in;
+  transition:
+    opacity 140ms ease-in,
+    backdrop-filter 140ms ease-in;
+  backdrop-filter: blur(0px);
 }
 
 .wb-modal-enter-from,
 .wb-modal-leave-to {
   opacity: 0;
+  backdrop-filter: blur(0px);
 }
 
 .wb-modal-enter-active .wb-modal-card {
