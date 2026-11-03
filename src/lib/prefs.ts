@@ -13,6 +13,7 @@ const SCAN_KEY = "wb-ta/scan";
 const NUM_KEY = "wb-ta/numformat";
 const MOTION_KEY = "wb-ta/motion";
 const SIDEBAR_KEY = "wb-ta/sidebar";
+const CHART_KEY = "wb-ta/chart";
 
 export type Theme = "dark" | "light";
 
@@ -67,6 +68,10 @@ export const motion = ref<Motion>(localStorage.getItem(MOTION_KEY) === "none" ? 
 /** 侧栏形态：full = 编号+图标+文字（148px）；compact = 仅图标（56px）。 */
 export type SidebarMode = "full" | "compact";
 export const sidebar = ref<SidebarMode>(localStorage.getItem(SIDEBAR_KEY) === "compact" ? "compact" : "full");
+
+/** 图表样式：bar = 柱状；line = 折线（积分 / TOKEN 的每日趋势）。 */
+export type ChartStyle = "bar" | "line";
+export const chartStyle = ref<ChartStyle>(localStorage.getItem(CHART_KEY) === "line" ? "line" : "bar");
 
 function loadRadius(): number {
   const n = Number(localStorage.getItem(RADIUS_KEY) ?? "0");
@@ -150,6 +155,11 @@ export function setSidebar(next: SidebarMode) {
   sidebar.value = next;
   localStorage.setItem(SIDEBAR_KEY, next);
   apply();
+}
+
+export function setChartStyle(next: ChartStyle) {
+  chartStyle.value = next;
+  localStorage.setItem(CHART_KEY, next);
 }
 
 /**

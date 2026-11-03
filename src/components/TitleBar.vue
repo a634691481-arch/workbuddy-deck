@@ -20,6 +20,8 @@ import {
   scan,
   setAccent,
   setDensity,
+  chartStyle,
+  setChartStyle,
   setMotion,
   setNumberFormat,
   setRadius,
@@ -256,6 +258,29 @@ onMounted(() => void loadConfig());
             @click="setScan(s.key)"
           >
             {{ locale === "zh" ? s.zh : s.en }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 图表 -->
+      <div class="flex items-center justify-between gap-2">
+        <span class="lbl">{{ t("tb.chart") }}</span>
+        <div class="flex border border-border-strong wb-seg">
+          <button
+            type="button"
+            class="px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em]"
+            :class="chartStyle === 'bar' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'"
+            @click="setChartStyle('bar')"
+          >
+            {{ t("tb.chartBar") }}
+          </button>
+          <button
+            type="button"
+            class="px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em]"
+            :class="chartStyle === 'line' ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'"
+            @click="setChartStyle('line')"
+          >
+            {{ t("tb.chartLine") }}
           </button>
         </div>
       </div>

@@ -10,7 +10,7 @@ import { Loader2, RefreshCw } from "lucide-vue-next";
 
 import { tokenStatistics, type TokenStatistics } from "@/lib/api";
 import { t } from "@/lib/i18n";
-import { fmtNum } from "@/lib/prefs";
+import { chartStyle, fmtNum } from "@/lib/prefs";
 
 const stats = ref<TokenStatistics | null>(null);
 const loading = ref(true);
@@ -132,6 +132,17 @@ const daily = computed(() => {
 });
 
 const dailyMax = computed(() => daily.value.reduce((peak, point) => Math.max(peak, point.total), 0));
+
+/** 折线模式坐标（0–100 百分比，交给 viewBox 拉伸） */
+const dailyDots = computed(() => {
+  const rows = daily.value;
+  if (rows.length === 0) return [];
+  const step = rows.length === 1 ? 0 : 100 / (rows.length - 1);
+  return rows.map((point, index) => ({ x: rows.length === 1 ? 50 : index * step, y: 100 - point.height }));
+});
+const dailyPolyline = computed(() =>
+  dailyDots.value.map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(" "),
+);
 
 /**
  * 环比：近 7 天 vs 前 7 天。
@@ -473,12 +484,30 @@ const cellColor = (level: number) =>
           <div class="lbl">// {{ t("tk.daily") }}</div>
           <div v-if="daily.length === 0" class="py-10 text-center text-[11px] text-faint">{{ t("tk.empty") }}</div>
           <div v-else class="mt-2">
-            <div class="flex h-[120px] items-end gap-[3px] border-b border-border pb-px">
+            <div v-if="chartStyle === 'bar'" class="flex h-[120px] items-end gap-[3px] border-b border-border pb-px">
               <div
                 v-for="(point, index) in daily"
                 :key="`${point.date}-${index}`"
                 class="flex-1 bg-foreground/70 transition-colors hover:bg-hazard"
                 :style="{ height: `${point.height}%` }"
+                :title="`${point.date} · ${compact(point.total)}`"
+              />
+            </div>
+            <div v-else class="relative h-[120px] border-b border-border">
+              <svg class="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                <polyline
+                  :points="dailyPolyline"
+                  fill="none"
+                  stroke="var(--color-foreground)"
+                  stroke-width="1.5"
+                  vector-effect="non-scaling-stroke"
+                />
+              </svg>
+              <i
+                v-for="(point, index) in daily"
+                :key="`dot-${point.date}-${index}`"
+                class="absolute size-1.5 -translate-x-1/2 translate-y-1/2 bg-foreground"
+                :style="{ left: `${dailyDots[index]?.x ?? 0}%`, bottom: `${point.height}%` }"
                 :title="`${point.date} · ${compact(point.total)}`"
               />
             </div>

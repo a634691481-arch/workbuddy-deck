@@ -10,7 +10,7 @@ import { ArrowDown, ArrowUp, CircleAlert, Loader2, RefreshCw } from "lucide-vue-
 
 import { creditStatistics, type CreditOfficialUsage, type CreditStatistics } from "@/lib/api";
 import { t } from "@/lib/i18n";
-import { fmtNum } from "@/lib/prefs";
+import { chartStyle, fmtNum } from "@/lib/prefs";
 import { mask } from "@/lib/task-meta";
 
 const stats = ref<CreditStatistics | null>(null);
@@ -72,6 +72,15 @@ const chart = computed(() => {
     height: max > 0 ? Math.max(2, Math.round((point.usage / max) * 100)) : 2,
   }));
 });
+
+/** 折线模式坐标：x 均分 0–100，y = 100 - 高度百分比 */
+const linePoints = computed(() => {
+  const rows = chart.value;
+  if (rows.length === 0) return [];
+  const step = rows.length === 1 ? 0 : 100 / (rows.length - 1);
+  return rows.map((point, index) => ({ x: rows.length === 1 ? 50 : index * step, y: 100 - point.height }));
+});
+const linePolyline = computed(() => linePoints.value.map((point) => `${point.x.toFixed(2)},${point.y.toFixed(2)}`).join(" "));
 
 const chartMax = computed(() => {
   const tail = (stats.value?.daily ?? []).slice(-20);
@@ -409,7 +418,11 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
               <div class="pointer-events-none absolute inset-x-0 top-0 h-px bg-border/60" />
               <div class="pointer-events-none absolute inset-x-0 top-1/3 h-px bg-border/40" />
               <div class="pointer-events-none absolute inset-x-0 top-2/3 h-px bg-border/40" />
-              <div class="flex h-full items-end justify-center gap-[3px] border-b border-border pb-px">
+              <!-- 柱状 -->
+              <div
+                v-if="chartStyle === 'bar'"
+                class="flex h-full items-end justify-center gap-[3px] border-b border-border pb-px"
+              >
                 <div
                   v-for="(point, index) in chart"
                   :key="`${point.date}-${index}`"
@@ -420,6 +433,27 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
                       : 'w-full max-w-[46px] bg-foreground/35 hover:bg-foreground/70'
                   "
                   :style="{ height: `${point.height}%` }"
+                  :title="`${point.date} · ${fmt(point.usage)}`"
+                />
+              </div>
+
+              <!-- 折线：同一条数据换形状，峰值点用强调色 -->
+              <div v-else class="relative h-full border-b border-border">
+                <svg class="absolute inset-0 h-full w-full" viewBox="0 0 100 100" preserveAspectRatio="none">
+                  <polyline
+                    :points="linePolyline"
+                    fill="none"
+                    stroke="var(--color-foreground)"
+                    stroke-width="1.5"
+                    vector-effect="non-scaling-stroke"
+                  />
+                </svg>
+                <i
+                  v-for="(point, index) in chart"
+                  :key="`dot-${point.date}-${index}`"
+                  class="absolute size-1.5 -translate-x-1/2 translate-y-1/2"
+                  :class="point.usage > 0 && point.usage === chartMax ? 'bg-hazard' : 'bg-foreground'"
+                  :style="{ left: `${linePoints[index]?.x ?? 0}%`, bottom: `${point.height}%` }"
                   :title="`${point.date} · ${fmt(point.usage)}`"
                 />
               </div>
