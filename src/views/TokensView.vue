@@ -341,7 +341,7 @@ const cellColor = (level: number) =>
         <span v-if="loading && stats" class="readout text-[9px] uppercase tracking-[0.14em] text-hazard">
           scanning…
         </span>
-        <div class="flex gap-px bg-border overflow-hidden">
+        <div class="flex wb-seg">
           <button
             v-for="range in RANGES"
             :key="range.key"
@@ -598,7 +598,7 @@ const cellColor = (level: number) =>
       <section class="border border-border bg-card">
         <div class="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
           <span class="lbl">// {{ t("tk.recent") }}</span>
-          <div class="flex gap-px bg-border overflow-hidden">
+          <div class="flex wb-seg">
             <button
               v-for="tab in (['sessions', 'calls'] as const)"
               :key="tab"

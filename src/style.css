@@ -155,6 +155,20 @@ body {
   border-radius: 0 !important;
 }
 
+/* 分段控件：容器圆角 + 裁切，内部按钮直角，选中块才能填满整格 */
+.wb-seg {
+  overflow: hidden;
+}
+
+.wb-seg > * {
+  border-radius: 0 !important;
+}
+
+/* 柱体：只有顶角跟随圆角，底部贴着坐标轴保持直角 */
+.wb-bar-top {
+  border-radius: var(--app-radius) var(--app-radius) 0 0 !important;
+}
+
 /* 柱状条 / 分段条：内部一层层都是色块，递归直角，否则细柱子会变成圆点 */
 .wb-bars,
 .wb-bars * {

@@ -410,11 +410,11 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
               <div class="pointer-events-none absolute inset-x-0 top-0 h-px bg-border/60" />
               <div class="pointer-events-none absolute inset-x-0 top-1/3 h-px bg-border/40" />
               <div class="pointer-events-none absolute inset-x-0 top-2/3 h-px bg-border/40" />
-              <div class="flex h-full items-end justify-center gap-[3px] border-b border-border pb-px wb-bars">
+              <div class="flex h-full items-end justify-center gap-[3px] border-b border-border pb-px">
                 <div
                   v-for="(point, index) in chart"
                   :key="`${point.date}-${index}`"
-                  class="origin-bottom transition-[background-color,transform] duration-300"
+                  class="origin-bottom transition-[background-color,transform] duration-300 wb-bar-top"
                   :class="
                     point.usage > 0 && point.usage === chartMax
                       ? 'w-full max-w-[46px] bg-hazard hover:bg-hazard/85'
@@ -460,7 +460,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
         <div class="flex flex-wrap items-center justify-between gap-2 border-b border-border px-3 py-2">
           <div class="flex items-center gap-2">
             <span class="lbl">// {{ t("cr.dim") }}</span>
-            <div class="flex gap-px bg-border overflow-hidden">
+            <div class="flex wb-seg">
               <button
                 v-for="option in dimensionOptions"
                 :key="option.key"
@@ -488,9 +488,9 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
         <div v-else-if="dimRows.length === 0" class="px-3 py-10 text-center text-[11px] text-faint">
           {{ t("cr.flowEmpty") }}
         </div>
-        <div v-else class="grid grid-cols-[1fr_252px] gap-px bg-border">
+        <div v-else class="grid grid-cols-[1fr_252px] gap-3 p-3">
           <!-- 模型排行 -->
-          <div class="min-w-0 bg-card px-3 py-2">
+          <div class="min-w-0 border border-border bg-card px-3 py-2">
             <div class="readout grid grid-cols-[18px_1fr_64px_52px_52px] gap-2 border-b border-border pb-1 text-[9px] text-faint">
               <span>#</span>
               <span>{{ dimension === "model" ? "MODEL" : dimension === "client" ? "CLIENT" : "ACCOUNT" }}</span>
@@ -521,7 +521,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
           </div>
 
           <!-- 模型汇总 + 客户端 -->
-          <div class="min-w-0 bg-card">
+          <div class="min-w-0 border border-border bg-card">
             <div class="px-3 py-2">
               <div class="lbl">// {{ t("cr.totalCredit") }}</div>
               <div class="readout mt-1 text-[18px] leading-none text-foreground">{{ fmt(dimStats.totalCredit) }}</div>
@@ -569,7 +569,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
       <section class="border border-border bg-card">
         <div class="flex items-center justify-between gap-2 border-b border-border px-3 py-2">
           <span class="lbl">// {{ t("cr.detail") }}</span>
-          <div class="flex gap-px bg-border overflow-hidden">
+          <div class="flex wb-seg">
             <button
               v-for="tab in (['accounts', 'flow'] as const)"
               :key="tab"
@@ -677,7 +677,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
               class="readout flex items-center justify-between gap-2 border-t border-border px-3 py-1.5 text-[9px] text-faint"
             >
               <span>{{ flowRange }}</span>
-              <div class="flex items-center gap-px bg-border overflow-hidden">
+              <div class="flex items-center overflow-hidden">
                 <button
                   type="button"
                   class="bg-card px-2 py-0.5 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-30"

@@ -596,7 +596,7 @@ async function doClear() {
           </div>
           <p class="border-b border-border/40 px-3 py-1.5 text-[9px] leading-4 text-faint">{{ t("st.autoSwitchHint") }}</p>
           <div class="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
-            <div class="flex shrink-0 gap-px bg-border overflow-hidden">
+            <div class="flex shrink-0 overflow-hidden">
               <button
                 type="button"
                 class="px-2 py-1 text-[10px] transition-colors disabled:opacity-40"
