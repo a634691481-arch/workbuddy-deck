@@ -245,6 +245,54 @@ body,
   opacity: 0;
 }
 
+/*
+ * ① 字号：整体缩放。用 transform + 反向尺寸补偿，而不是 zoom——
+ * zoom 会让内容超出窗口被直接裁掉（右下角拖不回来），补偿后布局按 100%/zoom 铺，
+ * 再放大回窗口，视觉变大但四周不丢内容。
+ */
+#app {
+  width: calc(100% / var(--ui-zoom, 1));
+  height: calc(100% / var(--ui-zoom, 1));
+  transform: scale(var(--ui-zoom, 1));
+  transform-origin: top left;
+}
+
+/* ② 斑马纹：容器标记 .wb-zebra，偶数行加 4% 前景色底，长表不串行 */
+html.zebra .wb-zebra > *:nth-child(even) {
+  background-color: color-mix(in srgb, var(--color-foreground) 4%, transparent);
+}
+
+/* ③ 描边强度：不改线宽（会拆坏 1px 网格），只调描边颜色深浅 */
+html.stroke-light {
+  --color-border: color-mix(in srgb, var(--color-foreground) 9%, transparent);
+  --color-border-strong: color-mix(in srgb, var(--color-foreground) 16%, transparent);
+}
+
+html.light.stroke-light {
+  --color-border: color-mix(in srgb, var(--color-foreground) 12%, transparent);
+  --color-border-strong: color-mix(in srgb, var(--color-foreground) 20%, transparent);
+}
+
+html.stroke-heavy {
+  --color-border: color-mix(in srgb, var(--color-foreground) 30%, transparent);
+  --color-border-strong: color-mix(in srgb, var(--color-foreground) 46%, transparent);
+}
+
+/* ④ 高对比度：次要文字提到可读阈值，描边加深 */
+html.contrast {
+  --color-muted-foreground: #c8c8c2;
+  --color-faint: #a6a6a0;
+  --color-border: #4a4a45;
+  --color-border-strong: #6e6e68;
+}
+
+html.light.contrast {
+  --color-muted-foreground: #33332f;
+  --color-faint: #5a5a54;
+  --color-border: #8a8a84;
+  --color-border-strong: #5e5e58;
+}
+
 /* 毛玻璃：系统特效在窗口后面，这里把表面调成半透明，文字仍用原色保持对比 */
 html.backdrop {
   --color-background: rgba(10, 10, 10, 0.55);

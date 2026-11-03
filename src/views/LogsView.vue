@@ -450,7 +450,7 @@ async function doClear() {
     </section>
 
     <!-- 日志表 -->
-    <div ref="rowsEl" class="mx-3 mb-3 mt-3 min-h-0 flex-1 overflow-auto border border-border bg-card">
+    <div ref="rowsEl" class="wb-zebra mx-3 mb-3 mt-3 min-h-0 flex-1 overflow-auto border border-border bg-card">
       <div class="grid grid-cols-[92px_76px_72px_minmax(160px,1fr)_minmax(200px,1.4fr)] items-center gap-2 wb-cells border-b border-border bg-panel px-3 py-1">
         <span class="lbl">{{ t("rl.time") }}</span>
         <span class="lbl">{{ t("rl.source") }}</span>

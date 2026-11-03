@@ -67,7 +67,7 @@ const GRID = "grid grid-cols-[minmax(0,1fr)_74px_62px_66px_30px] items-center ga
     </div>
 
     <!-- 任务表 -->
-    <div v-show="tab === 'tasks'" ref="rowsEl" class="min-h-0 flex-1 overflow-y-auto">
+    <div v-show="tab === 'tasks'" ref="rowsEl" class="min-h-0 flex-1 overflow-y-auto wb-zebra">
       <!-- 表头：粘性黑底，列间竖线 -->
       <div
         :class="[GRID, 'sticky top-0 z-10 border-b border-border-strong bg-background text-[10px] uppercase tracking-[0.1em] text-muted-foreground']"

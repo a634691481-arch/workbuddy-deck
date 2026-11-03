@@ -15,6 +15,10 @@ const MOTION_KEY = "wb-ta/motion";
 const SIDEBAR_KEY = "wb-ta/sidebar";
 const CHART_KEY = "wb-ta/chart";
 const BACKDROP_KEY = "wb-ta/backdrop";
+const FONT_KEY = "wb-ta/fontsize";
+const ZEBRA_KEY = "wb-ta/zebra";
+const STROKE_KEY = "wb-ta/stroke";
+const CONTRAST_KEY = "wb-ta/contrast";
 
 export type Theme = "dark" | "light";
 
@@ -74,6 +78,30 @@ export const sidebar = ref<SidebarMode>(localStorage.getItem(SIDEBAR_KEY) === "c
 export type ChartStyle = "bar" | "line";
 export const chartStyle = ref<ChartStyle>(localStorage.getItem(CHART_KEY) === "line" ? "line" : "bar");
 
+/** 字号：整体缩放（只影响观感，不改信息密度设置）。 */
+export type FontSize = "sm" | "md" | "lg";
+export const FONT_SIZES = [
+  { key: "sm", zh: "小", en: "S", zoom: 0.94 },
+  { key: "md", zh: "标准", en: "M", zoom: 1 },
+  { key: "lg", zh: "大", en: "L", zoom: 1.07 },
+] as const;
+export const fontSize = ref<FontSize>(loadEnum(FONT_KEY, ["sm", "lg"] as const, "md"));
+
+/** 表格斑马纹：奇偶行底色差 4%，长表横向不串行。 */
+export const zebra = ref(localStorage.getItem(ZEBRA_KEY) === "on");
+
+/** 描边强度：不改线宽（会破坏 1px 网格），只改描边颜色深浅。 */
+export type Stroke = "light" | "normal" | "heavy";
+export const STROKES = [
+  { key: "light", zh: "淡", en: "LIGHT" },
+  { key: "normal", zh: "标准", en: "STD" },
+  { key: "heavy", zh: "重", en: "HEAVY" },
+] as const;
+export const stroke = ref<Stroke>(loadEnum(STROKE_KEY, ["light", "heavy"] as const, "normal"));
+
+/** 高对比度：提亮次要文字、加深描边，弱光/投影环境可读。 */
+export const contrast = ref(localStorage.getItem(CONTRAST_KEY) === "on");
+
 /** 窗口背景：off = 实底；on = 系统毛玻璃（需原生窗口特效，重启后由启动流程重新应用）。 */
 export const backdrop = ref<"off" | "on">(localStorage.getItem(BACKDROP_KEY) === "on" ? "on" : "off");
 
@@ -86,6 +114,11 @@ function loadRadius(): number {
 function loadAccent(): string {
   const v = localStorage.getItem(ACCENT_KEY) ?? "";
   return /^#[0-9a-fA-F]{6}$/.test(v) ? v : DEFAULT_ACCENT;
+}
+
+function loadEnum<T extends string>(key: string, allowed: readonly T[], fallback: T): T {
+  const v = localStorage.getItem(key);
+  return (allowed as readonly string[]).includes(v ?? "") ? (v as T) : fallback;
 }
 
 function loadDensity(): Density {
@@ -111,6 +144,11 @@ function apply() {
   el.dataset.density = density.value;
   el.classList.toggle("no-motion", motion.value === "none");
   el.classList.toggle("backdrop", backdrop.value === "on");
+  el.classList.toggle("zebra", zebra.value);
+  el.classList.toggle("contrast", contrast.value);
+  el.classList.toggle("stroke-light", stroke.value === "light");
+  el.classList.toggle("stroke-heavy", stroke.value === "heavy");
+  el.style.setProperty("--ui-zoom", String(FONT_SIZES.find((f) => f.key === fontSize.value)?.zoom ?? 1));
   el.dataset.sidebar = sidebar.value;
 }
 
@@ -159,6 +197,30 @@ export function setMotion(next: Motion) {
 export function setSidebar(next: SidebarMode) {
   sidebar.value = next;
   localStorage.setItem(SIDEBAR_KEY, next);
+  apply();
+}
+
+export function setFontSize(next: FontSize) {
+  fontSize.value = next;
+  localStorage.setItem(FONT_KEY, next);
+  apply();
+}
+
+export function setZebra(on: boolean) {
+  zebra.value = on;
+  localStorage.setItem(ZEBRA_KEY, on ? "on" : "off");
+  apply();
+}
+
+export function setStroke(next: Stroke) {
+  stroke.value = next;
+  localStorage.setItem(STROKE_KEY, next);
+  apply();
+}
+
+export function setContrast(on: boolean) {
+  contrast.value = on;
+  localStorage.setItem(CONTRAST_KEY, on ? "on" : "off");
   apply();
 }
 

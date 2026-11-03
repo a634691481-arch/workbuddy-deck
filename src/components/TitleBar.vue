@@ -12,28 +12,38 @@ import { setWindowBackdrop } from "@/lib/api";
 import {
   ACCENTS,
   DENSITIES,
+  FONT_SIZES,
   RADIUS_MAX,
   SCANS,
+  STROKES,
   accent,
+  backdrop,
+  chartStyle,
+  contrast,
   density,
+  fontSize,
+  motion,
   numberFormat,
   radius,
   scan,
   setAccent,
-  setDensity,
-  backdrop,
-  chartStyle,
   setBackdrop,
   setChartStyle,
+  setContrast,
+  setDensity,
+  setFontSize,
   setMotion,
   setNumberFormat,
   setRadius,
   setScan,
   setSidebar,
+  setStroke,
   setTheme,
-  motion,
+  setZebra,
   sidebar,
+  stroke,
   theme,
+  zebra,
 } from "@/lib/prefs";
 import { useUpdate } from "@/composables/useUpdate";
 
@@ -55,7 +65,11 @@ const appearanceDirty = computed(
     scan.value !== 0.5 ||
     motion.value !== "full" ||
     sidebar.value !== "full" ||
-    backdrop.value === "on",
+    backdrop.value === "on" ||
+    fontSize.value !== "md" ||
+    zebra.value ||
+    stroke.value !== "normal" ||
+    contrast.value,
 );
 function togglePanel(name: "appearance") {
   panel.value = panel.value === name ? "" : name;
@@ -160,7 +174,7 @@ async function toggleBackdrop(next: "off" | "on") {
     <Transition name="wb-pop">
     <div
       v-if="panel === 'appearance'"
-      class="absolute right-24 top-full z-50 w-64 space-y-2.5 border border-border-strong bg-card p-3"
+      class="absolute right-24 top-full z-50 max-h-[76vh] w-64 space-y-2.5 overflow-y-auto border border-border-strong bg-card p-3"
     >
       <!-- 主题 -->
       <div class="flex items-center justify-between gap-2">
@@ -181,6 +195,23 @@ async function toggleBackdrop(next: "off" | "on") {
             @click="setTheme('light')"
           >
             {{ t("tb.light") }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 字号 -->
+      <div class="flex items-center justify-between gap-2">
+        <span class="lbl">{{ t("tb.fontsize") }}</span>
+        <div class="flex border border-border-strong wb-seg">
+          <button
+            v-for="f in FONT_SIZES"
+            :key="f.key"
+            type="button"
+            class="px-2 py-0.5 text-[10px] uppercase tracking-[0.1em]"
+            :class="fontSize === f.key ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'"
+            @click="setFontSize(f.key)"
+          >
+            {{ locale === "zh" ? f.zh : f.en }}
           </button>
         </div>
       </div>
@@ -233,6 +264,23 @@ async function toggleBackdrop(next: "off" | "on") {
         </div>
       </div>
 
+      <!-- 描边强度 -->
+      <div class="flex items-center justify-between gap-2">
+        <span class="lbl">{{ t("tb.stroke") }}</span>
+        <div class="flex border border-border-strong wb-seg">
+          <button
+            v-for="k in STROKES"
+            :key="k.key"
+            type="button"
+            class="px-1.5 py-0.5 text-[10px] uppercase tracking-[0.1em]"
+            :class="stroke === k.key ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'"
+            @click="setStroke(k.key)"
+          >
+            {{ locale === "zh" ? k.zh : k.en }}
+          </button>
+        </div>
+      </div>
+
       <!-- 窗口背景 -->
       <div class="flex items-center justify-between gap-2">
         <span class="lbl">{{ t("tb.backdrop") }}</span>
@@ -269,6 +317,52 @@ async function toggleBackdrop(next: "off" | "on") {
             @click="setDensity(d.key)"
           >
             {{ locale === "zh" ? d.zh : d.en }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 斑马纹 -->
+      <div class="flex items-center justify-between gap-2">
+        <span class="lbl">{{ t("tb.zebra") }}</span>
+        <div class="flex border border-border-strong wb-seg">
+          <button
+            type="button"
+            class="px-2 py-0.5 text-[10px] uppercase tracking-[0.1em]"
+            :class="!zebra ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'"
+            @click="setZebra(false)"
+          >
+            {{ t("tb.off") }}
+          </button>
+          <button
+            type="button"
+            class="px-2 py-0.5 text-[10px] uppercase tracking-[0.1em]"
+            :class="zebra ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'"
+            @click="setZebra(true)"
+          >
+            {{ t("tb.on") }}
+          </button>
+        </div>
+      </div>
+
+      <!-- 高对比度 -->
+      <div class="flex items-center justify-between gap-2">
+        <span class="lbl">{{ t("tb.contrast") }}</span>
+        <div class="flex border border-border-strong wb-seg">
+          <button
+            type="button"
+            class="px-2 py-0.5 text-[10px] uppercase tracking-[0.1em]"
+            :class="!contrast ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'"
+            @click="setContrast(false)"
+          >
+            {{ t("tb.off") }}
+          </button>
+          <button
+            type="button"
+            class="px-2 py-0.5 text-[10px] uppercase tracking-[0.1em]"
+            :class="contrast ? 'bg-foreground text-background' : 'text-muted-foreground hover:text-foreground'"
+            @click="setContrast(true)"
+          >
+            {{ t("tb.on") }}
           </button>
         </div>
       </div>

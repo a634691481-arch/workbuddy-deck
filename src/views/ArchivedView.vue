@@ -163,7 +163,7 @@ async function doPurge() {
 
     <!-- 台账表：粘性表头 + 行滚动，排序与口径都由后端定（归档时刻倒序） -->
     <div class="min-h-0 flex-1 overflow-y-auto p-3">
-      <div ref="rowsEl" class="overflow-hidden border border-border bg-card">
+      <div ref="rowsEl" class="wb-zebra overflow-hidden border border-border bg-card">
       <div class="sticky top-0 z-10 grid grid-cols-[36px_minmax(0,1fr)_150px_72px] items-center gap-2 wb-cells border-b border-border bg-card px-3 py-1.5">
         <span class="lbl">#</span>
         <span class="lbl">{{ t("ar.colTask") }}</span>
