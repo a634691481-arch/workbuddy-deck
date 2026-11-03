@@ -731,12 +731,14 @@ async function doClear() {
     </div>
 
     <Teleport to="body">
+    <Transition name="wb-modal">
+
       <div
         v-if="clearTarget"
         class="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
         @click.self="clearTarget = null"
       >
-        <div class="w-full max-w-sm border border-hazard bg-card">
+        <div class="w-full max-w-sm border border-hazard bg-card wb-modal-card">
           <div class="flex items-center justify-between border-b border-border px-3 py-2">
             <span class="text-[12px] tracking-[0.1em] text-hazard">{{ t(clearTarget.labelKey) }}</span>
             <button type="button" class="text-[11px] text-muted-foreground hover:text-foreground" @click="clearTarget = null">
@@ -766,6 +768,7 @@ async function doClear() {
           </div>
         </div>
       </div>
-    </Teleport>
+    </Transition>
+  </Teleport>
   </div>
 </template>

@@ -43,10 +43,12 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useAccountIo } from "@/composables/useAccountIo";
 import { useLogin } from "@/composables/useLogin";
 import { useShell } from "@/composables/useShell";
+import { useListAnim } from "@/composables/useListAnim";
 import { t, type I18nKey } from "@/lib/i18n";
 import { mask } from "@/lib/task-meta";
 
 const { setAccountCount, go } = useShell();
+const cardsEl = useListAnim();
 
 const rows = ref<AccountOverviewRow[]>([]);
 const mode = ref<"local" | "official">("local");
@@ -697,7 +699,7 @@ async function doSwitch() {
         {{ t("ac.empty") }}
       </div>
 
-      <div v-else class="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">
+      <div v-else ref="cardsEl" class="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">
         <article
           v-for="(row, index) in orderedRows"
           :key="row.accountId"
@@ -904,6 +906,8 @@ async function doSwitch() {
 
     <!-- OAuth 扫码登录：采集完成后的收尾提示（扫码在浏览器里，界面必须回话） -->
     <Teleport to="body">
+    <Transition name="wb-modal">
+
       <div
         v-if="loginCollected"
         class="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4"
@@ -911,7 +915,7 @@ async function doSwitch() {
         aria-modal="true"
         @click.self="dismissCollected"
       >
-        <div class="w-full max-w-[420px] border border-border-strong bg-card">
+        <div class="w-full max-w-[420px] border border-border-strong bg-card wb-modal-card">
           <header class="flex shrink-0 items-start justify-between gap-3 border-b border-border px-3 py-2 wb-flat">
             <div class="min-w-0">
               <div class="text-[13px] text-foreground">{{ t("ac.oauthTitle") }}</div>
@@ -940,10 +944,13 @@ async function doSwitch() {
           </footer>
         </div>
       </div>
-    </Teleport>
+    </Transition>
+  </Teleport>
 
     <!-- 查看全部积分包（弹框）：卡片只露 2 条，完整明细在这里 -->
     <Teleport to="body">
+    <Transition name="wb-modal">
+
       <div
         v-if="packageSheet"
         class="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4"
@@ -951,7 +958,7 @@ async function doSwitch() {
         aria-modal="true"
         @click.self="closePackages"
       >
-        <div class="flex max-h-[80vh] w-full max-w-[560px] flex-col border border-border-strong bg-card shadow-none">
+        <div class="flex max-h-[80vh] w-full max-w-[560px] flex-col border border-border-strong bg-card shadow-none wb-modal-card">
           <header class="flex shrink-0 items-start justify-between gap-3 border-b border-border px-3 py-2 wb-flat">
             <div class="min-w-0">
               <div class="lbl">// {{ t("ac.allPackages") }}</div>
@@ -1019,9 +1026,12 @@ async function doSwitch() {
           </div>
         </div>
       </div>
-    </Teleport>
+    </Transition>
+  </Teleport>
     <!-- 完全同步切换确认弹框：复刻原项目「切换到目标账号」的警示结构 -->
     <Teleport to="body">
+    <Transition name="wb-modal">
+
       <div
         v-if="switchTarget"
         class="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4"
@@ -1029,7 +1039,7 @@ async function doSwitch() {
         aria-modal="true"
         @click.self="closeSwitch"
       >
-        <div class="flex max-h-[85vh] w-full max-w-[480px] flex-col border border-border-strong bg-card">
+        <div class="flex max-h-[85vh] w-full max-w-[480px] flex-col border border-border-strong bg-card wb-modal-card">
           <header class="flex shrink-0 items-start justify-between gap-3 border-b border-border px-3 py-2 wb-flat">
             <div class="min-w-0">
               <div class="text-[13px] text-foreground">
@@ -1141,6 +1151,7 @@ async function doSwitch() {
           </footer>
         </div>
       </div>
-    </Teleport>
+    </Transition>
+  </Teleport>
   </div>
 </template>

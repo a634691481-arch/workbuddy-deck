@@ -9,10 +9,12 @@ import { archivedTasksList, purgeArchivedTasks, type ArchivedList } from "@/lib/
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { formatStamp } from "@/lib/utils";
 import { t, type I18nKey } from "@/lib/i18n";
+import { useListAnim } from "@/composables/useListAnim";
 
 const data = ref<ArchivedList | null>(null);
 const loading = ref(false);
 const error = ref("");
+const rowsEl = useListAnim();
 const notice = ref("");
 
 async function load() {
@@ -161,7 +163,7 @@ async function doPurge() {
 
     <!-- 台账表：粘性表头 + 行滚动，排序与口径都由后端定（归档时刻倒序） -->
     <div class="min-h-0 flex-1 overflow-y-auto p-3">
-      <div class="overflow-hidden border border-border bg-card">
+      <div ref="rowsEl" class="overflow-hidden border border-border bg-card">
       <div class="sticky top-0 z-10 grid grid-cols-[36px_minmax(0,1fr)_150px_72px] items-center gap-2 wb-cells border-b border-border bg-card px-3 py-1.5">
         <span class="lbl">#</span>
         <span class="lbl">{{ t("ar.colTask") }}</span>
@@ -189,6 +191,8 @@ async function doPurge() {
     </div>
 
     <Teleport to="body">
+    <Transition name="wb-modal">
+
       <!-- 清理确认：复刻「切换账号」弹框结构；数字来自实扫，不可恢复提示必须过目 -->
       <div
         v-if="purgeOpen"
@@ -197,7 +201,7 @@ async function doPurge() {
         aria-modal="true"
         @click.self="closePurge()"
       >
-        <div class="flex max-h-[85vh] w-full max-w-[480px] flex-col border border-border-strong bg-card">
+        <div class="flex max-h-[85vh] w-full max-w-[480px] flex-col border border-border-strong bg-card wb-modal-card">
           <header class="flex shrink-0 items-start justify-between gap-3 border-b border-border px-3 py-2 wb-flat">
             <div class="min-w-0">
               <div class="text-[13px] text-foreground">{{ t("pz.title") }}</div>
@@ -287,6 +291,7 @@ async function doPurge() {
           </footer>
         </div>
       </div>
-    </Teleport>
+    </Transition>
+  </Teleport>
   </div>
 </template>

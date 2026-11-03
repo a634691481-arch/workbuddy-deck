@@ -164,8 +164,11 @@ async function toggleBackdrop(next: "off" | "on") {
       </button>
     </div>
 
-    <!-- 外观面板：透明背板点击关闭 -->
-    <div v-if="panel" class="fixed inset-0 z-40" @click="panel = ''" />
+    <!-- 外观面板：透明背板点击关闭；面板淡入淡出，不做位移（贴窗口边缘会露缝） -->
+    <Transition name="wb-pop">
+      <div v-if="panel" class="fixed inset-0 z-40" @click="panel = ''" />
+    </Transition>
+    <Transition name="wb-pop">
     <div
       v-if="panel === 'appearance'"
       class="absolute right-24 top-full z-50 w-64 space-y-2.5 border border-border-strong bg-card p-3"
@@ -390,6 +393,7 @@ async function toggleBackdrop(next: "off" | "on") {
         </div>
       </div>
     </div>
+    </Transition>
 
     <!-- 加载条：占位就是原来那 2px 红线。空闲 = 满格；有在飞请求 = 滑块巡游 -->
     <div class="pointer-events-none absolute inset-x-0 bottom-0 h-0.5 overflow-hidden bg-hazard/25">

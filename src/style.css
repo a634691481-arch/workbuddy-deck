@@ -194,6 +194,50 @@ body,
   border-radius: 0 !important;
 }
 
+/* 弹框：遮罩淡入 + 卡片轻微上浮；关闭反向更快（120ms），不等它慢慢退场 */
+.wb-modal-enter-active {
+  transition: opacity 180ms ease-out;
+}
+
+.wb-modal-leave-active {
+  transition: opacity 140ms ease-in;
+}
+
+.wb-modal-enter-from,
+.wb-modal-leave-to {
+  opacity: 0;
+}
+
+.wb-modal-enter-active .wb-modal-card {
+  transition:
+    transform 240ms cubic-bezier(0.16, 1, 0.3, 1),
+    opacity 240ms ease-out;
+}
+
+.wb-modal-leave-active .wb-modal-card {
+  transition:
+    transform 150ms ease-in,
+    opacity 150ms ease-in;
+}
+
+.wb-modal-enter-from .wb-modal-card,
+.wb-modal-leave-to .wb-modal-card {
+  transform: translateY(14px) scale(0.97);
+  opacity: 0;
+}
+
+/* 标题栏弹层：从按钮下沿展开，不做位移缩放（贴着窗口边缘，位移会露缝） */
+.wb-pop-enter-active,
+.wb-pop-leave-active {
+  transition: opacity 120ms ease-out;
+  transform-origin: top right;
+}
+
+.wb-pop-enter-from,
+.wb-pop-leave-to {
+  opacity: 0;
+}
+
 /* 毛玻璃：系统特效在窗口后面，这里把表面调成半透明，文字仍用原色保持对比 */
 html.backdrop {
   --color-background: rgba(10, 10, 10, 0.55);

@@ -22,12 +22,14 @@ import {
   type SwitchHistoryList,
 } from "@/lib/api";
 import { t, type I18nKey } from "@/lib/i18n";
+import { useListAnim } from "@/composables/useListAnim";
 
 type Filter = "all" | EventSource;
 
 const data = ref<EventList | null>(null);
 const loading = ref(true);
 const error = ref("");
+const rowsEl = useListAnim(() => !loading.value && rows.value.length <= 120);
 const filter = ref<Filter>("all");
 const keyword = ref("");
 const clearing = ref(false);
@@ -448,7 +450,7 @@ async function doClear() {
     </section>
 
     <!-- 日志表 -->
-    <div class="mx-3 mb-3 mt-3 min-h-0 flex-1 overflow-auto border border-border bg-card">
+    <div ref="rowsEl" class="mx-3 mb-3 mt-3 min-h-0 flex-1 overflow-auto border border-border bg-card">
       <div class="grid grid-cols-[92px_76px_72px_minmax(160px,1fr)_minmax(200px,1.4fr)] items-center gap-2 wb-cells border-b border-border bg-panel px-3 py-1">
         <span class="lbl">{{ t("rl.time") }}</span>
         <span class="lbl">{{ t("rl.source") }}</span>
@@ -487,12 +489,14 @@ async function doClear() {
 
     <!-- 清空确认 -->
     <Teleport to="body">
+    <Transition name="wb-modal">
+
       <div
         v-if="clearTarget"
         class="fixed inset-0 z-50 grid place-items-center bg-black/60 p-4"
         @click.self="clearTarget = null"
       >
-        <div class="w-full max-w-md border border-hazard bg-card">
+        <div class="w-full max-w-md border border-hazard bg-card wb-modal-card">
           <div class="flex items-center justify-between border-b border-border px-3 py-2">
             <span class="text-[12px] tracking-[0.1em] text-hazard">{{ t("rl.clear") }}</span>
             <button type="button" class="text-[11px] text-muted-foreground hover:text-foreground" @click="clearTarget = null">
@@ -520,6 +524,7 @@ async function doClear() {
           </div>
         </div>
       </div>
-    </Teleport>
+    </Transition>
+  </Teleport>
   </div>
 </template>

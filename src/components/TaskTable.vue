@@ -4,6 +4,7 @@ import { Check, CircleAlert, CircleDot, Inbox, Loader, Minus } from "lucide-vue-
 import Badge from "@/components/ui/Badge.vue";
 import type { CheckinStatus, GrowthTask } from "@/lib/api";
 import { t } from "@/lib/i18n";
+import { useListAnim } from "@/composables/useListAnim";
 import { isDone, progressOf, statusOf } from "@/lib/task-meta";
 
 const props = defineProps<{
@@ -18,6 +19,7 @@ const props = defineProps<{
 }>();
 
 const tab = defineModel<"tasks" | "checkin" | "raw">({ default: "tasks" });
+const rowsEl = useListAnim(() => !props.running);
 
 const tabs = [
   { key: "tasks", labelKey: "tt.growth" },
@@ -65,7 +67,7 @@ const GRID = "grid grid-cols-[minmax(0,1fr)_74px_62px_66px_30px] items-center ga
     </div>
 
     <!-- 任务表 -->
-    <div v-show="tab === 'tasks'" class="min-h-0 flex-1 overflow-y-auto">
+    <div v-show="tab === 'tasks'" ref="rowsEl" class="min-h-0 flex-1 overflow-y-auto">
       <!-- 表头：粘性黑底，列间竖线 -->
       <div
         :class="[GRID, 'sticky top-0 z-10 border-b border-border-strong bg-background text-[10px] uppercase tracking-[0.1em] text-muted-foreground']"
