@@ -124,14 +124,33 @@ fn normalize_mirror(raw: &str) -> String {
     }
 }
 
-/// 清单候选 URL（按优先级）。镜像前缀同时作用于两个端点。
+/// 公共镜像：GitHub 直连不稳时兜底（前缀式代理，与自定义镜像同一套拼法）。
+const PUBLIC_MIRRORS: [&str; 2] = ["https://ghfast.top/", "https://gh-proxy.com/"];
+
+/// 清单候选 URL（按优先级）。自定义镜像优先；没配就直连 + 公共镜像兜底。
+///
+/// 说明：镜像只影响**清单**（latest.json）能不能拉到；安装包地址由清单里给出，
+/// 插件按它下载。所以真正的兜底是下面的「重试」，镜像负责先把清单拿到手。
 fn manifest_urls(mirror: &str) -> Vec<String> {
-    let prefix = normalize_mirror(mirror);
     let base = format!("https://github.com/{OWNER}/{REPO}/releases/latest/download");
-    vec![
-        format!("{prefix}{base}/latest.json"),
-        format!("{prefix}{base}/latest-windows-x86_64.json"),
-    ]
+    let custom = normalize_mirror(mirror);
+    let mut prefixes: Vec<String> = Vec::new();
+    if !custom.is_empty() {
+        prefixes.push(custom);
+    }
+    prefixes.push(String::new());
+    if mirror.trim().is_empty() {
+        prefixes.extend(PUBLIC_MIRRORS.iter().map(|item| (*item).to_string()));
+    }
+    prefixes
+        .into_iter()
+        .flat_map(|prefix| {
+            [
+                format!("{prefix}{base}/latest.json"),
+                format!("{prefix}{base}/latest-windows-x86_64.json"),
+            ]
+        })
+        .collect()
 }
 
 /// 逐段数字比较（`0.1.10 > 0.1.9`，字符串比较会错）。
@@ -307,37 +326,59 @@ pub fn install(app: AppHandle) -> Value {
             );
         };
 
-        let builder = match app.updater_builder().endpoints(urls) {
-            Ok(builder) => builder,
-            Err(e) => return finish(false, Some(format!("更新器初始化失败：{e}"))),
-        };
-        let updater = match builder.build() {
-            Ok(updater) => updater,
-            Err(e) => return finish(false, Some(format!("更新器初始化失败：{e}"))),
-        };
-        let update = match updater.check().await {
-            Ok(Some(update)) => update,
-            Ok(None) => return finish(false, Some("已是最新版本".into())),
-            Err(e) => return finish(false, Some(format!("检查失败：{e}"))),
-        };
-
-        let version = update.version.clone();
-        let app_for_progress = app.clone();
-        let downloaded = AtomicU64::new(0);
-        let _ = app.emit("update://progress", json!({ "downloaded": 0, "total": null }));
-
-        let outcome = update
-            .download_and_install(
-                |chunk, total| {
-                    let done = downloaded.fetch_add(chunk as u64, Ordering::Relaxed) + chunk as u64;
-                    let _ = app_for_progress.emit(
-                        "update://progress",
-                        json!({ "downloaded": done, "total": total }),
-                    );
-                },
-                || {},
-            )
-            .await;
+        // 重试三次：GitHub 的下载域名（objects.githubusercontent.com）在国内经常
+        // 第一次就 reset，重试往往第二次就通。每次都是独立的 updater + 独立进度。
+        let mut version = String::new();
+        let mut outcome: Result<(), String> = Err("未开始".into());
+        for attempt in 1..=3u32 {
+            if attempt > 1 {
+                // 2s / 5s 退避，给线路一点恢复时间
+                tokio::time::sleep(Duration::from_secs(if attempt == 2 { 2 } else { 5 })).await;
+                trace(&format!("download retry {attempt}"));
+            }
+            let builder = match app.updater_builder().endpoints(urls.clone()) {
+                Ok(builder) => builder.timeout(Duration::from_secs(180)),
+                Err(e) => return finish(false, Some(format!("更新器初始化失败：{e}"))),
+            };
+            let updater = match builder.build() {
+                Ok(updater) => updater,
+                Err(e) => return finish(false, Some(format!("更新器初始化失败：{e}"))),
+            };
+            let update = match updater.check().await {
+                Ok(Some(update)) => update,
+                Ok(None) => return finish(false, Some("已是最新版本".into())),
+                Err(e) => {
+                    outcome = Err(format!("检查失败：{e}"));
+                    continue;
+                }
+            };
+            version = update.version.clone();
+            let app_for_progress = app.clone();
+            let downloaded = AtomicU64::new(0);
+            let _ = app.emit("update://progress", json!({ "downloaded": 0, "total": null }));
+            match update
+                .download_and_install(
+                    |chunk, total| {
+                        let done =
+                            downloaded.fetch_add(chunk as u64, Ordering::Relaxed) + chunk as u64;
+                        let _ = app_for_progress.emit(
+                            "update://progress",
+                            json!({ "downloaded": done, "total": total }),
+                        );
+                    },
+                    || {},
+                )
+                .await
+            {
+                Ok(()) => {
+                    outcome = Ok(());
+                    break;
+                }
+                Err(e) => {
+                    outcome = Err(e.to_string());
+                }
+            }
+        }
 
         match outcome {
             Ok(()) => {
@@ -352,7 +393,20 @@ pub fn install(app: AppHandle) -> Value {
                 #[cfg(not(target_os = "windows"))]
                 app.restart();
             }
-            Err(e) => finish(false, Some(format!("下载或校验失败：{e}"))),
+            Err(e) => {
+                let hint = if e.contains("sending request")
+                    || e.contains("connect")
+                    || e.contains("timed out")
+                    || e.contains("dns")
+                {
+                    "（网络到 GitHub 不通，已重试 3 次；可在「设置 → 自动更新 → 镜像前缀」填 https://ghfast.top/ ，或到发布页手动下载安装包）"
+                } else if e.contains("signature") || e.contains("verify") {
+                    "（安装包签名校验失败，多为下载被中途篡改或代理缓存了旧文件，请重试或手动下载）"
+                } else {
+                    ""
+                };
+                finish(false, Some(format!("下载或校验失败：{e}{hint}")))
+            }
         }
         INSTALLING.store(false, Ordering::SeqCst);
     });
