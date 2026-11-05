@@ -1,9 +1,15 @@
 // 编排层：状态 / 副作用 / 轮询 / 动作。App.vue 只渲染；这里是唯一使用 `api` 的地方。
 // 抽出理由见 AGENTS.md §2：模板与逻辑混在一个文件里无法单独演进。
 import { computed, onBeforeUnmount, onMounted, ref } from "vue";
+import {
+  isPermissionGranted,
+  requestPermission,
+  sendNotification,
+} from "@tauri-apps/plugin-notification";
 
 import type { LogLine } from "@/components/LogPanel.vue";
 import * as api from "@/lib/api";
+import { isTauri } from "@/lib/tauri-env";
 import { actionLabel, failuresOf, mask, pendingOf, type ActionKey } from "@/lib/task-meta";
 
 /** 轮询间隔：只在运行中开启，结束立刻停表（AGENTS.md §6）。 */
@@ -11,6 +17,7 @@ const POLL_INTERVAL_MS = 400;
 const SIDEBAR_MIN = 240;
 const SIDEBAR_MAX = 380;
 const SIDEBAR_KEY = "wb-ta/sidebar-width";
+const ACTIVE_KEY = "wb-ta/active-account";
 const LOG_LIMIT = 200;
 const FAILURE_PREVIEW = 5;
 
@@ -31,7 +38,18 @@ function emptyRun(): api.RunStatus {
 export function useAssistant() {
   const accounts = ref<api.AccountSummary[]>([]);
   const selected = ref<Set<string>>(new Set());
-  const activeId = ref<string | null>(null);
+  // 上次选中的账号：重启后直接回到那个号，不用每次从 01 号开始翻
+  const activeId = ref<string | null>(localStorage.getItem(ACTIVE_KEY));
+  // 批量执行计时：用来估剩余时间（只在运行中显示，结束清空）
+  let runStartedAt = 0;
+  const etaText = computed(() => {
+    const { running, done, total } = run.value;
+    if (!running || !runStartedAt || done <= 0 || total <= done) return "";
+    const elapsed = Date.now() - runStartedAt;
+    const left = Math.round(((elapsed / done) * (total - done)) / 1000);
+    if (left <= 0) return "";
+    return left >= 60 ? `≈${Math.floor(left / 60)}m${String(left % 60).padStart(2, "0")}s` : `≈${left}s`;
+  });
   const detail = ref<api.AccountDetail | null>(null);
   const detailLoading = ref(false);
   const detailError = ref("");
@@ -40,7 +58,7 @@ export function useAssistant() {
   const lastRefresh = ref("—");
   const tab = ref<"tasks" | "checkin" | "raw">("tasks");
   const sidebarWidth = ref(clampWidth(Number(localStorage.getItem(SIDEBAR_KEY)) || 300));
-  const failures = ref<{ label: string; reason: string }[]>([]);
+  const failures = ref<{ accountId: string; label: string; reason: string }[]>([]);
   const pendingRows = ref<ReturnType<typeof pendingOf>>([]);
   const showFailures = ref(false);
   const cancelling = ref(false);
@@ -95,6 +113,7 @@ export function useAssistant() {
     // 切到不同账号时先清掉旧详情，加载期间不残留上个账号的数据
     if (activeId.value !== id) detail.value = null;
     activeId.value = id;
+    localStorage.setItem(ACTIVE_KEY, id);
     detailLoading.value = true;
     detailError.value = "";
     try {
@@ -117,7 +136,10 @@ export function useAssistant() {
       accounts.value = res.accounts;
       lastRefresh.value = stamp();
       pushLog(`已刷新账号列表（${res.total} 个）`);
-      if (!activeId.value && res.accounts.length > 0) {
+      if (
+        res.accounts.length > 0 &&
+        (!activeId.value || !res.accounts.some((item) => item.id === activeId.value))
+      ) {
         await selectAccount(res.accounts[0].id);
       } else if (activeId.value) {
         await selectAccount(activeId.value);
@@ -169,15 +191,18 @@ export function useAssistant() {
     localStorage.setItem(SIDEBAR_KEY, String(sidebarWidth.value));
   }
 
-  async function runAction(action: ActionKey) {
+  async function runAction(action: ActionKey, onlyIds?: string[]) {
     if (busy.value) return;
-    if (scope.value === "selected" && selected.value.size === 0) return;
+    // 失败重试带明确 id，不受当前作用域影响
+    if (!onlyIds && scope.value === "selected" && selected.value.size === 0) return;
 
     const label = actionLabel(action);
     busyAction.value = action;
     showFailures.value = false;
     failures.value = [];
-    pushLog(`开始执行「${label}」，共 ${targetIds.value.length || accounts.value.length} 个账号`);
+    const ids = onlyIds ?? targetIds.value;
+    runStartedAt = Date.now();
+    pushLog(`开始执行「${label}」，共 ${ids.length || accounts.value.length} 个账号`);
 
     try {
       startPolling();
@@ -187,9 +212,10 @@ export function useAssistant() {
         travel: api.runTravel,
         growth: api.runGrowth,
       } as const;
-      const result = await runner[action](targetIds.value);
+      const result = await runner[action](ids);
 
       run.value = await api.runStatus().catch(() => run.value);
+      if (!run.value.running) runStartedAt = 0;
       failures.value = failuresOf(result.accounts ?? []);
       pendingRows.value = pendingOf(result.accounts ?? []);
 
@@ -206,6 +232,10 @@ export function useAssistant() {
       for (const failure of failures.value.slice(0, FAILURE_PREVIEW)) {
         pushLog(`${failure.label} 失败：${failure.reason}`, "err");
       }
+      void notifyResult(
+        `WorkBuddy Deck · ${label}`,
+        `${verdict}：成功 ${run.value.ok}，失败 ${run.value.fail}，跳过 ${run.value.skip}`,
+      );
       await refreshQuietly();
     } catch (error) {
       pushLog(`「${label}」执行异常：${String(error)}`, "err");
@@ -247,6 +277,21 @@ export function useAssistant() {
       await selectAccount(activeId.value as string);
       if (ticks >= 8) window.clearInterval(timer);
     }, 15_000);
+  }
+
+  /**
+   * 批量跑完给一条系统通知：窗口不在前台时也能知道结果。
+   * 前台时静默（界面已经显示结果），通知失败不影响主流程。
+   */
+  async function notifyResult(title: string, body: string) {
+    if (!isTauri() || document.hasFocus()) return;
+    try {
+      let granted = await isPermissionGranted();
+      if (!granted) granted = (await requestPermission()) === "granted";
+      if (granted) sendNotification({ title, body });
+    } catch {
+      /* 通知不是关键路径 */
+    }
   }
 
   async function cancel() {
@@ -302,6 +347,7 @@ export function useAssistant() {
 
   return {
     accounts,
+    etaText,
     selected,
     activeId,
     detail,

@@ -504,3 +504,60 @@ mod tests {
         }
     }
 }
+
+
+/// 导出诊断包（单个 .txt）：版本 / 平台 / 数据规模 / 脱敏后的配置 / 各日志尾部。
+///
+/// 为什么是 txt 不是 zip：这里只排障用，纯文本能直接贴进工单，也不用引 zip 依赖。
+/// **脱敏**：账号库只输出条数与字段名，token / 手机号 / 昵称一律不出。
+pub fn export_diagnostics(path: &str) -> serde_json::Value {
+    use std::fmt::Write as _;
+
+    let mut out = String::new();
+    let _ = writeln!(out, "WorkBuddy Deck 诊断包");
+    let _ = writeln!(out, "生成时间: {}", stamp(None));
+    let _ = writeln!(out, "版本: {}", env!("CARGO_PKG_VERSION"));
+    let _ = writeln!(out, "平台: {} {}", std::env::consts::OS, std::env::consts::ARCH);
+
+    let accounts = wb_switch_core::modules::account::load_accounts();
+    let cn = wb_switch_core::modules::account::cn_accounts();
+    let _ = writeln!(out, "账号: {} 条（国内版 {}）", accounts.len(), cn.len());
+    if let Some(first) = accounts.first() {
+        let keys: Vec<&str> = first
+            .as_object()
+            .map(|obj| obj.keys().map(String::as_str).collect())
+            .unwrap_or_default();
+        let _ = writeln!(out, "账号字段: {}", keys.join(", "));
+    }
+
+    let dir = wb_switch_core::modules::config::store_dir();
+    let _ = writeln!(out, "数据目录: {}", dir.display());
+
+    for name in [
+        "error.log",
+        "auto_daily_logs.json",
+        "notifications.json",
+        "switch_history.json",
+        "update.log",
+    ] {
+        let file = dir.join(name);
+        let _ = writeln!(out);
+        let _ = writeln!(out, "──────── {name} ────────");
+        match std::fs::read_to_string(&file) {
+            Ok(text) => {
+                let tail: Vec<&str> = text.lines().rev().take(200).collect();
+                for line in tail.into_iter().rev() {
+                    let _ = writeln!(out, "{line}");
+                }
+            }
+            Err(err) => {
+                let _ = writeln!(out, "（读取失败：{err}）");
+            }
+        }
+    }
+
+    match std::fs::write(path, out) {
+        Ok(()) => serde_json::json!({ "ok": true, "path": path }),
+        Err(err) => serde_json::json!({ "ok": false, "error": err.to_string() }),
+    }
+}

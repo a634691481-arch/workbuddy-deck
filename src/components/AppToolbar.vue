@@ -9,6 +9,7 @@ const props = defineProps<{
   running: boolean;
   done: number;
   runTotal: number;
+  eta?: string;
   current: string;
   actionLabel: string;
   busyAction: string;
@@ -35,6 +36,7 @@ const btnClass =
         <Loader2 class="size-3 shrink-0 animate-spin text-hazard" />
         <span class="lbl lbl-ink">{{ props.actionLabel }}</span>
         <span class="readout text-[11px] text-foreground">{{ props.done }}/{{ props.runTotal }}</span>
+        <span v-if="props.eta" class="readout text-[9px] text-faint">{{ props.eta }}</span>
         <span v-if="props.current" class="lbl truncate text-faint">» {{ props.current }}</span>
         <div class="ml-2 h-2 flex-1 border border-border-strong">
           <div

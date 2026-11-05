@@ -47,10 +47,14 @@ export function isDone(task: GrowthTask): boolean {
 }
 
 /** 失败聚合：把一批结果行里失败的挑出来，供顶部横幅展开。 */
-export function failuresOf(rows: RunRow[]): { label: string; reason: string }[] {
+export function failuresOf(
+  rows: RunRow[],
+): { accountId: string; label: string; reason: string }[] {
   return rows
     .filter((row) => row.result === "error" || row.result === "fail")
     .map((row) => ({
+      // 带上 id：失败聚合条要能「只重试这几个号」，没有 id 就只能整体重跑
+      accountId: row.accountId ?? "",
       label: row.label ?? row.accountId ?? "未知账号",
       reason: row.error ?? row.reason ?? "未返回原因",
     }));

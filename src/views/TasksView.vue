@@ -40,6 +40,7 @@ const {
   pendingRows,
   openTaskJump,
   goComplete,
+  etaText,
   cancelling,
   busyAction,
   run,
@@ -108,6 +109,13 @@ watch(
   (value) => setRunning(value),
   { immediate: true },
 );
+
+/** 只重跑失败的那几个号：避免为了 1 个失败把 30 个账号整套重来。 */
+function retryFailures() {
+  const ids = failures.value.map((item) => item.accountId).filter(Boolean);
+  if (ids.length === 0) return;
+  void runAction((run.value.action || "checkin") as "checkin" | "growth" | "travel", ids);
+}
 </script>
 
 <template>
@@ -116,6 +124,7 @@ watch(
       :running="run.running"
       :done="run.done"
       :run-total="run.total"
+      :eta="etaText"
       :current="run.current"
       :action-label="runLabel"
       :busy-action="busyAction"
@@ -173,6 +182,13 @@ watch(
             [ {{ t("fail.title") }} {{ String(failures.length).padStart(2, "0") }} ]
             <span class="text-hazard/70">
               {{ showFailures ? t("fail.collapse") : t("fail.expand") }}
+            </span>
+            <span
+              class="ml-auto border border-hazard px-1.5 py-0.5 text-[9px] hover:bg-hazard hover:text-white"
+              :class="busyAction ? 'pointer-events-none opacity-40' : ''"
+              @click.stop="retryFailures"
+            >
+              {{ t("fail.retry") }}
             </span>
           </button>
           <ul v-if="showFailures" class="mt-1 max-h-24 space-y-0.5 overflow-y-auto pl-4 text-[10px] text-hazard">

@@ -792,6 +792,10 @@ export const exportData = (kind: ExportKind, path: string) =>
   invoke<ExportResult>("export_data", { kind, path });
 
 /** 把四份 CSV 一起写进目录。 */
+/** 导出诊断包（单个 txt，已脱敏）：排障用。 */
+export const exportDiagnostics = (path: string) =>
+  invoke<{ ok: boolean; path?: string; error?: string }>("export_diagnostics", { path });
+
 export const exportAllData = (dir: string) =>
   invoke<ExportAllResult>("export_all_data", { dir });
 

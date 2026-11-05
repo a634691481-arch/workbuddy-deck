@@ -8,6 +8,7 @@ import { computed, onMounted, ref } from "vue";
 
 import AppSidebar from "@/components/AppSidebar.vue";
 import BootOverlay from "@/components/BootOverlay.vue";
+import CommandPalette from "@/components/CommandPalette.vue";
 import TitleBar from "@/components/TitleBar.vue";
 import AccountsView from "@/views/AccountsView.vue";
 import ArchivedView from "@/views/ArchivedView.vue";
@@ -23,6 +24,15 @@ import type { NavKey } from "@/lib/nav";
 
 const { accountCount, running, nav } = useShell();
 
+// Ctrl/Cmd+K 命令面板：只做分区跳转，不复制业务动作
+const paletteOpen = ref(false);
+function onKeydown(event: KeyboardEvent) {
+  if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
+    event.preventDefault();
+    paletteOpen.value = !paletteOpen.value;
+  }
+}
+
 /**
  * 启动补一次「本机 WorkBuddy 登录态 → 账号库」，两种机器都要兼容：
  * - 装过 workbuddy-switch：账号库已有这些账号，core 只在 uid 缺失时才写，等于空转；
@@ -30,6 +40,7 @@ const { accountCount, running, nav } = useShell();
  * 静默且幂等，没有登录态就什么都不发生。
  */
 onMounted(async () => {
+  window.addEventListener("keydown", onKeydown);
   if (!isTauri()) return;
   try {
     await importLocalAccounts();
@@ -87,6 +98,8 @@ const booting = ref(true);
         <component :is="activeView" class="wb-view min-w-0 flex-1" />
       </KeepAlive>
     </div>
+
+    <CommandPalette :open="paletteOpen" @close="paletteOpen = false" @nav="nav = $event" />
 
     <BootOverlay v-if="booting" @done="booting = false" />
   </div>

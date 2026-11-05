@@ -1460,6 +1460,15 @@ pub fn export_data(kind: String, path: String) -> Value {
     crate::export::export_one(&kind, &path)
 }
 
+/// 导出诊断包（版本 / 平台 / 数据规模 / 日志尾部），排障用。
+#[tauri::command(rename_all = "camelCase")]
+pub fn export_diagnostics(path: String) -> Value {
+    if path.trim().is_empty() {
+        return json!({ "ok": false, "error": "未选择保存位置" });
+    }
+    crate::export::export_diagnostics(&path)
+}
+
 /// 把全部 CSV 写进选定目录，逐份返回结果。
 #[tauri::command(rename_all = "camelCase")]
 pub fn export_all_data(dir: String) -> Value {

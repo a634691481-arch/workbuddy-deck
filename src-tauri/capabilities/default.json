@@ -14,6 +14,8 @@
     "core:window:allow-show",
     "core:window:allow-set-focus",
     "dialog:default",
+    "notification:default",
+    "window-state:default",
     "dialog:allow-open",
     "dialog:allow-save"
   ]

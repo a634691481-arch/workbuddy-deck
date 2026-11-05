@@ -30,6 +30,10 @@ chrono = "0.4"
 # Windows 后端处理（自己拼 installer 命令行会在进程占用时失败）。
 # process：安装器启动后需要主动退出当前进程，交给插件做更稳。
 tauri-plugin-updater = "2"
+# 系统通知：批量跑完/失败时在托盘外也能知道结果
+tauri-plugin-notification = "2"
+# 窗口大小/位置记忆：每次启动不用重摆
+tauri-plugin-window-state = "2"
 # 检查更新用：与 core 同版本同 feature，直接复用已编译产物，不增加构建时间。
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
 # 直接复用已有工具的核心逻辑（账号库 / 签到 / 成长任务 / 旅行 / 令牌续期），

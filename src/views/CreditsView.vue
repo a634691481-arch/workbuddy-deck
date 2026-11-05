@@ -433,7 +433,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
                       : 'w-full max-w-[46px] bg-foreground/35 hover:bg-foreground/70'
                   "
                   :style="{ height: `${point.height}%` }"
-                  :title="`${point.date} · ${fmt(point.usage)}`"
+                  :title="`${point.date} · ${fmt(point.usage)} 积分${point.usage === chartMax ? ' · 峰值' : ''}`"
                 />
               </div>
 
@@ -454,7 +454,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
                   class="absolute size-1.5 -translate-x-1/2 translate-y-1/2"
                   :class="point.usage > 0 && point.usage === chartMax ? 'bg-hazard' : 'bg-foreground'"
                   :style="{ left: `${linePoints[index]?.x ?? 0}%`, bottom: `${point.height}%` }"
-                  :title="`${point.date} · ${fmt(point.usage)}`"
+                  :title="`${point.date} · ${fmt(point.usage)} 积分${point.usage === chartMax ? ' · 峰值' : ''}`"
                 />
               </div>
             </div>

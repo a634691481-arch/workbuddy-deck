@@ -477,6 +477,49 @@ const orderedRows = computed(() => {
 });
 
 
+/**
+ * 账号多了以后靠眼睛扫不过来：搜索按 名称 / 账号 ID / 手机号尾号 匹配，
+ * 排序提供「默认（到期紧迫度）/ 余额 / 健康分 / 到期时间」四档。
+ * 匹配用原始值（不是脱敏后的星号文本），否则脱敏模式下搜不到。
+ */
+const query = ref("");
+type SortKey = "default" | "balance" | "health" | "expiry";
+const sortBy = ref<SortKey>("default");
+const viewMode = ref<"cards" | "list">("cards");
+
+const visibleRows = computed(() => {
+  const keyword = query.value.trim().toLowerCase();
+  const base = keyword
+    ? orderedRows.value.filter((row) => {
+        const haystack = [row.label, row.accountId]
+          .filter(Boolean)
+          .join(" ")
+          .toLowerCase();
+        return haystack.includes(keyword);
+      })
+    : [...orderedRows.value];
+
+  switch (sortBy.value) {
+    case "balance":
+      return base.sort((a, b) => (b.remaining ?? -1) - (a.remaining ?? -1));
+    case "health":
+      return base.sort((a, b) => (b.health?.score ?? -1) - (a.health?.score ?? -1));
+    case "expiry":
+      return base.sort(
+        (a, b) => expiryOf(a) - expiryOf(b),
+      );
+    default:
+      return base;
+  }
+});
+
+/** 最近一条额度的到期时刻（没有就排到最后）。 */
+function expiryOf(row: AccountOverviewRow): number {
+  return (row.resources ?? [])
+    .filter((item) => item.remaining > 0 && item.expireAt != null)
+    .reduce((best, item) => Math.min(best, item.expireAt as number), Number.MAX_SAFE_INTEGER);
+}
+
 /** 账号当前生效的限流条目（官方恢复时刻还没到的）。 */
 const activeLimits = (row: AccountOverviewRow) => {
   const now = Date.now();
@@ -673,7 +716,7 @@ async function doSwitch() {
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col">
-    <header class="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-panel px-4 py-2 wb-flat">
+    <header class="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-border bg-panel px-4 py-2 wb-flat">
       <div class="min-w-0">
         <h1 class="text-[13px] tracking-[0.12em] text-foreground">{{ t("ac.title") }}</h1>
         <div class="readout mt-0.5 flex flex-wrap items-center gap-x-3 text-[9px] text-faint">
@@ -761,6 +804,34 @@ async function doSwitch() {
           {{ t("ac.export") }}
         </button>
       </div>
+
+      <!-- 搜索 / 排序 / 视图：账号多了靠眼睛扫不过来 -->
+      <div class="mt-2 flex w-full items-center gap-1.5">
+        <input
+          v-model="query"
+          type="search"
+          :placeholder="t('ac.search')"
+          class="readout h-6 w-44 border border-border-strong bg-input px-1.5 text-[10px] text-foreground outline-none focus:border-hazard"
+        />
+        <select
+          v-model="sortBy"
+          class="readout h-6 border border-border-strong bg-input px-1 text-[10px] text-muted-foreground outline-none focus:border-hazard"
+          :title="t('ac.sort')"
+        >
+          <option value="default">{{ t("ac.sortDefault") }}</option>
+          <option value="balance">{{ t("ac.sortBalance") }}</option>
+          <option value="health">{{ t("ac.sortHealth") }}</option>
+          <option value="expiry">{{ t("ac.sortExpiry") }}</option>
+        </select>
+        <span class="readout text-[9px] text-faint">{{ visibleRows.length }}/{{ rows.length }}</span>
+        <button
+          type="button"
+          class="ml-auto flex h-6 items-center border border-border-strong px-1.5 text-[9px] uppercase tracking-[0.08em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+          @click="viewMode = viewMode === 'cards' ? 'list' : 'cards'"
+        >
+          {{ viewMode === "cards" ? t("ac.viewList") : t("ac.viewCards") }}
+        </button>
+      </div>
     </header>
 
     <div
@@ -783,7 +854,7 @@ async function doSwitch() {
     <div class="min-h-0 flex-1 overflow-y-auto p-3">
       <!-- 首次加载：骨架卡（呼吸块）比一个「···」更像在干活 -->
       <div
-        v-if="orderedRows.length === 0 && loading"
+        v-if="visibleRows.length === 0 && loading"
         class="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3"
       >
         <div
@@ -801,13 +872,50 @@ async function doSwitch() {
           <div class="mt-auto h-2 w-4/5 animate-pulse bg-border" />
         </div>
       </div>
-      <div v-else-if="orderedRows.length === 0" class="px-3 py-16 text-center text-[11px] text-faint">
-        {{ t("ac.empty") }}
+      <div v-else-if="rows.length === 0" class="mx-auto max-w-md px-3 py-14 text-center">
+        <p class="text-[12px] text-foreground">{{ t("ac.empty") }}</p>
+        <ol class="mt-4 space-y-2 text-left text-[11px] text-muted-foreground">
+          <li class="flex items-start gap-2">
+            <span class="readout text-hazard">01</span>
+            <span>{{ t("ac.emptyStep1") }}</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="readout text-hazard">02</span>
+            <span>{{ t("ac.emptyStep2") }}</span>
+          </li>
+          <li class="flex items-start gap-2">
+            <span class="readout text-hazard">03</span>
+            <span>{{ t("ac.emptyStep3") }}</span>
+          </li>
+        </ol>
+        <div class="mt-4 flex items-center justify-center gap-2">
+          <button
+            type="button"
+            class="border border-foreground bg-foreground px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-background"
+            @click="importLocal(false)"
+          >
+            {{ t("ac.importLocal") }}
+          </button>
+          <button
+            type="button"
+            class="border border-border-strong px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground hover:border-foreground hover:text-foreground"
+            @click="startLogin()"
+          >
+            {{ t("ac.add") }}
+          </button>
+        </div>
+      </div>
+      <div v-else-if="visibleRows.length === 0" class="px-3 py-16 text-center text-[11px] text-faint">
+        {{ t("ac.noMatch") }}
       </div>
 
-      <div v-else ref="cardsEl" class="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3">
+      <div
+        v-else-if="viewMode === 'cards'"
+        ref="cardsEl"
+        class="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3"
+      >
         <article
-          v-for="(row, index) in orderedRows"
+          v-for="(row, index) in visibleRows"
           :key="row.accountId"
           class="flex min-w-0 flex-col border bg-card"
           :class="[
@@ -1019,6 +1127,55 @@ async function doSwitch() {
             </div>
           </div>
         </article>
+      </div>
+
+      <!-- 列表视图：20+ 账号时一屏看更多，只保留最关键的列 -->
+      <div v-else class="border border-border bg-card">
+        <div class="readout grid grid-cols-[2.2rem_minmax(0,1fr)_5.5rem_4rem_5.5rem_7rem] gap-px border-b border-border bg-muted text-[9px] text-faint">
+          <span class="px-2 py-1">#</span>
+          <span class="px-2 py-1">{{ t("ac.name") }}</span>
+          <span class="px-2 py-1 text-right">{{ t("ac.balanceShort") }}</span>
+          <span class="px-2 py-1 text-right">{{ t("ac.packages") }}</span>
+          <span class="px-2 py-1">{{ t("ac.expiring") }}</span>
+          <span class="px-2 py-1 text-right">{{ t("ac.ops") }}</span>
+        </div>
+        <div
+          v-for="(row, index) in visibleRows"
+          :key="row.accountId"
+          class="grid grid-cols-[2.2rem_minmax(0,1fr)_5.5rem_4rem_5.5rem_7rem] items-center gap-px border-b border-border/60 text-[11px] last:border-b-0 hover:bg-muted/60"
+          :class="isPrimary(row) ? 'border-l-2 border-l-hazard' : ''"
+        >
+          <span class="readout px-2 py-1.5 text-[9px] text-faint">{{ String(index + 1).padStart(2, "0") }}</span>
+          <div class="min-w-0 px-2 py-1.5">
+            <div class="flex min-w-0 items-center gap-1.5">
+              <span class="size-1.5 shrink-0 rounded-full" :class="healthDot(row.health)" :title="healthTitle(row.health)" />
+              <span class="min-w-0 truncate text-foreground" :title="mask(row.label)">{{ mask(row.label) }}</span>
+              <span v-if="isPrimary(row)" class="lbl-ink shrink-0 border border-hazard px-1 text-[8px] text-hazard">
+                {{ t("ac.currentBadge") }}
+              </span>
+            </div>
+          </div>
+          <span class="readout px-2 py-1.5 text-right text-foreground">
+            {{ row.ok ? fmt(row.remaining) : t("ac.noSnapshot") }}
+          </span>
+          <span class="readout px-2 py-1.5 text-right text-muted-foreground">{{ row.packages }}</span>
+          <span class="readout truncate px-2 py-1.5 text-[10px]" :class="expiringTone(row)">
+            {{ row.resources.length > 0 ? expiringSummary(row) : "—" }}
+          </span>
+          <span class="flex items-center justify-end gap-1 px-2 py-1.5">
+            <button
+              v-if="!isPrimary(row)"
+              type="button"
+              class="border border-foreground bg-foreground px-1 py-0.5 text-[9px] text-background"
+              @click="openSwitch(row)"
+            >
+              {{ t("ac.setCurrent") }}
+            </button>
+            <button type="button" class="border border-border-strong px-1 py-0.5 text-[9px] text-muted-foreground hover:border-hazard hover:text-hazard" @click="openPackages(row)">
+              {{ t("ac.viewAll") }}
+            </button>
+          </span>
+        </div>
       </div>
     </div>
 

@@ -17,6 +17,7 @@ import {
   autoSwitchStatus,
   eventsClear,
   exportAllData,
+  exportDiagnostics,
   exportData,
   openExternal,
   openStoreDir,
@@ -246,7 +247,7 @@ const EXPORTS: { kind: ExportKind; labelKey: "st.exAccounts" | "st.exTokensDaily
   { kind: "credits", labelKey: "st.exCredits", file: "credits" },
 ];
 
-const exporting = ref<"" | ExportKind | "all">("");
+const exporting = ref<"" | ExportKind | "all" | "diag">("");
 const exportNote = ref("");
 const exportFailed = ref(false);
 
@@ -269,6 +270,30 @@ async function runExport(kind: ExportKind, file: string) {
     exportNote.value = result.ok
       ? `${t("st.exDone")} · ${path}`
       : `${t("st.exFail")} · ${result.error ?? ""}`;
+  } catch (cause) {
+    exportFailed.value = true;
+    exportNote.value = `${t("st.exFail")} · ${cause instanceof Error ? cause.message : String(cause)}`;
+  } finally {
+    exporting.value = "";
+  }
+}
+
+/** 诊断包：版本 + 平台 + 数据规模 + 日志尾部，脱敏后落一个 txt。 */
+async function runDiagnostics() {
+  if (exporting.value) return;
+  try {
+    const path = await save({
+      title: t("st.diagSave"),
+      defaultPath: `workbuddy-deck-diagnostics-${Date.now()}.txt`,
+      filters: [{ name: "Text", extensions: ["txt"] }],
+    });
+    if (!path) return;
+    exporting.value = "diag";
+    exportNote.value = "";
+    exportFailed.value = false;
+    const result = await exportDiagnostics(path);
+    exportFailed.value = !result.ok;
+    exportNote.value = result.ok ? `${t("st.diagDone")} · ${path}` : `${t("st.exFail")} · ${result.error ?? ""}`;
   } catch (cause) {
     exportFailed.value = true;
     exportNote.value = `${t("st.exFail")} · ${cause instanceof Error ? cause.message : String(cause)}`;
@@ -707,6 +732,17 @@ async function doClear() {
                 <Loader2 v-if="exporting === 'all'" class="size-2.5 animate-spin" />
                 <FolderOpen v-else class="size-2.5" />
                 {{ t("st.exAll") }}
+              </button>
+              <!-- 诊断包：出问题一键打包，报障不用来回问 -->
+              <button
+                type="button"
+                class="flex items-center gap-1 border border-border-strong px-2 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
+                :disabled="exporting !== ''"
+                @click="runDiagnostics()"
+              >
+                <Loader2 v-if="exporting === 'diag'" class="size-2.5 animate-spin" />
+                <FileText v-else class="size-2.5" />
+                {{ t("st.diag") }}
               </button>
             </div>
           </div>

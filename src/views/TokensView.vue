@@ -490,7 +490,7 @@ const cellColor = (level: number) =>
                 :key="`${point.date}-${index}`"
                 class="flex-1 bg-foreground/70 transition-colors hover:bg-hazard"
                 :style="{ height: `${point.height}%` }"
-                :title="`${point.date} · ${compact(point.total)}`"
+                :title="`${point.date} · ${compact(point.total)} tokens`"
               />
             </div>
             <div v-else class="relative h-[120px] border-b border-border">
@@ -508,7 +508,7 @@ const cellColor = (level: number) =>
                 :key="`dot-${point.date}-${index}`"
                 class="absolute size-1.5 -translate-x-1/2 translate-y-1/2 bg-foreground"
                 :style="{ left: `${dailyDots[index]?.x ?? 0}%`, bottom: `${point.height}%` }"
-                :title="`${point.date} · ${compact(point.total)}`"
+                :title="`${point.date} · ${compact(point.total)} tokens`"
               />
             </div>
             <div class="readout mt-1 flex justify-between text-[9px] text-faint">

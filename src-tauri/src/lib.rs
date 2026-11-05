@@ -34,6 +34,9 @@ pub fn run() {
         .plugin(tauri_plugin_dialog::init())
         // 自动更新：签名校验 + NSIS 覆盖安装由插件负责，这里只提供清单与入口
         .plugin(tauri_plugin_updater::Builder::new().build())
+        .plugin(tauri_plugin_notification::init())
+        // 窗口位置/大小记忆：默认存在 app config 目录
+        .plugin(tauri_plugin_window_state::Builder::default().build())
         .invoke_handler(tauri::generate_handler![
             commands::list_accounts,
             commands::import_local_accounts,
@@ -73,6 +76,7 @@ pub fn run() {
             commands::open_workbuddy_deeplink,
             commands::export_data,
             commands::export_all_data,
+            commands::export_diagnostics,
             commands::auto_switch_status,
             commands::auto_switch_set,
             commands::auto_switch_logs,
