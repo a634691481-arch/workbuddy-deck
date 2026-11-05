@@ -1337,13 +1337,29 @@ pub fn auto_switch_set(patch: Value) -> Value {
     }
 }
 
+/// 自动切换的 3 秒倒计时状态：期间用户可以取消（正在打字时不被强行关窗）。
+static AUTO_SWITCH_CANCEL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static AUTO_SWITCH_PENDING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// 取消这次待执行的自动切换（前端倒计时条上的「取消」按钮）。
+#[tauri::command]
+pub fn auto_switch_cancel() -> Value {
+    if !AUTO_SWITCH_PENDING.load(std::sync::atomic::Ordering::SeqCst) {
+        return json!({ "ok": false, "error": "当前没有待执行的切换" });
+    }
+    AUTO_SWITCH_CANCEL.store(true, std::sync::atomic::Ordering::SeqCst);
+    json!({ "ok": true })
+}
+
 /// 真正执行一次「限流 → 主动切换」。
 ///
-/// 与 `auto_switch_check`（只算决策、不动手）分开：那个是只读的，这个会**关掉
+/// 与 `auto_switch_check`（只算决策、不动手）分开：那些是只读的，这个会**关掉
 /// WorkBuddy 并重启**。所以三道闸：总开关开、非仅提醒模式、且本次确有新限流事件。
-/// 切换用 plain 模式（`replace_sessions=false`）——自动流程绝不碰会话数据。
+///
+/// 执行前留 3 秒倒计时：用户可能正在客户端里打字，直接关窗等于打断。倒计时期间
+/// 前端弹一条可取消的提示，点了取消就本轮放弃（不写冷却、不动认证）。
 #[tauri::command]
-pub async fn auto_switch_apply() -> Value {
+pub async fn auto_switch_apply(app: tauri::AppHandle) -> Value {
     let cfg = auto_switch::load_config();
     if !cfg.enabled {
         return json!({ "action": "skip", "reason": "未开启自动切换" });
@@ -1353,8 +1369,24 @@ pub async fn auto_switch_apply() -> Value {
     }
     let current = auto_switch::current_account_id();
     let now = config::now_ms();
+    let app_for_pending = app.clone();
     let outcome = tauri::async_runtime::spawn_blocking(move || {
         auto_switch::run_once(&cfg, current.as_deref(), now, |target| {
+            // 倒计时：3 秒，100ms 粒度，期间允许取消
+            AUTO_SWITCH_CANCEL.store(false, std::sync::atomic::Ordering::SeqCst);
+            AUTO_SWITCH_PENDING.store(true, std::sync::atomic::Ordering::SeqCst);
+            let _ = app_for_pending.emit(
+                "auto-switch-pending",
+                json!({ "targetId": target, "seconds": 3 }),
+            );
+            for _ in 0..30 {
+                if AUTO_SWITCH_CANCEL.load(std::sync::atomic::Ordering::SeqCst) {
+                    AUTO_SWITCH_PENDING.store(false, std::sync::atomic::Ordering::SeqCst);
+                    return Err("cancelled-by-user".to_string());
+                }
+                std::thread::sleep(std::time::Duration::from_millis(100));
+            }
+            AUTO_SWITCH_PENDING.store(false, std::sync::atomic::Ordering::SeqCst);
             switch::switch_account(None, target, true, false, &[], &[], false)
                 .map(|_| ())
                 .map_err(|error| error.to_string())
@@ -1363,7 +1395,13 @@ pub async fn auto_switch_apply() -> Value {
     .await;
 
     match outcome {
-        Ok(payload) => payload,
+        Ok(payload) => {
+            // 用户取消不是失败：回一个明确的 cancelled，日志里也别写成切换失败。
+            if payload.get("error").and_then(|v| v.as_str()) == Some("cancelled-by-user") {
+                return json!({ "action": "cancelled", "reason": "用户取消了本次自动切换" });
+            }
+            payload
+        }
         Err(join_error) => json!({
             "action": "switch",
             "ok": false,

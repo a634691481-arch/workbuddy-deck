@@ -18,14 +18,32 @@ import SettingsView from "@/views/SettingsView.vue";
 import TasksView from "@/views/TasksView.vue";
 import TokensView from "@/views/TokensView.vue";
 import { useShell } from "@/composables/useShell";
-import { importLocalAccounts } from "@/lib/api";
+import { autoSwitchCancel, importLocalAccounts } from "@/lib/api";
 import { isTauri } from "@/lib/tauri-env";
+import { t } from "@/lib/i18n";
 import type { NavKey } from "@/lib/nav";
 
 const { accountCount, running, nav } = useShell();
 
 // Ctrl/Cmd+K 命令面板：只做分区跳转，不复制业务动作
 const paletteOpen = ref(false);
+
+/**
+ * 限流自动切换的 3 秒倒计时：后端决定要换号时先发事件，这 3 秒里
+ * 用户可以取消（正在打字时不该被直接关掉 WorkBuddy）。
+ */
+const switchPending = ref<{ targetId: string; left: number } | null>(null);
+let pendingTimer: number | undefined;
+
+async function cancelPendingSwitch() {
+  if (pendingTimer) window.clearInterval(pendingTimer);
+  switchPending.value = null;
+  try {
+    await autoSwitchCancel();
+  } catch {
+    /* 取消失败就让它继续，最多 3 秒后自己切 */
+  }
+}
 function onKeydown(event: KeyboardEvent) {
   if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === "k") {
     event.preventDefault();
@@ -41,6 +59,22 @@ function onKeydown(event: KeyboardEvent) {
  */
 onMounted(async () => {
   window.addEventListener("keydown", onKeydown);
+  if (isTauri()) {
+    const { listen } = await import("@tauri-apps/api/event");
+    void listen<{ targetId: string; seconds: number }>("auto-switch-pending", (event) => {
+      const seconds = event.payload.seconds || 3;
+      switchPending.value = { targetId: event.payload.targetId, left: seconds };
+      if (pendingTimer) window.clearInterval(pendingTimer);
+      pendingTimer = window.setInterval(() => {
+        if (!switchPending.value) return;
+        switchPending.value.left -= 1;
+        if (switchPending.value.left <= 0) {
+          window.clearInterval(pendingTimer);
+          switchPending.value = null;
+        }
+      }, 1000);
+    });
+  }
   if (!isTauri()) return;
   try {
     await importLocalAccounts();
@@ -98,6 +132,28 @@ const booting = ref(true);
         <component :is="activeView" class="wb-view min-w-0 flex-1" />
       </KeepAlive>
     </div>
+
+    <!-- 限流自动切换倒计时：3 秒内可取消，避免正在打字时被直接关窗 -->
+    <Transition name="wb-modal">
+      <div
+        v-if="switchPending"
+        class="fixed bottom-6 right-6 z-[70] w-72 border border-hazard bg-card p-3"
+        role="alertdialog"
+      >
+        <p class="text-[11px] text-foreground">{{ t("as.pendingTitle") }}</p>
+        <p class="mt-1 break-all text-[10px] text-faint">{{ switchPending.targetId }}</p>
+        <div class="mt-2 flex items-center justify-between gap-2">
+          <span class="readout text-[11px] text-hazard">{{ switchPending.left }}s</span>
+          <button
+            type="button"
+            class="border border-foreground bg-foreground px-2 py-0.5 text-[10px] uppercase tracking-[0.1em] text-background"
+            @click="cancelPendingSwitch()"
+          >
+            {{ t("as.cancel") }}
+          </button>
+        </div>
+      </div>
+    </Transition>
 
     <CommandPalette :open="paletteOpen" @close="paletteOpen = false" @nav="nav = $event" />
 

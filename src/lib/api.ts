@@ -755,6 +755,10 @@ export const autoSwitchSet = (patch: Partial<AutoSwitchConfig>) =>
 /** 手动判定一次：不执行切换，只告诉你会怎么判。 */
 export const autoSwitchCheck = () => invoke<AutoSwitchCheck>("auto_switch_check");
 
+/** 取消本轮待执行的自动切换（3 秒倒计时内有效）。 */
+export const autoSwitchCancel = () =>
+  invoke<{ ok: boolean; error?: string }>("auto_switch_cancel");
+
 export const autoSwitchLogs = (limit = 100) =>
   invoke<{ total: number; items: AutoSwitchEvent[] }>("auto_switch_logs", { limit });
 
