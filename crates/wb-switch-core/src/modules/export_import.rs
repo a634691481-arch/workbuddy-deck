@@ -82,7 +82,67 @@ enum MergeOutcome {
 /// 按 uid 去重：同 uid 覆盖（保留导入记录原样）；uid 缺失或无法匹配则追加。
 /// 凭据判定与采集口径一致（`account::secret_value`）：非空明文串或
 /// `$wbEncrypted` 加密信封均可入库，缺失 / 空串 / 普通对象跳过。
+/// 把秒级时间戳统一成毫秒：`10^11` 以下按秒（约 1973 年之前不可能出现在这里）。
+fn to_ms(raw: i64) -> i64 {
+    if raw > 0 && raw < 100_000_000_000 {
+        raw.saturating_mul(1000)
+    } else {
+        raw
+    }
+}
+
+/// 兼容外部导出工具的字段命名：snake_case + 秒级时间戳 → 本应用的 camelCase + 毫秒。
+///
+/// 现场：用户从别的工具导出的账号 JSON 用 `expires_at: 1796298469`（秒）、`created_at`、
+/// `last_used`，而本应用所有过期判断只读 `expiresAt`（毫秒）。缺字段会让账号被当成
+/// 「无过期信息」，签到 / 成长任务执行前先走异常分支，表现为「执行不了」。
+/// 这里只补缺失或换算时间字段，其余原样保留，不动 token 与展示字段。
+pub fn normalize_imported(item: &Value) -> Value {
+    let Some(source) = item.as_object() else {
+        return item.clone();
+    };
+    let mut out = source.clone();
+
+    // 时间字段：snake_case 秒 → camelCase 毫秒
+    let pairs = [
+        ("expires_at", "expiresAt"),
+        ("refresh_expires_at", "refreshExpiresAt"),
+        ("created_at", "createdAt"),
+        ("refreshed_at", "refreshedAt"),
+        ("last_used", "lastUsedAt"),
+    ];
+    for (from, to) in pairs {
+        if out.contains_key(to) {
+            // 已有 camelCase：只校正单位
+            if let Some(ms) = out.get(to).and_then(Value::as_i64) {
+                out.insert(to.to_string(), json!(to_ms(ms)));
+            }
+            continue;
+        }
+        if let Some(ms) = source.get(from).and_then(Value::as_i64) {
+            out.insert(to.to_string(), json!(to_ms(ms)));
+        }
+    }
+
+    // 展示兜底：snake_case 手机号 / 昵称别名不影响功能，但列表里要能看懂
+    if !out.contains_key("nickname") {
+        for key in ["name", "label"] {
+            if let Some(v) = source.get(key).filter(|v| v.is_string()) {
+                out.insert("nickname".to_string(), v.clone());
+                break;
+            }
+        }
+    }
+    // 档位缺失时补国内版：本工具只服务 cn，留空会让 variant 判定走 domain 兜底
+    if !out.contains_key("variant") {
+        out.insert("variant".to_string(), json!("cn"));
+    }
+    Value::Object(out)
+}
+
 fn merge_import_record(accounts: &mut Vec<Value>, item: &Value) -> MergeOutcome {
+    let normalized = normalize_imported(item);
+    let item = &normalized;
     if account::secret_value(item, "access_token").is_none() {
         return MergeOutcome::Skipped;
     }
