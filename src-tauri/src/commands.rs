@@ -1633,6 +1633,9 @@ pub async fn purge_archived_tasks(app: tauri::AppHandle, relaunch: Option<bool>)
 /// 窗口在 tauri.conf.json 里是 `visible:false`。
 #[tauri::command]
 pub fn app_ready(app: tauri::AppHandle) {
+    // 存量账号字段补齐（外部工具导入的记录可能只有 expires_at 秒级时间）：
+    // 幂等、纯本地，失败不影响开窗。
+    let _ = std::panic::catch_unwind(|| wb_switch_core::modules::export_import::repair_store_fields());
     if let Some(window) = tauri::Manager::get_webview_window(&app, "main") {
         let _ = window.show();
         let _ = window.set_focus();

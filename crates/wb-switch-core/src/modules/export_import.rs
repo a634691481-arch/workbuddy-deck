@@ -161,6 +161,32 @@ pub fn normalize_imported(item: &Value) -> Value {
     Value::Object(out)
 }
 
+/// 把账号库现有记录补齐到当前字段口径（幂等）。
+///
+/// 用于「已经导进来、字段却是外部工具命名」的存量账号：过期时间缺失会让
+/// 过期判断失效，档位缺失会让分组走兜底。返回真正被改写的条数。
+pub fn repair_store_fields() -> usize {
+    let accounts = account::load_accounts();
+    if accounts.is_empty() {
+        return 0;
+    }
+    let mut changed = 0;
+    let repaired: Vec<Value> = accounts
+        .iter()
+        .map(|item| {
+            let next = normalize_imported(item);
+            if &next != item {
+                changed += 1;
+            }
+            next
+        })
+        .collect();
+    if changed > 0 {
+        let _ = account::save_accounts(&repaired);
+    }
+    changed
+}
+
 fn merge_import_record(accounts: &mut Vec<Value>, item: &Value) -> MergeOutcome {
     let normalized = normalize_imported(item);
     let item = &normalized;
