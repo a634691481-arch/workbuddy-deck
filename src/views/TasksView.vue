@@ -39,6 +39,7 @@ const {
   showFailures,
   pendingRows,
   openTaskJump,
+  goComplete,
   cancelling,
   busyAction,
   run,
@@ -233,6 +234,7 @@ watch(
           :has-account="!!activeAccount"
           :running="run.running"
           :running-label="run.current"
+          @jump="goComplete"
         />
 
         <ActionBar

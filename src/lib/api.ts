@@ -33,6 +33,10 @@ export interface GrowthTask {
   progress?: { current?: number; target?: number } | null;
   reward_credit?: number;
   reward_energy?: number;
+  /** 后端标记的跳过原因：manual_required = 必须去客户端/官网手动完成 */
+  skipped?: string | null;
+  /** 官方入口（workbuddy:// 深链或 https 页面） */
+  jumpUrl?: string | null;
 }
 
 export interface GrowthRow {

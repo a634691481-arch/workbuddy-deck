@@ -19,6 +19,9 @@ const props = defineProps<{
 }>();
 
 const tab = defineModel<"tasks" | "checkin" | "raw">({ default: "tasks" });
+
+/** manual_required 任务只能去客户端点，交给上层开官方入口。 */
+const emit = defineEmits<{ jump: [url: string] }>();
 const rowsEl = useListAnim(() => !props.running);
 
 const tabs = [
@@ -118,8 +121,20 @@ const GRID = "grid grid-cols-[minmax(0,1fr)_74px_62px_66px_30px] items-center ga
             <div class="truncate text-foreground" :title="task.title">
               {{ task.title ?? task.task_code }}
             </div>
-            <div v-if="task.task_desc" class="truncate text-[10px] text-faint" :title="task.task_desc">
-              {{ task.task_desc }}
+            <div class="flex items-center gap-1">
+              <div v-if="task.task_desc" class="min-w-0 truncate text-[10px] text-faint" :title="task.task_desc">
+                {{ task.task_desc }}
+              </div>
+              <!-- 需手动完成的任务：给一个直接跳客户端/官网的入口，否则用户只能自己找 -->
+              <button
+                v-if="task.skipped === 'manual_required' && task.jumpUrl"
+                type="button"
+                class="shrink-0 border border-border-strong px-1 text-[9px] uppercase tracking-[0.08em] text-hazard transition-colors hover:border-hazard"
+                :title="t('tt.goComplete')"
+                @click="emit('jump', task.jumpUrl ?? '')"
+              >
+                {{ t("tt.goComplete") }} ↗
+              </button>
             </div>
           </div>
           <div class="flex items-center gap-1 border-l border-border/60 px-2 py-1">

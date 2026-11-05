@@ -229,6 +229,26 @@ export function useAssistant() {
     }
   }
 
+  /**
+   * 「去完成」：打开任务官方入口（客户端深链 / 官网），随后轮询刷新该账号详情，
+   * 用户在客户端点完，这里能第一时间看到状态变 completed，再点「执行」即可自动领奖。
+   *
+   * 为什么不直接替用户打点：Library_read / Buddy_App 的完成判定来自客户端真实交互
+   * （多账号实测伪造事件 0/1），服务端不认，硬发只是浪费额度。
+   */
+  async function goComplete(url: string) {
+    if (!url) return;
+    await openTaskJump(url);
+    pushLog("已打开任务入口，完成后回到这里点「执行」即可领奖");
+    if (!activeId.value) return;
+    let ticks = 0;
+    const timer = window.setInterval(async () => {
+      ticks += 1;
+      await selectAccount(activeId.value as string);
+      if (ticks >= 8) window.clearInterval(timer);
+    }, 15_000);
+  }
+
   async function cancel() {
     if (!run.value.running) return;
     cancelling.value = true;
@@ -296,6 +316,7 @@ export function useAssistant() {
     showFailures,
     pendingRows,
     openTaskJump,
+    goComplete,
     cancelling,
     busyAction,
     run,
