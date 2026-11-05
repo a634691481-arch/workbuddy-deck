@@ -13,6 +13,7 @@ import {
   ArrowLeftRight,
   CircleAlert,
   CircleCheck,
+  Dices,
   Download,
   Gauge,
   Loader2,
@@ -566,6 +567,26 @@ function openSwitch(row: AccountOverviewRow) {
   switchProgress.value = "";
 }
 
+/**
+ * 随机切换：从「非当前账号」里等概率抽一个，命中后**仍走原有确认弹框**。
+ *
+ * 三条边界：
+ * ① 排除当前账号（切到自己是无意义空转，还会白关一次 WorkBuddy）；
+ * ② 只在国内版列表里抽（列表本身已过滤）；
+ * ③ 正在切换 / 只有一个账号时不可用。
+ * 不做「按余额加权」：加权等于把随机变成推荐，用户要的是「随便换一个」。
+ */
+function pickRandom() {
+  if (switching.value) return;
+  const candidates = orderedRows.value.filter((row) => !isPrimary(row));
+  if (candidates.length === 0) {
+    say(t("ac.randomNone"), "err");
+    return;
+  }
+  const hit = candidates[Math.floor(Math.random() * candidates.length)];
+  openSwitch(hit);
+}
+
 function closeSwitch() {
   if (switching.value) return;
   switchTarget.value = null;
@@ -643,6 +664,17 @@ async function doSwitch() {
         </div>
       </div>
       <div class="flex shrink-0 items-center gap-1.5">
+        <!-- 随机切换：从非当前账号里抽一个，点击后进同一个确认弹框 -->
+        <button
+          type="button"
+          class="flex items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
+          :disabled="switching || orderedRows.length < 2"
+          :title="t('ac.randomHint')"
+          @click="pickRandom()"
+        >
+          <Dices class="size-3" />
+          {{ t("ac.random") }}
+        </button>
         <button
           type="button"
           class="flex items-center gap-1.5 bg-primary px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
