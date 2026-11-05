@@ -610,11 +610,66 @@ pub async fn refresh_all_tokens() -> Value {
 ///
 /// 判定口径与 workbuddy-switch 一致：auth 里的 uid 命中账号的 id/uid，或 email 相等。
 /// 两个档位（cn/ai）都查，命中的 accountId 全部返回（同一人可能双档位登录）。
+/// 同一台机器上 cn / ai 是两个独立客户端，可能各登录一个号（两个 auth 文件都在），
+/// 所以「当前账号」天然可能有两个。这里定一个主账号：正在运行的档位优先，
+/// 其次 cn（国内版是默认档位），否则取第一个。剩下的号由前端标「已登录」。
+fn pick_primary_account(
+    current_by_variant: &[(String, String)],
+    running_variant: Option<&str>,
+) -> Option<String> {
+    if let Some(running) = running_variant {
+        if let Some((_, id)) = current_by_variant.iter().find(|(v, _)| v == running) {
+            return Some(id.clone());
+        }
+    }
+    if let Some((_, id)) = current_by_variant.iter().find(|(v, _)| v == "cn") {
+        return Some(id.clone());
+    }
+    current_by_variant.first().map(|(_, id)| id.clone())
+}
+
+#[cfg(test)]
+mod workbuddy_status_tests {
+    use super::pick_primary_account;
+
+    fn pairs() -> Vec<(String, String)> {
+        vec![
+            ("cn".to_string(), "id-cn".to_string()),
+            ("ai".to_string(), "id-ai".to_string()),
+        ]
+    }
+
+    #[test]
+    fn running_variant_wins() {
+        assert_eq!(
+            pick_primary_account(&pairs(), Some("ai")).as_deref(),
+            Some("id-ai")
+        );
+    }
+
+    #[test]
+    fn cn_is_default_when_nothing_running() {
+        assert_eq!(pick_primary_account(&pairs(), None).as_deref(), Some("id-cn"));
+    }
+
+    #[test]
+    fn falls_back_to_only_variant() {
+        let only_ai = vec![("ai".to_string(), "id-ai".to_string())];
+        assert_eq!(
+            pick_primary_account(&only_ai, None).as_deref(),
+            Some("id-ai")
+        );
+        assert_eq!(pick_primary_account(&[], None), None);
+    }
+}
+
 #[tauri::command]
 pub async fn workbuddy_status() -> Value {
     tauri::async_runtime::spawn_blocking(move || {
         let accounts = account::load_accounts();
         let mut current_ids: Vec<String> = Vec::new();
+        // 档位 → 命中账号：cn / ai 各登录一个号时会有两条
+        let mut by_variant: Vec<(String, String)> = Vec::new();
         let mut current: Option<Value> = None;
         for variant in WbVariant::ALL {
             let Some(auth) = auth_file::read_auth_file(variant) else {
@@ -653,15 +708,37 @@ pub async fn workbuddy_status() -> Value {
                         if !current_ids.iter().any(|known| known == id) {
                             current_ids.push(id.to_string());
                         }
+                        // 同一账号可能被两档位同时命中，只在首次登记该档位
+                        let key = variant.as_str().to_string();
+                        if !by_variant.iter().any(|(v, _)| v == &key) {
+                            by_variant.push((key, id.to_string()));
+                        }
                     }
                 }
             }
         }
+        let running_cn = process::is_workbuddy_running(WbVariant::Cn);
+        let running_ai = process::is_workbuddy_running(WbVariant::Ai);
+        let running_variant = if running_cn {
+            Some("cn")
+        } else if running_ai {
+            Some("ai")
+        } else {
+            None
+        };
+        let primary = pick_primary_account(&by_variant, running_variant);
         json!({
-            "running": process::is_workbuddy_running(WbVariant::Cn)
-                || process::is_workbuddy_running(WbVariant::Ai),
+            "running": running_cn || running_ai,
             "currentAccountIds": current_ids,
             "current": current,
+            // 同一台机器 cn / ai 各登录一个号时，「当前账号」不止一个：
+            // primary 画强调色，其余按 variants 标「已登录」。
+            "primaryAccountId": primary,
+            "currentByVariant": by_variant
+                .iter()
+                .map(|(v, id)| json!({ "variant": v, "accountId": id }))
+                .collect::<Vec<_>>(),
+            "runningVariant": running_variant,
         })
     })
     .await

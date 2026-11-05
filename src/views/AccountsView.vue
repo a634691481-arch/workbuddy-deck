@@ -523,6 +523,25 @@ async function loadWbStatus() {
 const isCurrent = (row: AccountOverviewRow) =>
   wbStatus.value?.currentAccountIds.includes(row.accountId) ?? false;
 
+/**
+ * 主账号：正在运行的档位（没有运行的就 cn）登录的那个号。
+ * 同一台机器可能 CN 与国际版各登录一个号 → 两个命中，但只有一个是「主」。
+ */
+const primaryId = computed(() => {
+  const status = wbStatus.value;
+  if (!status) return "";
+  return status.primaryAccountId ?? status.currentAccountIds[0] ?? "";
+});
+const isPrimary = (row: AccountOverviewRow) => row.accountId === primaryId.value;
+
+/** 命中了但不是主账号：另一档位客户端登录的号，标「已登录 · CN/INTL」。 */
+function loggedInVariant(row: AccountOverviewRow): string | null {
+  const status = wbStatus.value;
+  if (!status || !isCurrent(row) || isPrimary(row)) return null;
+  const hit = status.currentByVariant?.find((item) => item.accountId === row.accountId);
+  return hit?.variant ?? null;
+}
+
 /** 待确认切换的目标账号；null 表示弹框关闭。 */
 const switchTarget = ref<AccountOverviewRow | null>(null);
 const switching = ref(false);
@@ -754,7 +773,7 @@ async function doSwitch() {
           :key="row.accountId"
           class="flex min-w-0 flex-col border bg-card"
           :class="[
-            isCurrent(row) ? 'border-hazard shadow-[0_0_0_1px_var(--color-hazard)]' : 'border-border',
+            isPrimary(row) ? 'border-hazard shadow-[0_0_0_1px_var(--color-hazard)]' : 'border-border',
             row.ok ? '' : 'border-l-2 border-l-hazard',
           ]"
         >
@@ -776,12 +795,20 @@ async function doSwitch() {
                   {{ variantText(row.variant) }}
                 </span>
                 <span
-                  v-if="isCurrent(row)"
+                  v-if="isPrimary(row)"
                   class="lbl-ink flex shrink-0 items-center gap-0.5 border border-hazard bg-hazard-soft px-1 py-0.5 text-[8px] text-hazard"
-                  :title="t('ac.currentBadge')"
+                  :title="t('ac.currentBadgeHint')"
                 >
                   <CircleCheck class="size-2.5" />
                   {{ t("ac.currentBadge") }}
+                </span>
+                <!-- 同机两档位各登录一个号：非主账号标「已登录」，避免看起来像两个当前账号 -->
+                <span
+                  v-else-if="loggedInVariant(row)"
+                  class="lbl-ink flex shrink-0 items-center gap-0.5 border border-border-strong px-1 py-0.5 text-[8px] text-muted-foreground"
+                  :title="t('ac.loggedInHint')"
+                >
+                  {{ t("ac.loggedIn") }} · {{ variantText(loggedInVariant(row) ?? '') }}
                 </span>
                 <span
                   v-if="isPriority(row)"
@@ -806,7 +833,7 @@ async function doSwitch() {
             </div>
             <div class="flex shrink-0 items-center gap-1">
               <button
-                v-if="!isCurrent(row)"
+                v-if="!isPrimary(row)"
                 type="button"
                 class="flex items-center gap-1 border border-border-strong px-1.5 py-0.5 text-[9px] text-muted-foreground transition-colors hover:border-hazard hover:text-hazard"
                 :title="t('ac.switchTitle')"

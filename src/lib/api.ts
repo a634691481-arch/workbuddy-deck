@@ -535,6 +535,10 @@ export const refreshAllTokens = () => invoke<TokenRefreshResult>("refresh_all_to
 export interface WorkbuddyStatus {
   running: boolean;
   currentAccountIds: string[];
+  /** 主账号：运行中的档位优先，其次 cn；其余命中账号标「已登录」 */
+  primaryAccountId?: string | null;
+  currentByVariant?: Array<{ variant: string; accountId: string }>;
+  runningVariant?: string | null;
   current: {
     uid: string | null;
     email: string | null;
