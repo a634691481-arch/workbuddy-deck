@@ -4,7 +4,7 @@
  * 页面自闭环：每个 view 自己取数、自己处理动作，外壳不掺业务。
  * 分区顺序以「账号管理」打头：先有账号，才谈得上任务与统计。
  */
-import { computed, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 
 import AppSidebar from "@/components/AppSidebar.vue";
 import BootOverlay from "@/components/BootOverlay.vue";
@@ -17,9 +17,26 @@ import SettingsView from "@/views/SettingsView.vue";
 import TasksView from "@/views/TasksView.vue";
 import TokensView from "@/views/TokensView.vue";
 import { useShell } from "@/composables/useShell";
+import { importLocalAccounts } from "@/lib/api";
+import { isTauri } from "@/lib/tauri-env";
 import type { NavKey } from "@/lib/nav";
 
 const { accountCount, running, nav } = useShell();
+
+/**
+ * 启动补一次「本机 WorkBuddy 登录态 → 账号库」，两种机器都要兼容：
+ * - 装过 workbuddy-switch：账号库已有这些账号，core 只在 uid 缺失时才写，等于空转；
+ * - 没装过：账号库为空，这里把当前登录的账号补进去，否则任务面板永远「无账号」。
+ * 静默且幂等，没有登录态就什么都不发生。
+ */
+onMounted(async () => {
+  if (!isTauri()) return;
+  try {
+    await importLocalAccounts();
+  } catch {
+    /* 纯补数据动作，失败不影响启动 */
+  }
+});
 
 // hash 直达分区（浏览器预览与 WB_START_NAV 深链共用）：#tasks / #credits / #tokens / #accounts / #logs / #archived / #settings
 const NAV_KEYS: NavKey[] = ["accounts", "tasks", "credits", "tokens", "logs", "archived", "settings"];

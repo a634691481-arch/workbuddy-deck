@@ -56,15 +56,19 @@ pub fn list_accounts() -> Value {
 pub fn import_local_accounts() -> Value {
     let mut imported: Vec<Value> = Vec::new();
     let mut errors: Vec<Value> = Vec::new();
+    let mut skipped = 0;
     for variant in WbVariant::ALL {
-        match account::import_local(variant) {
-            Ok(meta) => imported.push(meta),
+        match account::import_local_if_absent(variant) {
+            Ok(Some(meta)) => imported.push(meta),
+            // 库里已有同 uid：装过 workbuddy-switch 的机器走到这里，必须空转
+            Ok(None) => skipped += 1,
             Err(error) => errors.push(json!({ "variant": variant.as_str(), "error": error })),
         }
     }
     json!({
         "ok": true,
         "imported": imported.len(),
+        "skipped": skipped,
         "accounts": imported,
         "errors": errors,
     })

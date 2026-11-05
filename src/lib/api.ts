@@ -165,6 +165,7 @@ export const listAccounts = () => invoke<AccountList>("list_accounts");
 export interface ImportLocalResult {
   ok: boolean;
   imported: number;
+  skipped: number;
   accounts: AccountSummary[];
   errors: Array<{ variant: string; error: string }>;
 }

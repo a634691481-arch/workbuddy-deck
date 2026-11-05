@@ -518,6 +518,27 @@ pub fn import_local(variant: WbVariant) -> Result<Value, String> {
     Ok(account_meta(&saved))
 }
 
+/// 只在账号库里**没有**这个 uid 时才导入本机登录态，已有则原样跳过。
+///
+/// 用于启动 / 页面挂载时的兜底补数据：装过 workbuddy-switch 的机器账号齐全，
+/// 这里必须空转——否则每次启动都拿 auth 文件里可能更旧的 token 覆盖库里
+/// 已经被刷新过的新 token，签到与积分查询会一起失效。
+pub fn import_local_if_absent(variant: WbVariant) -> Result<Option<Value>, String> {
+    let collected = crate::modules::auth_file::import_from_auth_file(variant)
+        .ok_or("未读取到本地 WorkBuddy 登录信息")?;
+    let uid = get_str(&collected, "uid");
+    let already = uid.as_deref().is_some_and(|uid| {
+        load_accounts()
+            .iter()
+            .any(|acc| get_str(acc, "uid").as_deref() == Some(uid))
+    });
+    if already {
+        return Ok(None);
+    }
+    let saved = save_collected_account(collected).map_err(|e| e.to_string())?;
+    Ok(Some(account_meta(&saved)))
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;

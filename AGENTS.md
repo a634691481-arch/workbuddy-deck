@@ -103,7 +103,10 @@ StatusBar   24px  ● READY · 最近刷新 · 账号数 · 日志数
 - **账号库来源只有一个**：`~/.wb-switch/accounts.json`。没装过上游 workbuddy-switch 的用户
   这个文件不存在 → 任务面板与账号管理都是空。所以 `import_local_accounts` 会在**账号管理挂载时
   静默跑一次**，把 WorkBuddy 自己的 auth 文件（cn / ai 两档位）里当前登录的账号补进库；
-  页头另有「导入本机」手动入口。**只导当前登录态**：auth 文件里的 `accounts[]` 只有资料没有 token，
+  页头另有「导入本机」手动入口；外壳启动时也跑一次（用户可能直接进任务面板）。
+  导入用 `import_local_if_absent`：**库里已有同 uid 就空转**，绝不能用 auth 文件里可能更旧的
+  token 覆盖库里已刷新的 token（否则签到/积分一起失效）。
+  **只导当前登录态**：auth 文件里的 `accounts[]` 只有资料没有 token，
   其它账号必须走「浏览器登录」重新授权，不要试图凭空造 token。
 - 账号卡片数据走 `account_overview`：`refresh=false` 读本地快照（离线秒开），
   `refresh=true` 并发 4 路拉官方资源包；页面先出本地结果再后台补官方，失败不回滚本地。

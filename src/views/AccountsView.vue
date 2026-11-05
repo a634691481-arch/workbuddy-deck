@@ -222,6 +222,8 @@ async function importLocal(silent = false) {
     if (count > 0) {
       say(t("ac.importLocalDone").replace("{n}", String(count)));
       await load(false);
+    } else if ((result.skipped ?? 0) > 0) {
+      say(t("ac.importLocalSkip"));
     } else {
       say(t("ac.importLocalEmpty"), "err");
     }
