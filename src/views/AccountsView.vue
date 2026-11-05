@@ -813,7 +813,7 @@ async function doSwitch() {
               <button
                 v-if="!isPrimary(row)"
                 type="button"
-                class="flex items-center gap-1 border border-border-strong px-1.5 py-0.5 text-[9px] text-muted-foreground transition-colors hover:border-hazard hover:text-hazard"
+                class="flex items-center gap-1 border border-hazard bg-hazard-soft px-1.5 py-0.5 text-[9px] font-medium text-hazard transition-colors hover:bg-hazard hover:text-white disabled:opacity-40"
                 :title="t('ac.switchTitle')"
                 :disabled="switching"
                 @click="openSwitch(row)"
