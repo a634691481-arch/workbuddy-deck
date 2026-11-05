@@ -124,6 +124,27 @@ pub fn normalize_imported(item: &Value) -> Value {
         }
     }
 
+    // 绝对过期时间缺省时，用 auth_raw 里的相对秒数补（expiresIn / refreshExpiresIn）：
+    // 外部导出常只带相对时长，缺 expiresAt 会让「是否该刷新」判断失效。
+    let now = crate::modules::config::now_ms();
+    let auth = source.get("auth_raw");
+    for (relative, absolute) in [
+        ("expiresIn", "expiresAt"),
+        ("refreshExpiresIn", "refreshExpiresAt"),
+    ] {
+        if out.contains_key(absolute) {
+            continue;
+        }
+        if let Some(seconds) = auth
+            .and_then(|a| a.get(relative))
+            .and_then(Value::as_i64)
+        {
+            if seconds > 0 {
+                out.insert(absolute.to_string(), json!(now + seconds * 1000));
+            }
+        }
+    }
+
     // 展示兜底：snake_case 手机号 / 昵称别名不影响功能，但列表里要能看懂
     if !out.contains_key("nickname") {
         for key in ["name", "label"] {
