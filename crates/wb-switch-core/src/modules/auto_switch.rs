@@ -144,16 +144,56 @@ pub fn save_config(cfg: &AutoSwitchConfig) -> Result<(), String> {
     atomic_write(&path, &text).map_err(|error| error.to_string())
 }
 
+/// 状态文件里「正在切换」标记的有效期：超过它就当上次进程已死，允许再试。
+const IN_FLIGHT_TTL_MS: i64 = 10 * 60 * 1000;
+
+fn read_state() -> Value {
+    std::fs::read_to_string(state_path())
+        .ok()
+        .and_then(|text| serde_json::from_str(&text).ok())
+        .unwrap_or_else(|| json!({}))
+}
+
+fn write_state(value: &Value) {
+    let _ = atomic_write(&state_path(), &value.to_string());
+}
+
 /// 上一次切换的时刻（冷却期用）。读不出来就当没有。
 fn last_switch_at() -> Option<i64> {
-    let text = std::fs::read_to_string(state_path()).ok()?;
-    let value: Value = serde_json::from_str(&text).ok()?;
-    value.get("lastSwitchAt").and_then(Value::as_i64)
+    read_state().get("lastSwitchAt").and_then(Value::as_i64)
 }
 
 fn set_last_switch_at(ts: i64) {
-    let path = state_path();
-    let _ = atomic_write(&path, &json!({ "lastSwitchAt": ts }).to_string());
+    let mut state = read_state();
+    state["lastSwitchAt"] = json!(ts);
+    write_state(&state);
+}
+
+/// 抢占「本次切换」的名额：多个入口（1 秒快路径 / 60 秒兜底 / 2 分钟巡检）
+/// 可能同时判定要切，必须只有一个能真正动手——否则 16 秒内会连切两次同一目标。
+///
+/// 只写 `inFlightAt`，不碰 `lastSwitchAt`：冷却语义不能被这次占位提前消耗，
+/// 决定是否切换的 `decide()` 仍按真实的上次成功时刻算。
+pub fn try_begin_switch(now: i64) -> bool {
+    let mut state = read_state();
+    if let Some(at) = state.get("inFlightAt").and_then(Value::as_i64) {
+        if at > 0 && now - at < IN_FLIGHT_TTL_MS {
+            return false;
+        }
+    }
+    state["inFlightAt"] = json!(now);
+    write_state(&state);
+    true
+}
+
+/// 收尾：清掉占位；成功才写冷却时刻（失败/取消不该白吃一次 30 分钟冷却）。
+pub fn end_switch(ok: bool, now: i64) {
+    let mut state = read_state();
+    state["inFlightAt"] = json!(0);
+    if ok {
+        state["lastSwitchAt"] = json!(now);
+    }
+    write_state(&state);
 }
 
 /// 候选账号（只用本地快照与台账，不发请求）。

@@ -69,6 +69,11 @@ fn count(outcome: Outcome) {
     });
 }
 
+/// 是否有批量任务正在执行：自动切换要避开，不能把跑到一半的批次掐断。
+pub fn is_running() -> bool {
+    RUNNING.load(std::sync::atomic::Ordering::SeqCst)
+}
+
 pub fn status() -> Value {
     let state = snapshot();
     json!({

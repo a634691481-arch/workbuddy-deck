@@ -681,3 +681,23 @@ decision(forced-on) = Skip("当前账号未被限流")
 ### 回顾
 - 任务定义里的 `jump_url` 是权威元数据，能解析就别猜关键词
 - 判定「失败」只看 claimed=0 会把「选错人」和「接口挂了」混为一谈，日志需带任务 code
+
+## 2026-11-05 自动切换语义对齐手动切换（用户要求）
+
+- [x] 现象：自动切换后 WorkBuddy 里任务与空间「消失」；日志显示 16:41:16 与 16:41:32
+      对同一目标连切两次（30 分钟冷却没拦住）
+- [x] 根因①：自动切换用 `replace_sessions=false`（只换认证不搬会话），切过去就是空会话
+- [x] 根因②：三个入口（1s 事件快路径 / 60s 兜底 / 2min 巡检）各写一份切换，无互斥；
+      冷却写在切换成功后，并发可绕过
+- [x] 修复①：`auto_switch_apply` 改走 `switch_account_detailed(..., replace_sessions=true)`，
+      与手动「完全同步」同一条路径，任务与空间跟着账号走
+- [x] 修复②：三道闸——`AUTO_SWITCH_RUNNING` 进程内互斥、`executor::is_running()` 批量任务闸门、
+      `auto_switch::try_begin_switch` 跨进程占位（inFlightAt，10min TTL，成功才写冷却）
+- [x] 修复③：`spawn_auto_switch` 不再自拼逻辑，统一调 `auto_switch_apply`
+- [x] 修复④：倒计时结束后提示条改为显示真实切换阶段（原来 3 秒后直接消失，像卡死）
+- [x] 验证：`cargo check` / `cargo clippy` 0 警告；`vue-tsc` 0 错；`vite build` 通过
+
+### 回顾
+- 「自动」与「手动」两套切换实现是事故源；入口可以有多个，动作只能有一个
+- 互斥要落在**动作**上（进程内 Atomic + 跨进程文件占位），不能只落在触发源上
+- 冷却必须在动手前占位，失败再释放，否则并发两次都能通过判定

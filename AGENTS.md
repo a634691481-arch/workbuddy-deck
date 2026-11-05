@@ -129,6 +129,13 @@ StatusBar   24px  ● READY · 最近刷新 · 账号数 · 日志数
   **该命令不抛 Err**：失败返回 `{ ok:false, result, stage, identity, rolledBack, error }`，
   前端必须显式判 `ok`。三态语义：`blocked`（未动认证）/ `rolled_back`（已还原认证）/ `ok`。
   失败现场留在弹框里（阶段 + 身份校验 + 原文），不跟 toast 一起消失。
+- **自动切换 = 手动切换的完全同步**（2026-11-05 改）：`auto_switch_apply` 走
+  `switch_account_detailed(..., replace_sessions=true)`，任务与空间跟着账号走。
+  以前用 `false`（只换认证），切过去是空会话，用户误判「任务被删」。
+  三道并发闸门（勿删）：① `AUTO_SWITCH_RUNNING` 进程内互斥；② `executor::is_running()`
+  批量任务在跑就不切；③ `auto_switch::try_begin_switch` 跨进程占位（`inFlightAt`，10 分钟 TTL，
+  成功才写 `lastSwitchAt` 冷却）。三个入口（1s 事件快路径 / 60s 兜底 / 2min 巡检）统一调这一个函数，
+  **不许再各写一份切换**——历史上就是这样 16 秒内对同一目标连切两次、会话被替换两遍。
 - **切换的硬约束（勿删）**：① 会话替换 `replaced !== true` 时 fail-closed，不写认证；
   ② 写后读磁盘校验 uid，`identity-mismatch` 必须回滚；③ 历史写入失败不得影响切换结果。
 - **用量预测 = `account_forecast`**（core `modules/forecast.rs`，纯本地、不发请求）：

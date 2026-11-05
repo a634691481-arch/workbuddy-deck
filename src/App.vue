@@ -33,6 +33,8 @@ const paletteOpen = ref(false);
  * 用户可以取消（正在打字时不该被直接关掉 WorkBuddy）。
  */
 const switchPending = ref<{ targetId: string; left: number } | null>(null);
+/** 倒计时结束后的真实切换阶段文案（完全同步要搬会话，可能几十秒） */
+const switchStage = ref("");
 let pendingTimer: number | undefined;
 
 async function cancelPendingSwitch() {
@@ -73,6 +75,13 @@ onMounted(async () => {
           switchPending.value = null;
         }
       }, 1000);
+    });
+    // 倒计时结束后进入真实切换：把后端阶段原样显示，别让窗口看起来「卡死」
+    void listen<{ message: string }>("switch-progress", (event) => {
+      switchStage.value = event.payload.message || "…";
+    });
+    void listen<{ action?: string }>("auto-switch", () => {
+      switchStage.value = "";
     });
   }
   if (!isTauri()) return;
@@ -136,22 +145,28 @@ const booting = ref(true);
     <!-- 限流自动切换倒计时：3 秒内可取消，避免正在打字时被直接关窗 -->
     <Transition name="wb-modal">
       <div
-        v-if="switchPending"
+        v-if="switchPending || switchStage"
         class="fixed bottom-6 right-6 z-[70] w-72 border border-hazard bg-card p-3"
         role="alertdialog"
       >
-        <p class="text-[11px] text-foreground">{{ t("as.pendingTitle") }}</p>
-        <p class="mt-1 break-all text-[10px] text-faint">{{ switchPending.targetId }}</p>
-        <div class="mt-2 flex items-center justify-between gap-2">
-          <span class="readout text-[11px] text-hazard">{{ switchPending.left }}s</span>
-          <button
-            type="button"
-            class="border border-foreground bg-foreground px-2 py-0.5 text-[10px] uppercase tracking-[0.1em] text-background"
-            @click="cancelPendingSwitch()"
-          >
-            {{ t("as.cancel") }}
-          </button>
-        </div>
+        <template v-if="switchPending">
+          <p class="text-[11px] text-foreground">{{ t("as.pendingTitle") }}</p>
+          <p class="mt-1 break-all text-[10px] text-faint">{{ switchPending.targetId }}</p>
+          <div class="mt-2 flex items-center justify-between gap-2">
+            <span class="readout text-[11px] text-hazard">{{ switchPending.left }}s</span>
+            <button
+              type="button"
+              class="border border-foreground bg-foreground px-2 py-0.5 text-[10px] uppercase tracking-[0.1em] text-background"
+              @click="cancelPendingSwitch()"
+            >
+              {{ t("as.cancel") }}
+            </button>
+          </div>
+        </template>
+        <template v-else>
+          <p class="text-[11px] text-foreground">{{ t("ac.switching") }}</p>
+          <p class="mt-1 break-all text-[10px] text-faint">{{ switchStage }}</p>
+        </template>
       </div>
     </Transition>
 
