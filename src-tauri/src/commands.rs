@@ -44,6 +44,32 @@ pub fn list_accounts() -> Value {
     json!({ "total": rows.len(), "accounts": rows })
 }
 
+/// 从本机 WorkBuddy 登录态导入当前账号（cn / ai 两档位都试一遍）。
+///
+/// 为什么需要它：账号列表读的是 `~/.wb-switch/accounts.json`（上游 workbuddy-switch
+/// 的库）。没装过那个工具的用户，这个文件根本不存在 → 账号库永远为空，即便他
+/// 已经在 WorkBuddy 里登录过。登录态其实在 WorkBuddy 自己的 auth 文件里，这里把它读出来落库。
+///
+/// 核心逻辑（信封 token 保护 / 同 uid 去重 / 保留本地备注）在 core `account::import_local`，
+/// 这里只负责遍历档位并把失败摊平成可读结果——单档位失败不影响另一档位。
+#[tauri::command]
+pub fn import_local_accounts() -> Value {
+    let mut imported: Vec<Value> = Vec::new();
+    let mut errors: Vec<Value> = Vec::new();
+    for variant in WbVariant::ALL {
+        match account::import_local(variant) {
+            Ok(meta) => imported.push(meta),
+            Err(error) => errors.push(json!({ "variant": variant.as_str(), "error": error })),
+        }
+    }
+    json!({
+        "ok": true,
+        "imported": imported.len(),
+        "accounts": imported,
+        "errors": errors,
+    })
+}
+
 /// 单账号详情：签到状态 + 成长任务清单（清单实时拉，不写死）。
 #[tauri::command]
 pub async fn account_detail(account_id: String) -> Result<Value, String> {

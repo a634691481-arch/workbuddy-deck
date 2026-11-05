@@ -30,6 +30,7 @@ import {
   accountForecast,
   accountOverview,
   accountSetNote,
+  importLocalAccounts,
   refreshAllTokens,
   switchWorkbuddyAccount,
   workbuddyStatus,
@@ -200,7 +201,42 @@ const healthTitle = (health: AccountHealth | null | undefined) => {
   return `${health.score} · ${reasons.length > 0 ? reasons.join(" / ") : t("ac.hzOk")}`;
 };
 
+/**
+ * 把「本机 WorkBuddy 已登录的账号」导入账号库。
+ *
+ * 账号列表读的是 `~/.wb-switch/accounts.json`；没装过上游 workbuddy-switch 的用户
+ * 这个文件不存在，账号永远是空。登录态在 WorkBuddy 自己的 auth 文件里，这里补读一次。
+ * 返回导入了几个（0 表示本机没有可导入的登录态，或已经在库里）。
+ */
+const importing = ref(false);
+async function importLocal(silent = false) {
+  if (importing.value) return 0;
+  importing.value = true;
+  try {
+    const result = await importLocalAccounts();
+    const count = result.imported ?? 0;
+    if (silent) {
+      if (count > 0) await load(false);
+      return count;
+    }
+    if (count > 0) {
+      say(t("ac.importLocalDone").replace("{n}", String(count)));
+      await load(false);
+    } else {
+      say(t("ac.importLocalEmpty"), "err");
+    }
+    return count;
+  } catch (cause) {
+    if (!silent) say(cause instanceof Error ? cause.message : String(cause), "err");
+    return 0;
+  } finally {
+    importing.value = false;
+  }
+}
+
 onMounted(async () => {
+  // 先补一次本机登录态（静默），再本地秒开；没装过 workbuddy-switch 的用户靠这一步才有账号
+  await importLocal(true);
   // 先本地秒开，再后台补官方口径（失败不覆盖本地结果）；当前登录态并行查
   await load(false);
   void loadWbStatus();
@@ -627,6 +663,17 @@ async function doSwitch() {
           <Loader2 v-if="tokenRefreshing" class="size-3 animate-spin" />
           <RotateCw v-else class="size-3" />
           {{ t("ac.refreshToken") }}
+        </button>
+        <button
+          type="button"
+          class="flex items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
+          :disabled="importing"
+          :title="t('ac.importLocalHint')"
+          @click="importLocal(false)"
+        >
+          <Loader2 v-if="importing" class="size-3 animate-spin" />
+          <Download v-else class="size-3" />
+          {{ t("ac.importLocal") }}
         </button>
         <button
           type="button"

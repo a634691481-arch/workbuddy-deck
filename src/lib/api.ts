@@ -161,6 +161,16 @@ export interface RunResult {
 
 export const listAccounts = () => invoke<AccountList>("list_accounts");
 
+/** 从本机 WorkBuddy 登录态导入当前账号（没装过 workbuddy-switch 的用户靠它入库）。 */
+export interface ImportLocalResult {
+  ok: boolean;
+  imported: number;
+  accounts: AccountSummary[];
+  errors: Array<{ variant: string; error: string }>;
+}
+
+export const importLocalAccounts = () => invoke<ImportLocalResult>("import_local_accounts");
+
 export const runStatus = () => invoke<RunStatus>("run_status");
 
 export const cancelRun = () => invoke<{ cancelled: boolean }>("cancel_run");

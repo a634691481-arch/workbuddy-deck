@@ -88,7 +88,7 @@ const zh = {
   "al.invert": "反选",
   "al.clear": "清空",
   "al.empty": "[ 无账号 ]",
-  "al.emptyHint": "账号库为空。本机复用 workbuddy-switch 的账号，添加账号请去「账号管理」。",
+  "al.emptyHint": "账号库为空。点下方「去账号管理」，用「导入本机」把当前 WorkBuddy 登录的账号加进来。",
   "al.goto": "去账号管理",
   "al.noMatch": "无匹配",
 
@@ -266,6 +266,10 @@ const zh = {
 
   // 账号管理
   "ac.title": "账号管理",
+  "ac.importLocal": "导入本机",
+  "ac.importLocalHint": "读取本机 WorkBuddy 当前登录的账号（无需装过 workbuddy-switch）",
+  "ac.importLocalDone": "已导入 {n} 个本机账号",
+  "ac.importLocalEmpty": "本机没有可导入的 WorkBuddy 登录态",
   "ac.add": "浏览器登录",
   "ac.import": "导入",
   "ac.export": "导出",
@@ -772,6 +776,10 @@ const en: Record<I18nKey, string> = {
 
   // accounts
   "ac.title": "ACCOUNT CONTROL",
+  "ac.importLocal": "IMPORT LOCAL",
+  "ac.importLocalHint": "Import the account currently signed in to WorkBuddy; workbuddy-switch not required",
+  "ac.importLocalDone": "Imported {n} local account(s)",
+  "ac.importLocalEmpty": "No WorkBuddy session found on this machine",
   "ac.add": "BROWSER LOGIN",
   "ac.import": "IMPORT",
   "ac.export": "EXPORT",

@@ -36,6 +36,7 @@ pub fn run() {
         .plugin(tauri_plugin_updater::Builder::new().build())
         .invoke_handler(tauri::generate_handler![
             commands::list_accounts,
+            commands::import_local_accounts,
             commands::account_detail,
             commands::account_balance,
             commands::total_balance,
