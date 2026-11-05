@@ -568,22 +568,42 @@ function openSwitch(row: AccountOverviewRow) {
 }
 
 /**
- * 随机切换：从「非当前账号」里等概率抽一个，命中后**仍走原有确认弹框**。
+ * 随机切换的选号逻辑（三层过滤 + 去重 + 兜底）。
  *
- * 三条边界：
- * ① 排除当前账号（切到自己是无意义空转，还会白关一次 WorkBuddy）；
- * ② 只在国内版列表里抽（列表本身已过滤）；
- * ③ 正在切换 / 只有一个账号时不可用。
- * 不做「按余额加权」：加权等于把随机变成推荐，用户要的是「随便换一个」。
+ * 硬条件（第一层，宁缺毋滥）：非当前账号、余额 > 0、未处于模型限流、拉取正常。
+ *   切到 0 余额或限流中的号，等于把 WorkBuddy 直接切到不可用状态，体验比不切更差。
+ * 放宽（第二层）：没有满足硬条件的号时，退到「非当前且拉取正常」。
+ * 兜底（第三层）：再退到「非当前」——宁可切个状态不明，也不让按钮点了没反应。
+ * 去重：记住上次随机命中的号，候选 ≥2 时排除它，避免连续两次抽到同一个。
+ * 权重：等概率，不按余额加权（加权就是推荐，不是随机）。
  */
+let lastRandomId = "";
+
+function randomPool(): AccountOverviewRow[] {
+  const pool = orderedRows.value.filter((row) => !isPrimary(row));
+  const strict = pool.filter(
+    (row) => row.ok !== false && (row.remaining ?? 0) > 0 && activeLimits(row).length === 0,
+  );
+  if (strict.length > 0) return strict;
+  const usable = pool.filter((row) => row.ok !== false);
+  return usable.length > 0 ? usable : pool;
+}
+
+/** 当前实际会从几个号里抽（按钮 tooltip 用，别让用户猜）。 */
+const randomCandidates = computed(() => {
+  const pool = randomPool();
+  return pool.length > 1 ? pool.filter((row) => row.accountId !== lastRandomId) : pool;
+});
+
 function pickRandom() {
   if (switching.value) return;
-  const candidates = orderedRows.value.filter((row) => !isPrimary(row));
-  if (candidates.length === 0) {
+  const pool = randomCandidates.value;
+  if (pool.length === 0) {
     say(t("ac.randomNone"), "err");
     return;
   }
-  const hit = candidates[Math.floor(Math.random() * candidates.length)];
+  const hit = pool[Math.floor(Math.random() * pool.length)];
+  lastRandomId = hit.accountId;
   openSwitch(hit);
 }
 
@@ -669,7 +689,7 @@ async function doSwitch() {
           type="button"
           class="flex items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
           :disabled="switching || orderedRows.length < 2"
-          :title="t('ac.randomHint')"
+          :title="`${t('ac.randomHint')}（${randomCandidates.length}）`"
           @click="pickRandom()"
         >
           <Dices class="size-3" />

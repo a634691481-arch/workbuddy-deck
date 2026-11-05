@@ -268,7 +268,7 @@ const zh = {
   // 账号管理
   "ac.title": "账号管理",
   "ac.random": "随机切换",
-  "ac.randomHint": "从除当前账号外的账号里随机挑一个，确认后执行完全同步切换",
+  "ac.randomHint": "优先在「有余额、未限流、拉取正常」的账号里随机挑一个，确认后执行切换",
   "ac.randomNone": "没有可切换的其它账号",
   "ac.importLocal": "导入本机",
   "ac.importLocalHint": "读取本机 WorkBuddy 当前登录的账号（无需装过 workbuddy-switch）",
@@ -786,7 +786,7 @@ const en: Record<I18nKey, string> = {
   // accounts
   "ac.title": "ACCOUNT CONTROL",
   "ac.random": "RANDOM",
-  "ac.randomHint": "Pick a random account other than the current one, then confirm to switch",
+  "ac.randomHint": "Random pick among accounts with balance, not rate-limited; confirm to switch",
   "ac.randomNone": "No other account to switch to",
   "ac.importLocal": "IMPORT LOCAL",
   "ac.importLocalHint": "Import the account currently signed in to WorkBuddy; workbuddy-switch not required",
