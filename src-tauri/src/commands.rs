@@ -1337,6 +1337,41 @@ pub fn auto_switch_set(patch: Value) -> Value {
     }
 }
 
+/// 真正执行一次「限流 → 主动切换」。
+///
+/// 与 `auto_switch_check`（只算决策、不动手）分开：那个是只读的，这个会**关掉
+/// WorkBuddy 并重启**。所以三道闸：总开关开、非仅提醒模式、且本次确有新限流事件。
+/// 切换用 plain 模式（`replace_sessions=false`）——自动流程绝不碰会话数据。
+#[tauri::command]
+pub async fn auto_switch_apply() -> Value {
+    let cfg = auto_switch::load_config();
+    if !cfg.enabled {
+        return json!({ "action": "skip", "reason": "未开启自动切换" });
+    }
+    if cfg.notify_only {
+        return json!({ "action": "skip", "reason": "仅提醒模式，不自动切换" });
+    }
+    let current = auto_switch::current_account_id();
+    let now = config::now_ms();
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
+        auto_switch::run_once(&cfg, current.as_deref(), now, |target| {
+            switch::switch_account(None, target, true, false, &[], &[], false)
+                .map(|_| ())
+                .map_err(|error| error.to_string())
+        })
+    })
+    .await;
+
+    match outcome {
+        Ok(payload) => payload,
+        Err(join_error) => json!({
+            "action": "switch",
+            "ok": false,
+            "error": format!("切换线程异常: {join_error}"),
+        }),
+    }
+}
+
 #[tauri::command]
 pub fn auto_switch_logs(limit: Option<usize>) -> Value {
     auto_switch::logs(limit.unwrap_or(100))

@@ -695,6 +695,16 @@ async function doClear() {
           >
             {{ t("st.autoWarn") }}
           </p>
+          <!-- 实时性说明：让用户知道它是「事件驱动 1 秒」而不是 60 秒轮询 -->
+          <p class="flex flex-wrap items-center gap-x-2 border-t border-border/40 px-3 py-1 text-[9px] text-faint">
+            <span>{{ t("st.autoRealtime") }}</span>
+            <span class="text-border-strong">/</span>
+            <span>{{ t("st.autoEvents") }} {{ autoSwitch?.totalEvents ?? 0 }}</span>
+            <span v-if="autoSwitch?.lastSwitchAt" class="text-border-strong">/</span>
+            <span v-if="autoSwitch?.lastSwitchAt">
+              {{ t("st.autoLastSwitch") }} {{ new Date(autoSwitch.lastSwitchAt).toLocaleTimeString() }}
+            </span>
+          </p>
           <p v-if="autoCheck" class="border-t border-border px-3 py-1.5 text-[9px] leading-4 text-muted-foreground">
             {{ t("st.autoCheckResult") }} · {{ autoCheck.decision.action }} · {{ autoCheck.decision.reason }}
           </p>

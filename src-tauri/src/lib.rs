@@ -80,6 +80,7 @@ pub fn run() {
             commands::auto_switch_status,
             commands::auto_switch_set,
             commands::auto_switch_logs,
+            commands::auto_switch_apply,
             commands::auto_switch_clear_logs,
             commands::auto_switch_check,
             commands::update_check,
@@ -93,6 +94,8 @@ pub fn run() {
             vibrancy::set_backdrop,
         ])
         .setup(|app| {
+            start_rate_limit_watcher();
+
             // 托盘菜单：快捷执行在上，退出压到最下面并与其他项分隔。
             let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
             let checkin = MenuItem::with_id(app, "checkin", "一键签到（全部账号）", true, None::<&str>)?;
@@ -198,4 +201,32 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("启动 WorkBuddy 任务助手失败");
+}
+
+
+/// 限流实时响应：走 hook 事件文件的 1 秒 stat 快路径，**不扫日志目录**。
+///
+/// 为什么不用文件系统监听（notify）：日志目录按天分文件夹、活跃期每秒多次写入，
+/// 递归监听会持续产生事件与上下文切换，对一台要长期挂机的工具来说不划算。
+/// 现有 `rate_limit_events::spawn_watcher` 每秒只做一次 `stat`（没有新字节直接返回），
+/// 命中新事件才解析——空闲开销基本为零，延迟 1 秒，足够。
+///
+/// 60s 兜底轮询保留：hook 未安装时日志扫描路径仍能捞出限流，只是慢一点。
+fn start_rate_limit_watcher() {
+    wb_switch_core::modules::rate_limit_events::spawn_watcher(|| {
+        tauri::async_runtime::spawn(async move {
+            let payload = commands::auto_switch_apply().await;
+            if payload.get("action").and_then(|value| value.as_str()) == Some("switch") {
+                eprintln!("[rate-watch] {payload}");
+            }
+        });
+    });
+
+    tauri::async_runtime::spawn(async move {
+        loop {
+            tokio::time::sleep(std::time::Duration::from_secs(60)).await;
+            wb_switch_core::modules::limits::invalidate_scan_cache();
+            let _ = commands::auto_switch_apply().await;
+        }
+    });
 }
