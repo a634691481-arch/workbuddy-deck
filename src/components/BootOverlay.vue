@@ -189,6 +189,16 @@ onMounted(() => {
 .rows {
   margin-top: 34px;
 }
+/*
+ * 启动动画固定直角：这三条读数轨是 CRT 扫描线的一部分，
+ * 跟随「外观 → 圆角」会变成圆头胶囊，和扫描线/网格对不上。
+ * 用 !important 压过全局 `* { border-radius: var(--app-radius) !important }`。
+ */
+.boot,
+.boot * {
+  border-radius: 0 !important;
+}
+
 .row {
   display: flex;
   align-items: center;

@@ -701,3 +701,18 @@ decision(forced-on) = Skip("当前账号未被限流")
 - 「自动」与「手动」两套切换实现是事故源；入口可以有多个，动作只能有一个
 - 互斥要落在**动作**上（进程内 Atomic + 跨进程文件占位），不能只落在触发源上
 - 冷却必须在动手前占位，失败再释放，否则并发两次都能通过判定
+
+## 2026-11-05 自动切换「先问用户」（方案 C 分级提醒）
+
+- [x] 配置：`askBeforeSwitch`（默认开）、`notifyWhenBackground`（默认开）、`countdownSeconds`（0–120，默认 15）
+- [x] 后端：`auto_switch_apply` 拆成 `auto_switch_run(app, ask)`；先 `preview()` 判定拿目标/原因，
+      前台走倒计时（`auto-switch-pending`），后台只发 `auto-switch-notify` 不动手
+- [x] 新命令：`auto_switch_confirm`（立即切换）、`auto_switch_pending`（重挂补画提示条）；
+      `auto_switch_cancel` 改为幂等
+- [x] 前端：右下角提示条常驻，显示目标 / 原因 / 倒计时，两个按钮；等待点（0 秒）不倒数
+- [x] 设置页：自动切换卡片加「切换前先询问 / 后台只提醒 / 倒计时」三个控件
+- [x] 验证：`cargo check`/`clippy` 0 警告、`vue-tsc` 0 错、`vite build` 通过；设置卡截图确认排版
+
+### 回顾
+- 「让用户知道」= 常驻可见 + 有倒计时 + 可取消，而不是 3 秒飘窗
+- 同一动作只能有一个执行者：倒计时线程在跑时，按钮只举旗不开新线程

@@ -191,8 +191,15 @@ async function runAutoCheck() {
 
 const autoOn = computed(() => autoSwitch.value?.config.enabled === true);
 const autoNotifyOnly = computed(() => autoSwitch.value?.config.notifyOnly !== false);
+const autoAsk = computed(() => autoSwitch.value?.config.askBeforeSwitch !== false);
+const autoBgNotify = computed(() => autoSwitch.value?.config.notifyWhenBackground !== false);
+const autoCountdown = computed(() => autoSwitch.value?.config.countdownSeconds ?? 15);
 
-function onNumberChange(event: Event, key: "cooldownMinutes" | "minRemaining", min: number) {
+function onNumberChange(
+  event: Event,
+  key: "cooldownMinutes" | "minRemaining" | "countdownSeconds",
+  min: number,
+) {
   const raw = Number((event.target as HTMLInputElement).value);
   if (!Number.isFinite(raw)) return;
   void patchAutoSwitch({ [key]: Math.max(min, Math.round(raw)) } as Partial<AutoSwitchConfig>);
@@ -654,6 +661,38 @@ async function doClear() {
                 {{ t("st.autoApply") }}
               </button>
             </div>
+            <button
+              type="button"
+              class="readout shrink-0 border px-1.5 py-1 text-[9px] uppercase transition-colors disabled:opacity-40"
+              :class="autoAsk ? 'border-hazard bg-hazard-soft text-hazard' : 'border-border-strong text-faint hover:text-foreground'"
+              :title="t('as.askHint')"
+              :disabled="autoBusy || !autoOn"
+              @click="patchAutoSwitch({ askBeforeSwitch: !autoAsk })"
+            >
+              {{ t("as.ask") }} {{ autoAsk ? t("st.on") : t("st.off") }}
+            </button>
+            <button
+              type="button"
+              class="readout shrink-0 border px-1.5 py-1 text-[9px] uppercase transition-colors disabled:opacity-40"
+              :class="autoBgNotify ? 'border-hazard bg-hazard-soft text-hazard' : 'border-border-strong text-faint hover:text-foreground'"
+              :title="t('as.bgNotifyHint')"
+              :disabled="autoBusy || !autoOn || !autoAsk"
+              @click="patchAutoSwitch({ notifyWhenBackground: !autoBgNotify })"
+            >
+              {{ t("as.bgNotify") }} {{ autoBgNotify ? t("st.on") : t("st.off") }}
+            </button>
+            <label class="flex shrink-0 items-center gap-1 text-[9px] text-faint">
+              {{ t("as.countdown") }}
+              <select
+                class="readout border border-border-strong bg-input px-1 py-0.5 text-[10px] text-foreground"
+                :value="autoCountdown"
+                :disabled="autoBusy || !autoOn || !autoAsk"
+                @change="onNumberChange($event, 'countdownSeconds', 3)"
+              >
+                <option :value="0">{{ t("as.waitMe") }}</option>
+                <option v-for="sec in [3, 10, 15, 30, 60]" :key="sec" :value="sec">{{ sec }}</option>
+              </select>
+            </label>
             <label class="flex shrink-0 items-center gap-1 text-[9px] text-faint">
               {{ t("st.autoCooldown") }}
               <input

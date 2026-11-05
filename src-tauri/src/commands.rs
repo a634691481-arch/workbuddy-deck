@@ -12,6 +12,7 @@ use std::os::windows::process::CommandExt;
 use serde_json::{json, Value};
 
 use tauri::Emitter;
+use tauri::Manager;
 
 use wb_switch_core::modules::config;
 use wb_switch_core::modules::credit_usage;
@@ -1347,24 +1348,64 @@ static AUTO_SWITCH_RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::A
 /// 取消这次待执行的自动切换（前端倒计时条上的「取消」按钮）。
 #[tauri::command]
 pub fn auto_switch_cancel() -> Value {
-    if !AUTO_SWITCH_PENDING.load(std::sync::atomic::Ordering::SeqCst) {
-        return json!({ "ok": false, "error": "当前没有待执行的切换" });
+    // 幂等：倒计时中、或后台只提醒的待确认状态下都算有效取消
+    AUTO_SWITCH_CANCEL.store(true, Ordering::SeqCst);
+    AUTO_SWITCH_PENDING.store(false, Ordering::SeqCst);
+    if let Ok(mut guard) = AUTO_SWITCH_PENDING_INFO.lock() {
+        *guard = None;
     }
-    AUTO_SWITCH_CANCEL.store(true, std::sync::atomic::Ordering::SeqCst);
     json!({ "ok": true })
 }
 
-/// 真正执行一次「限流 → 主动切换」。
-///
-/// 与 `auto_switch_check`（只算决策、不动手）分开：那些是只读的，这个会**关掉
-/// WorkBuddy 并重启**。所以闸门按顺序：总开关开 → 非仅提醒 → 没有并发切换 →
-/// 批量任务没在跑 → 跨进程名额抢到 → 3 秒倒计时没被取消。
-///
-/// **和手动切换同一条路径**（`replace_sessions=true`）：任务与空间跟着账号走，
-/// 切完在新账号里能看到原来的会话。旧版这里用 `false`，只换认证不搬会话，
-/// 结果切过去就是一片空白——用户会以为任务与空间被删了。
+/// 待确认的切换信息（前端重挂、或用户从托盘回来时读它恢复提示条）。
+static AUTO_SWITCH_PENDING_INFO: std::sync::Mutex<Option<Value>> = std::sync::Mutex::new(None);
+/// 用户点了「立即切换」：跳过剩余倒计时。
+static AUTO_SWITCH_CONFIRM: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+
+/// 主窗口是否在前台（最小化也算不在）。
+fn window_in_foreground(app: &tauri::AppHandle) -> bool {
+    app.get_webview_window("main")
+        .map(|win| win.is_focused().unwrap_or(false) && !win.is_minimized().unwrap_or(false))
+        .unwrap_or(false)
+}
+
+/// 当前是否有待确认的切换（前端启动/重挂时补画提示条）。
+#[tauri::command]
+pub fn auto_switch_pending() -> Value {
+    AUTO_SWITCH_PENDING_INFO
+        .lock()
+        .ok()
+        .and_then(|guard| guard.clone())
+        .unwrap_or(Value::Null)
+}
+
+/// 检测到限流：按配置决定「直接切」还是「先问用户」。
 #[tauri::command]
 pub async fn auto_switch_apply(app: tauri::AppHandle) -> Value {
+    auto_switch_run(app, true).await
+}
+
+/// 用户点了「立即切换」：跳过询问与倒计时，直接执行（仍走互斥与批量任务闸门）。
+#[tauri::command]
+pub async fn auto_switch_confirm(app: tauri::AppHandle) -> Value {
+    // 正在倒计时：只举旗，让等待中的那一次立刻开切（否则会撞上自己的名额闸门）
+    if AUTO_SWITCH_PENDING.load(Ordering::SeqCst) {
+        AUTO_SWITCH_CONFIRM.store(true, Ordering::SeqCst);
+        return json!({ "action": "confirmed" });
+    }
+    // 后台待确认（没有倒计时线程在跑）：这里重新走一遍，跳过询问
+    AUTO_SWITCH_CONFIRM.store(true, Ordering::SeqCst);
+    auto_switch_run(app, false).await
+}
+
+/// 切换到「前台提示 / 后台只提醒 / 直接执行」的统一实现。
+///
+/// 闸门顺序：总开关 → 非仅提醒 → 进程内互斥 → 批量任务没在跑 → 跨进程名额。
+/// 之后按 `askBeforeSwitch` 与窗口前后台决定：前台弹提示条 + 倒计时，
+/// 后台只发通知不动手（用户回来点确认才切）。
+#[allow(clippy::too_many_lines)]
+async fn auto_switch_run(app: tauri::AppHandle, ask: bool) -> Value {
     let cfg = auto_switch::load_config();
     if !cfg.enabled {
         return json!({ "action": "skip", "reason": "未开启自动切换" });
@@ -1372,17 +1413,13 @@ pub async fn auto_switch_apply(app: tauri::AppHandle) -> Value {
     if cfg.notify_only {
         return json!({ "action": "skip", "reason": "仅提醒模式，不自动切换" });
     }
-    // 并发闸①：同一进程内三个入口（1s 快路径 / 60s 兜底 / 2min 巡检）只能进一个。
-    // 少了这道闸，16 秒内会对同一目标连切两次，会话被替换两遍。
     if AUTO_SWITCH_RUNNING.swap(true, Ordering::SeqCst) {
         return json!({ "action": "skip", "reason": "已有一次自动切换在执行" });
     }
-    // 并发闸②：批量任务在跑时不切。切换要关 WorkBuddy，等于把跑到一半的批次掐断。
     if executor::is_running() {
         AUTO_SWITCH_RUNNING.store(false, Ordering::SeqCst);
         return json!({ "action": "skip", "reason": "批量任务执行中，本轮不切换" });
     }
-    // 并发闸③：跨进程名额（状态文件 inFlightAt）。主机重启/崩溃留下的占位 10 分钟后自动过期。
     let now = config::now_ms();
     if !auto_switch::try_begin_switch(now) {
         AUTO_SWITCH_RUNNING.store(false, Ordering::SeqCst);
@@ -1390,65 +1427,114 @@ pub async fn auto_switch_apply(app: tauri::AppHandle) -> Value {
     }
 
     let current = auto_switch::current_account_id();
-    let app_for_progress = app.clone();
-    let app_for_pending = app.clone();
-    let outcome = tauri::async_runtime::spawn_blocking(move || {
-        auto_switch::run_once(&cfg, current.as_deref(), now, |target| {
-            // 倒计时：3 秒，100ms 粒度，期间允许取消（取消不写冷却、不动认证）
-            AUTO_SWITCH_CANCEL.store(false, Ordering::SeqCst);
-            AUTO_SWITCH_PENDING.store(true, Ordering::SeqCst);
-            let _ = app_for_pending.emit(
-                "auto-switch-pending",
-                json!({ "targetId": target, "seconds": 3 }),
-            );
-            for _ in 0..30 {
-                if AUTO_SWITCH_CANCEL.load(Ordering::SeqCst) {
-                    AUTO_SWITCH_PENDING.store(false, Ordering::SeqCst);
-                    return Err("cancelled-by-user".to_string());
-                }
-                std::thread::sleep(std::time::Duration::from_millis(100));
-            }
-            AUTO_SWITCH_PENDING.store(false, Ordering::SeqCst);
+    let preview = auto_switch::preview(&cfg, current.as_deref(), now);
+    let kind = preview.get("action").and_then(Value::as_str).unwrap_or("skip");
 
-            // 与手动切换完全一致：完全同步（替换目标账号会话）+ 写后身份校验 + 重启
-            let progress: switch::ProgressFn = Box::new(move |message| {
-                let _ = app_for_progress.emit("switch-progress", json!({ "message": message }));
-            });
-            let (result, diagnostics) = switch::switch_account_detailed(
-                Some(&progress),
-                target,
-                true,
-                false,
-                &[],
-                &[],
-                true,
-            );
-            match result {
-                Ok(_) => Ok(()),
-                Err(error) => Err(format!("{error}（阶段 {}）", diagnostics.stage)),
+    // 不需要动手：交给 run_once 走原来的日志/通知路径（闭包不会被调用）
+    if kind != "switch" {
+        let payload =
+            auto_switch::run_once(&cfg, current.as_deref(), now, |_| Err("not-reached".to_string()));
+        auto_switch::end_switch(false, config::now_ms());
+        AUTO_SWITCH_RUNNING.store(false, Ordering::SeqCst);
+        return payload;
+    }
+
+    if ask && cfg.ask_before_switch {
+        // 后台：只提醒，不动手。把名额还回去，用户回来点「立即切换」再走一遍。
+        if !window_in_foreground(&app) && cfg.notify_when_background {
+            auto_switch::end_switch(false, config::now_ms());
+            AUTO_SWITCH_RUNNING.store(false, Ordering::SeqCst);
+            let mut payload = preview.clone();
+            payload["action"] = json!("notify");
+            payload["awaitingConfirm"] = json!(true);
+            payload["reason"] = json!(format!(
+                "{}（窗口在后台，等你确认后再切换）",
+                preview.get("reason").and_then(Value::as_str).unwrap_or("")
+            ));
+            let _ = app.emit("auto-switch-notify", payload.clone());
+            return payload;
+        }
+
+        // 0 = 不倒数，一直等用户点（最长 10 分钟，避免永久占位挡住后续切换）
+        let seconds = cfg.countdown_seconds.clamp(0, 120);
+        let budget_ms = if seconds == 0 { 10 * 60 * 1000 } else { seconds * 1000 };
+        AUTO_SWITCH_CANCEL.store(false, Ordering::SeqCst);
+        AUTO_SWITCH_CONFIRM.store(false, Ordering::SeqCst);
+        AUTO_SWITCH_PENDING.store(true, Ordering::SeqCst);
+        let info = json!({
+            "targetId": preview.get("targetId").cloned().unwrap_or(Value::Null),
+            "targetLabel": preview.get("targetLabel").cloned().unwrap_or(Value::Null),
+            "reason": preview.get("reason").cloned().unwrap_or(Value::Null),
+            "seconds": seconds,
+            "deadline": if seconds > 0 { config::now_ms() + seconds * 1000 } else { 0 },
+            // 0 秒 = 不算倒计时，一直等你点
+            "awaitingConfirm": seconds == 0,
+        });
+        if let Ok(mut guard) = AUTO_SWITCH_PENDING_INFO.lock() {
+            *guard = Some(info.clone());
+        }
+        let _ = app.emit("auto-switch-pending", info);
+
+        let mut waited = 0i64;
+        while waited < budget_ms {
+            if AUTO_SWITCH_CANCEL.load(Ordering::SeqCst) || AUTO_SWITCH_CONFIRM.load(Ordering::SeqCst) {
+                break;
             }
-        })
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+            waited += 100;
+        }
+        AUTO_SWITCH_PENDING.store(false, Ordering::SeqCst);
+        if let Ok(mut guard) = AUTO_SWITCH_PENDING_INFO.lock() {
+            *guard = None;
+        }
+        if AUTO_SWITCH_CANCEL.load(Ordering::SeqCst) {
+            auto_switch::end_switch(false, config::now_ms());
+            AUTO_SWITCH_RUNNING.store(false, Ordering::SeqCst);
+            return json!({ "action": "cancelled", "reason": "用户取消了本次自动切换" });
+        }
+    }
+
+    let app_for_progress = app.clone();
+    let cfg_for_switch = cfg.clone();
+    let current_for_switch = current.clone();
+    let now_for_switch = config::now_ms();
+    let outcome = tauri::async_runtime::spawn_blocking(move || {
+        auto_switch::run_once(
+            &cfg_for_switch,
+            current_for_switch.as_deref(),
+            now_for_switch,
+            |target| {
+                // 与手动切换完全一致：完全同步（替换目标账号会话）+ 写后身份校验 + 重启
+                let progress: switch::ProgressFn = Box::new(move |message| {
+                    let _ = app_for_progress.emit("switch-progress", json!({ "message": message }));
+                });
+                let (result, diagnostics) = switch::switch_account_detailed(
+                    Some(&progress),
+                    target,
+                    true,
+                    false,
+                    &[],
+                    &[],
+                    true,
+                );
+                match result {
+                    Ok(_) => Ok(()),
+                    Err(error) => Err(format!("{error}（阶段 {}）", diagnostics.stage)),
+                }
+            },
+        )
     })
     .await;
 
-    let cancelled = matches!(
-        &outcome,
-        Ok(payload) if payload.get("error").and_then(|v| v.as_str()) == Some("cancelled-by-user")
-    );
     let ok = matches!(&outcome, Ok(payload)
-        if payload.get("action").and_then(|v| v.as_str()) == Some("switch")
-            && payload.get("ok").and_then(|v| v.as_bool()) == Some(true));
+        if payload.get("action").and_then(Value::as_str) == Some("switch")
+            && payload.get("ok").and_then(Value::as_bool) == Some(true));
     // 成功才吃冷却；取消/失败把名额与冷却一起还原，下一轮还能立刻重试
     auto_switch::end_switch(ok, config::now_ms());
     AUTO_SWITCH_RUNNING.store(false, Ordering::SeqCst);
 
     match outcome {
-        Ok(payload) => {
-            if cancelled {
-                return json!({ "action": "cancelled", "reason": "用户取消了本次自动切换" });
-            }
-            payload
-        }
+        Ok(payload) => payload,
         Err(join_error) => json!({
             "action": "switch",
             "ok": false,

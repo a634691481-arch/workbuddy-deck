@@ -81,6 +81,8 @@ pub fn run() {
             commands::auto_switch_set,
             commands::auto_switch_logs,
             commands::auto_switch_apply,
+            commands::auto_switch_confirm,
+            commands::auto_switch_pending,
             commands::auto_switch_cancel,
             commands::auto_switch_clear_logs,
             commands::auto_switch_check,

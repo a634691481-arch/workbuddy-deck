@@ -721,6 +721,12 @@ export interface AutoSwitchConfig {
   excludedAccountIds: string[];
   minRemaining: number;
   requireSameVariant: boolean;
+  /** 切换前先询问（默认 true） */
+  askBeforeSwitch: boolean;
+  /** 窗口在后台时只提醒不执行（默认 true） */
+  notifyWhenBackground: boolean;
+  /** 询问倒计时秒数（3–120，默认 15） */
+  countdownSeconds: number;
 }
 
 export interface AutoSwitchEvent {
@@ -758,6 +764,16 @@ export const autoSwitchCheck = () => invoke<AutoSwitchCheck>("auto_switch_check"
 /** 取消本轮待执行的自动切换（3 秒倒计时内有效）。 */
 export const autoSwitchCancel = () =>
   invoke<{ ok: boolean; error?: string }>("auto_switch_cancel");
+
+/** 用户点「立即切换」：跳过剩余倒计时，立刻执行（仍走互斥与批量任务闸门）。 */
+export const autoSwitchConfirm = () =>
+  invoke<{ action: string; ok?: boolean; reason?: string; error?: string }>("auto_switch_confirm");
+
+/** 当前是否有待确认的切换（前端重挂时补画提示条）。 */
+export const autoSwitchPending = () =>
+  invoke<{ targetId?: string; targetLabel?: string; reason?: string; seconds?: number; deadline?: number } | null>(
+    "auto_switch_pending",
+  );
 
 export const autoSwitchLogs = (limit = 100) =>
   invoke<{ total: number; items: AutoSwitchEvent[] }>("auto_switch_logs", { limit });

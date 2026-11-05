@@ -45,6 +45,12 @@ pub struct AutoSwitchConfig {
     pub min_remaining: f64,
     /// 只切到同档位（cn / ai）账号：跨档位切换会换数据目录，代价大得多。
     pub require_same_variant: bool,
+    /// 切换前先询问（默认开）：关掉才回到「倒计时结束直接切」。
+    pub ask_before_switch: bool,
+    /// 窗口在后台时只提醒不执行（默认开）：避免用户不在电脑前被动换号。
+    pub notify_when_background: bool,
+    /// 询问倒计时秒数，0–120（0 = 一直等你点），默认 15。
+    pub countdown_seconds: i64,
 }
 
 impl Default for AutoSwitchConfig {
@@ -56,6 +62,9 @@ impl Default for AutoSwitchConfig {
             excluded_account_ids: Vec::new(),
             min_remaining: 50.0,
             require_same_variant: true,
+            ask_before_switch: true,
+            notify_when_background: true,
+            countdown_seconds: 15,
         }
     }
 }
@@ -91,6 +100,13 @@ impl AutoSwitchConfig {
                 .unwrap_or(base.min_remaining)
                 .max(0.0),
             require_same_variant: bool_of("requireSameVariant", base.require_same_variant),
+            ask_before_switch: bool_of("askBeforeSwitch", base.ask_before_switch),
+            notify_when_background: bool_of("notifyWhenBackground", base.notify_when_background),
+            countdown_seconds: value
+                .get("countdownSeconds")
+                .and_then(Value::as_i64)
+                .unwrap_or(base.countdown_seconds)
+                .clamp(0, 120),
         }
     }
 
@@ -102,6 +118,9 @@ impl AutoSwitchConfig {
             "excludedAccountIds": self.excluded_account_ids,
             "minRemaining": self.min_remaining,
             "requireSameVariant": self.require_same_variant,
+            "askBeforeSwitch": self.ask_before_switch,
+            "notifyWhenBackground": self.notify_when_background,
+            "countdownSeconds": self.countdown_seconds,
         })
     }
 
@@ -374,6 +393,36 @@ pub fn candidates(now: i64) -> Vec<Candidate> {
         .collect()
 }
 
+/// 只判定，不执行、不写日志：给宿主在「询问用户」阶段拿目标与原因用。
+///
+/// 与 `run_once` 走同一条 `decide()`，所以冷却、排除名单、余额门槛的结论一致；
+/// 区别只是这里不关 WorkBuddy、不动认证。
+pub fn preview(cfg: &AutoSwitchConfig, current_account_id: Option<&str>, now: i64) -> Value {
+    let candidates = candidates(now);
+    let label_of = |target_id: &str| {
+        candidates
+            .iter()
+            .find(|item| item.account_id == target_id)
+            .map(|item| item.label.clone())
+            .unwrap_or_default()
+    };
+    match decide(cfg, &candidates, current_account_id, last_switch_at(), now) {
+        Decision::Skip(reason) => json!({ "action": "skip", "reason": reason }),
+        Decision::Notify { target_id, reason } => json!({
+            "action": "notify",
+            "reason": reason,
+            "targetId": target_id,
+            "targetLabel": label_of(&target_id),
+        }),
+        Decision::Switch { target_id, reason } => json!({
+            "action": "switch",
+            "reason": reason,
+            "targetId": target_id,
+            "targetLabel": label_of(&target_id),
+        }),
+    }
+}
+
 /// 执行一轮判定。`apply_switch` 由宿主注入，避免 core 直接依赖重启逻辑。
 ///
 /// 返回结构直接可给前端/日志用：`{ action, reason, targetId, error }`。
@@ -530,6 +579,15 @@ pub fn update_config(patch: &Value) -> Result<Value, String> {
     }
     if let Some(value) = patch.get("requireSameVariant").and_then(Value::as_bool) {
         cfg.require_same_variant = value;
+    }
+    if let Some(value) = patch.get("askBeforeSwitch").and_then(Value::as_bool) {
+        cfg.ask_before_switch = value;
+    }
+    if let Some(value) = patch.get("notifyWhenBackground").and_then(Value::as_bool) {
+        cfg.notify_when_background = value;
+    }
+    if let Some(value) = patch.get("countdownSeconds").and_then(Value::as_i64) {
+        cfg.countdown_seconds = value.clamp(0, 120);
     }
     if let Some(items) = patch.get("excludedAccountIds").and_then(Value::as_array) {
         cfg.excluded_account_ids = items
