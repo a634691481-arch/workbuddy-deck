@@ -520,27 +520,13 @@ async function loadWbStatus() {
   }
 }
 
+/**
+ * 当前账号 = 国内版客户端此刻登录的那个号。
+ * 国际版已从列表与判定里移除，所以命中集合最多一条。
+ */
 const isCurrent = (row: AccountOverviewRow) =>
   wbStatus.value?.currentAccountIds.includes(row.accountId) ?? false;
-
-/**
- * 主账号：正在运行的档位（没有运行的就 cn）登录的那个号。
- * 同一台机器可能 CN 与国际版各登录一个号 → 两个命中，但只有一个是「主」。
- */
-const primaryId = computed(() => {
-  const status = wbStatus.value;
-  if (!status) return "";
-  return status.primaryAccountId ?? status.currentAccountIds[0] ?? "";
-});
-const isPrimary = (row: AccountOverviewRow) => row.accountId === primaryId.value;
-
-/** 命中了但不是主账号：另一档位客户端登录的号，标「已登录 · CN/INTL」。 */
-function loggedInVariant(row: AccountOverviewRow): string | null {
-  const status = wbStatus.value;
-  if (!status || !isCurrent(row) || isPrimary(row)) return null;
-  const hit = status.currentByVariant?.find((item) => item.accountId === row.accountId);
-  return hit?.variant ?? null;
-}
+const isPrimary = isCurrent;
 
 /** 待确认切换的目标账号；null 表示弹框关闭。 */
 const switchTarget = ref<AccountOverviewRow | null>(null);
@@ -801,14 +787,6 @@ async function doSwitch() {
                 >
                   <CircleCheck class="size-2.5" />
                   {{ t("ac.currentBadge") }}
-                </span>
-                <!-- 同机两档位各登录一个号：非主账号标「已登录」，避免看起来像两个当前账号 -->
-                <span
-                  v-else-if="loggedInVariant(row)"
-                  class="lbl-ink flex shrink-0 items-center gap-0.5 border border-border-strong px-1 py-0.5 text-[8px] text-muted-foreground"
-                  :title="t('ac.loggedInHint')"
-                >
-                  {{ t("ac.loggedIn") }} · {{ variantText(loggedInVariant(row) ?? '') }}
                 </span>
                 <span
                   v-if="isPriority(row)"

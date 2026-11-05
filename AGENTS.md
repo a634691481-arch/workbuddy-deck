@@ -100,6 +100,10 @@ StatusBar   24px  ● READY · 最近刷新 · 账号数 · 日志数
 - **i18n 前缀占用表**：`lg.*` 归任务页 LogPanel（历史），运行日志用 `rl.*`；新增页面前先 grep 前缀。
 - 跨分区跳转统一走 `useShell().go(key)`（`nav` ref 由外壳持有）；组件不要自己改 hash。
 - **账号的增 / 删 / 导入 / 导出只有账号管理页有入口**；其它页只做「带路」，不重复放按钮。
+- **只服务国内版（cn）**：`list_accounts` / `account_overview` 一律走 `account::cn_accounts()`，
+  本机导入只扫 cn 登录态，`workbuddy_status` 只认 cn，「当前账号」因此最多一条。
+  国际版（ai）账号不进列表、不参与统计——它的接口域名与积分口径都不同，混进来只会全盘失败。
+  要做国际版必须**另一套 base url 与积分口径**，不是放开一个 filter 就行。
 - **账号库来源只有一个**：`~/.wb-switch/accounts.json`。没装过上游 workbuddy-switch 的用户
   这个文件不存在 → 任务面板与账号管理都是空。所以 `import_local_accounts` 会在**账号管理挂载时
   静默跑一次**，把 WorkBuddy 自己的 auth 文件（cn / ai 两档位）里当前登录的账号补进库；

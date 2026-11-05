@@ -40,7 +40,7 @@ async fn fresh(acc: Value) -> Value {
 
 #[tauri::command]
 pub fn list_accounts() -> Value {
-    let rows: Vec<Value> = account::load_accounts().iter().map(summary).collect();
+    let rows: Vec<Value> = account::cn_accounts().iter().map(summary).collect();
     json!({ "total": rows.len(), "accounts": rows })
 }
 
@@ -57,7 +57,8 @@ pub fn import_local_accounts() -> Value {
     let mut imported: Vec<Value> = Vec::new();
     let mut errors: Vec<Value> = Vec::new();
     let mut skipped = 0;
-    for variant in WbVariant::ALL {
+    // 只要国内版登录态：国际版不导入
+    for variant in [WbVariant::Cn] {
         match account::import_local_if_absent(variant) {
             Ok(Some(meta)) => imported.push(meta),
             // 库里已有同 uid：装过 workbuddy-switch 的机器走到这里，必须空转
@@ -167,8 +168,8 @@ fn open_in_browser(url: &str) -> Result<(), String> {
 /// 不再拉起主程序：用户要的是「点一下就在浏览器登录」，多跳一步是多余动作。
 #[tauri::command]
 pub async fn start_login(variant: Option<String>) -> Value {
+    // 只做国内版：入参里的 intl/ai 一律按国内版处理（前端已无档位入口）
     let variant = match variant.as_deref() {
-        Some("intl") | Some("ai") => WbVariant::Ai,
         _ => WbVariant::Cn,
     };
     let res = match oauth::oauth_start(variant).await {
@@ -671,7 +672,8 @@ pub async fn workbuddy_status() -> Value {
         // 档位 → 命中账号：cn / ai 各登录一个号时会有两条
         let mut by_variant: Vec<(String, String)> = Vec::new();
         let mut current: Option<Value> = None;
-        for variant in WbVariant::ALL {
+        // 只认国内版档位：国际版账号已被列表过滤，不再参与「当前账号」判定
+        for variant in [WbVariant::Cn] {
             let Some(auth) = auth_file::read_auth_file(variant) else {
                 continue;
             };
@@ -718,17 +720,10 @@ pub async fn workbuddy_status() -> Value {
             }
         }
         let running_cn = process::is_workbuddy_running(WbVariant::Cn);
-        let running_ai = process::is_workbuddy_running(WbVariant::Ai);
-        let running_variant = if running_cn {
-            Some("cn")
-        } else if running_ai {
-            Some("ai")
-        } else {
-            None
-        };
+        let running_variant = if running_cn { Some("cn") } else { None };
         let primary = pick_primary_account(&by_variant, running_variant);
         json!({
-            "running": running_cn || running_ai,
+            "running": running_cn,
             "currentAccountIds": current_ids,
             "current": current,
             // 同一台机器 cn / ai 各登录一个号时，「当前账号」不止一个：
@@ -856,7 +851,8 @@ pub async fn account_overview(app: tauri::AppHandle, refresh: Option<bool>) -> V
     const CONCURRENCY: usize = 4;
     let refresh = refresh.unwrap_or(false);
     let collected_at = config::now_ms();
-    let accounts = account::load_accounts();
+    // 只服务国内版：国际版账号不参与余额 / 积分 / 预测统计
+    let accounts = account::cn_accounts();
     // 模型限流台账（扫本机日志 + hook 事件，内置 5 分钟缓存）：跟余额无关，
     // 两种口径都要展示，所以在这里取一次，按账号拆开。
     let rate_by_account = match tokio::task::spawn_blocking(limits::get_rate_limits).await {

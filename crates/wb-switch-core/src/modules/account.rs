@@ -510,6 +510,17 @@ pub fn delete_account(account_id: &str) -> Result<(), String> {
     delete_account_from_path(&accounts_file(), account_id)
 }
 
+/// 只保留国内版（cn）账号。
+///
+/// 本工具只服务国内版 WorkBuddy：国际版（ai）的接口域名与积分口径都不同，
+/// 混进同一份列表会让签到 / 积分 / 任务全部失败，所以列表层统一过滤掉。
+pub fn cn_accounts() -> Vec<Value> {
+    load_accounts()
+        .into_iter()
+        .filter(|acc| variant_of(acc) == WbVariant::Cn)
+        .collect()
+}
+
 /// 导入本机当前账号（从该档位的登录态文件读取）。
 pub fn import_local(variant: WbVariant) -> Result<Value, String> {
     let acc = crate::modules::auth_file::import_from_auth_file(variant)
