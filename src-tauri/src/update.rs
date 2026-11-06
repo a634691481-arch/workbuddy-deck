@@ -76,9 +76,17 @@ pub struct UpdateConfig {
     pub notified: String,
 }
 
+/// 默认国内镜像：GitHub 直连在国内经常 reset，首次安装就带上代理前缀，
+/// 免得用户第一次检查更新就失败。留空 = 仍然用它（见 `load_config`）。
+pub const DEFAULT_MIRROR: &str = "https://gh-proxy.com";
+
 impl Default for UpdateConfig {
     fn default() -> Self {
-        Self { auto_check: true, mirror: String::new(), notified: String::new() }
+        Self {
+            auto_check: true,
+            mirror: DEFAULT_MIRROR.to_string(),
+            notified: String::new(),
+        }
     }
 }
 
@@ -94,10 +102,15 @@ pub fn invalidate_cache() {
 }
 
 pub fn load_config() -> UpdateConfig {
-    std::fs::read_to_string(config_path())
+    let mut cfg = std::fs::read_to_string(config_path())
         .ok()
-        .and_then(|text| serde_json::from_str(&text).ok())
-        .unwrap_or_default()
+        .and_then(|text| serde_json::from_str::<UpdateConfig>(&text).ok())
+        .unwrap_or_default();
+    // 老配置里 mirror 是空串：视为「没配过」，补上默认国内镜像（用户想直连可显式填 github 地址）
+    if cfg.mirror.trim().is_empty() {
+        cfg.mirror = DEFAULT_MIRROR.to_string();
+    }
+    cfg
 }
 
 pub fn save_config(cfg: &UpdateConfig) -> std::io::Result<()> {
@@ -125,7 +138,7 @@ fn normalize_mirror(raw: &str) -> String {
 }
 
 /// 公共镜像：GitHub 直连不稳时兜底（前缀式代理，与自定义镜像同一套拼法）。
-const PUBLIC_MIRRORS: [&str; 2] = ["https://ghfast.top/", "https://gh-proxy.com/"];
+const PUBLIC_MIRRORS: [&str; 2] = ["https://gh-proxy.com/", "https://ghproxy.net/"];
 
 /// 清单候选 URL（按优先级）。自定义镜像优先；没配就直连 + 公共镜像兜底。
 ///
@@ -136,18 +149,23 @@ fn manifest_urls(mirror: &str) -> Vec<String> {
     let custom = normalize_mirror(mirror);
     let mut prefixes: Vec<String> = Vec::new();
     if !custom.is_empty() {
-        prefixes.push(custom);
+        prefixes.push(custom.clone());
     }
     prefixes.push(String::new());
-    if mirror.trim().is_empty() {
-        prefixes.extend(PUBLIC_MIRRORS.iter().map(|item| (*item).to_string()));
+    // 无论有没有配镜像，都补上另一个公共镜像兜底（配的那个已经排最前，不重复）
+    for item in PUBLIC_MIRRORS {
+        if normalize_mirror(item) != custom {
+            prefixes.push(item.to_string());
+        }
     }
+    // 先取 latest-cn.json（CI 生成，安装包地址已换成国内镜像前缀），
+    // 拿不到再退回官方 latest.json（直连下载）。
     prefixes
         .into_iter()
         .flat_map(|prefix| {
             [
+                format!("{prefix}{base}/latest-cn.json"),
                 format!("{prefix}{base}/latest.json"),
-                format!("{prefix}{base}/latest-windows-x86_64.json"),
             ]
         })
         .collect()
@@ -455,10 +473,26 @@ mod tests {
     }
 
     #[test]
+    fn default_config_uses_cn_mirror() {
+        let cfg = UpdateConfig::default();
+        assert_eq!(cfg.mirror, DEFAULT_MIRROR);
+        let urls = manifest_urls(&cfg.mirror);
+        assert!(
+            urls[0].starts_with("https://gh-proxy.com/https://github.com/"),
+            "默认镜像应排第一：{}",
+            urls[0]
+        );
+        // 直连与另一个公共镜像都要在列表里兜底
+        assert!(urls.iter().any(|u| u.starts_with("https://github.com/")));
+        assert!(urls.iter().any(|u| u.starts_with("https://ghproxy.net/")));
+    }
+
+    #[test]
     fn manifest_urls_are_prefixed_in_order() {
         let urls = manifest_urls("");
         assert!(urls[0].starts_with("https://github.com/a634691481-arch/workbuddy-deck"));
-        assert!(urls[0].ends_with("latest.json"));
+        assert!(urls[0].ends_with("latest-cn.json"));
+        assert!(urls[1].ends_with("latest.json"));
         let mirrored = manifest_urls("https://ghproxy.net");
         assert!(mirrored[0].starts_with("https://ghproxy.net/https://github.com/"));
     }

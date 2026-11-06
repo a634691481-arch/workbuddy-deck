@@ -127,3 +127,26 @@ jobs:
           done
           echo "latest.json missing for $TAG — updater chain is broken"
           exit 1
+
+      # 国内镜像清单：安装包地址统一换成 gh-proxy 前缀，客户端默认走它。
+      # 官方 latest.json 不动，境外用户拿到的仍是直连地址。
+      - name: Publish CN mirror manifest
+        env:
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+          REPO: ${{ github.repository }}
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          curl -fsSL "https://github.com/$REPO/releases/download/$TAG/latest.json" -o latest.json
+          python3 - <<'PY'
+          import json, os
+          mirror = os.environ.get("MIRROR", "https://gh-proxy.com/")
+          data = json.load(open("latest.json", encoding="utf-8"))
+          for item in data.get("platforms", {}).values():
+              url = item.get("url", "")
+              if url.startswith("https://github.com/"):
+                  item["url"] = mirror + url
+          json.dump(data, open("latest-cn.json", "w", encoding="utf-8"), ensure_ascii=False, indent=2)
+          print("platforms:", list(data.get("platforms", {})))
+          PY
+          gh release upload "$TAG" latest-cn.json --clobber
+          echo "latest-cn.json uploaded"
