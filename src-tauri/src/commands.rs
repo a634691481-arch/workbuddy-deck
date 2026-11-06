@@ -1409,6 +1409,17 @@ pub fn alerts_dismiss_all() -> Value {
     crate::alerts::dismiss_all()
 }
 
+// ───────────────────────── 切换前安全检查 ─────────────────────────
+
+/// 打开切换确认弹框时调用：源/目标会话数 + 目标将删除清单 + 可校验备份。
+/// 走 blocking 线程（要读库、拷正文、算 sha256），失败降级为 `ok:false`，不阻塞弹框。
+#[tauri::command(rename_all = "camelCase")]
+pub async fn switch_preflight(account_id: String) -> Value {
+    tauri::async_runtime::spawn_blocking(move || crate::preflight::preflight(&account_id))
+        .await
+        .unwrap_or_else(|error| json!({ "ok": false, "error": format!("安全检查异常: {error}") }))
+}
+
 /// 自动切换的进程内互斥：1s 快路径 / 60s 兜底 / 2min 巡检三个入口共用。
 static AUTO_SWITCH_RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 

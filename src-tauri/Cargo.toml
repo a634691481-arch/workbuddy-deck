@@ -26,6 +26,8 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 # 定时调度按本地日期 / 时刻判断（lastRunDate、HH:MM 到点）
 chrono = "0.4"
+# 切换前安全检查：备份清单的 sha256 校验和（与 core 同版本，共享编译产物）
+sha2 = "0.10"
 # 自动更新：下载 / 校验 minisign 签名 / 调用 NSIS 覆盖安装，都由官方插件的
 # Windows 后端处理（自己拼 installer 命令行会在进程占用时失败）。
 # process：安装器启动后需要主动退出当前进程，交给插件做更稳。

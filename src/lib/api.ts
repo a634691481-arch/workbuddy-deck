@@ -493,6 +493,43 @@ export const alertsDismiss = (fingerprint: string) =>
 export const alertsDismissAll = () =>
   invoke<{ ok: boolean; dismissed: number }>("alerts_dismiss_all");
 
+// ───────────────────────── 切换前安全检查 ─────────────────────────
+
+export interface PreflightSession {
+  id: string;
+  title: string | null;
+  updatedAt: number | null;
+  isPlayground: boolean;
+}
+
+export interface SwitchPreflight {
+  ok: boolean;
+  error?: string;
+  source?: {
+    accountId: string | null;
+    label: string;
+    sessionCount: number;
+  };
+  target?: {
+    accountId: string;
+    label: string;
+    sessionCount: number;
+    sessions: PreflightSession[];
+  };
+  backup?: {
+    skipped: boolean;
+    reason?: "size" | "io";
+    path?: string;
+    fileCount?: number;
+    totalBytes?: number;
+    manifestSha256?: string;
+  };
+  checkedAt: number;
+}
+
+export const switchPreflight = (accountId: string) =>
+  invoke<SwitchPreflight>("switch_preflight", { accountId });
+
 /** 单个积分包（官方资源包口径，字段与 core 的 credits 模块一致）。 */
 export interface AccountPackage {
   packageCode?: string | null;

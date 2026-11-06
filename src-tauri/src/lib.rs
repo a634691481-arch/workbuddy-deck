@@ -9,6 +9,7 @@ mod alerts;
 mod commands;
 mod executor;
 mod export;
+mod preflight;
 mod purge;
 mod scheduler;
 mod token_cache;
@@ -94,6 +95,7 @@ pub fn run() {
             commands::alerts_list,
             commands::alerts_dismiss,
             commands::alerts_dismiss_all,
+            commands::switch_preflight,
             commands::update_check,
             commands::update_install,
             commands::update_config_get,

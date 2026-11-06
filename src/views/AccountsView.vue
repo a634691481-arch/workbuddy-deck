@@ -20,6 +20,7 @@ import {
   Pencil,
   RotateCw,
   Star,
+  ShieldCheck,
   Tags,
   Trash2,
   Upload,
@@ -34,12 +35,14 @@ import {
   accountSetNote,
   importLocalAccounts,
   refreshAllTokens,
+  switchPreflight,
   switchWorkbuddyAccount,
   workbuddyStatus,
   type AccountForecastRow,
   type AccountHealth,
   type AccountOverviewRow,
   type AccountPackage,
+  type SwitchPreflight,
   type WorkbuddyStatus,
 } from "@/lib/api";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
@@ -717,11 +720,34 @@ const STAGE_KEYS: Record<string, I18nKey> = {
 };
 const stageLabel = (stage: string) => (STAGE_KEYS[stage] ? t(STAGE_KEYS[stage]) : stage || "-");
 
+/** 切换前安全检查：源/目标会话数 + 将删除清单 + 备份信息（打开弹框时拉） */
+const preflight = ref<SwitchPreflight | null>(null);
+const preflightLoading = ref(false);
+
+function fmtBytes(bytes: number): string {
+  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+  return `${bytes} B`;
+}
+
+async function loadPreflight(accountId: string) {
+  preflight.value = null;
+  preflightLoading.value = true;
+  try {
+    preflight.value = await switchPreflight(accountId);
+  } catch {
+    preflight.value = null;
+  } finally {
+    preflightLoading.value = false;
+  }
+}
+
 function openSwitch(row: AccountOverviewRow) {
   if (switching.value) return;
   switchError.value = null;
   switchTarget.value = row;
   switchProgress.value = "";
+  void loadPreflight(row.accountId);
 }
 
 /**
@@ -1549,6 +1575,77 @@ async function doSwitch() {
                 <li v-for="(bullet, bulletIndex) in switchBullets" :key="bulletIndex">{{ bullet }}</li>
               </ul>
             </div>
+
+            <!-- 切换前安全检查：源/目标会话数 + 将删除清单 + 备份 -->
+            <div v-if="preflightLoading" class="readout mt-3 flex items-center gap-2 text-[10px] text-muted-foreground">
+              <Loader2 class="size-3 animate-spin" />
+              {{ t("pf.loading") }}
+            </div>
+            <div v-else-if="preflight?.ok" class="mt-3 border border-border">
+              <div class="flex items-center gap-1.5 border-b border-border bg-muted px-3 py-1.5 text-[11px] text-foreground">
+                <ShieldCheck class="size-3.5 shrink-0" />
+                {{ t("pf.title") }}
+              </div>
+              <div class="flex gap-2 border-b border-border px-3 py-1.5 text-[10px]">
+                <span class="w-14 shrink-0 text-faint">{{ t("pf.source") }}</span>
+                <span class="readout min-w-0 flex-1 text-foreground">
+                  {{ preflight.source?.label ? mask(preflight.source.label) : t("pf.sourceUnknown") }}
+                  · {{ t("pf.sessionCount", { n: String(preflight.source?.sessionCount ?? 0) }) }}
+                </span>
+              </div>
+              <div class="flex gap-2 border-b border-border px-3 py-1.5 text-[10px]">
+                <span class="w-14 shrink-0 text-faint">{{ t("pf.target") }}</span>
+                <span class="readout min-w-0 flex-1 text-foreground">
+                  {{ t("pf.sessionCount", { n: String(preflight.target?.sessionCount ?? 0) }) }}
+                  <span class="text-hazard">{{ t("pf.willReplace") }}</span>
+                </span>
+              </div>
+              <!-- 将被删除的会话：只露前 5 条，全量在备份清单里 -->
+              <div
+                v-if="(preflight.target?.sessions?.length ?? 0) > 0"
+                class="border-b border-border px-3 py-1.5"
+              >
+                <p class="lbl mb-1 text-[8px] text-faint">{{ t("pf.deleteList") }}</p>
+                <ul class="space-y-0.5">
+                  <li
+                    v-for="item in preflight.target?.sessions.slice(0, 5)"
+                    :key="item.id"
+                    class="readout truncate text-[10px] text-muted-foreground"
+                    :title="item.title ?? item.id"
+                  >
+                    · {{ item.isPlayground ? t("pf.playground") : t("pf.space") }} {{ item.title || item.id }}
+                  </li>
+                  <li v-if="(preflight.target?.sessions?.length ?? 0) > 5" class="text-[9px] text-faint">
+                    {{ t("pf.more", { n: String((preflight.target?.sessions?.length ?? 0) - 5) }) }}
+                  </li>
+                </ul>
+              </div>
+              <!-- 备份：skipped 时红色警示（不拦切换，但必须让用户知道没有备份） -->
+              <div class="flex gap-2 px-3 py-1.5 text-[10px]">
+                <span class="w-14 shrink-0 text-faint">{{ t("pf.backup") }}</span>
+                <div
+                  v-if="preflight.backup && !preflight.backup.skipped"
+                  class="readout min-w-0 flex-1 break-all leading-4 text-muted-foreground"
+                  :title="preflight.backup.path"
+                >
+                  {{ t("pf.backupOk", {
+                    n: String(preflight.backup.fileCount ?? 0),
+                    size: fmtBytes(preflight.backup.totalBytes ?? 0),
+                  }) }}
+                  <span class="block text-faint">sha256 {{ (preflight.backup.manifestSha256 ?? "").slice(0, 16) }}…</span>
+                </div>
+                <span
+                  v-else-if="preflight.backup?.reason === 'size'"
+                  class="min-w-0 flex-1 leading-4 text-hazard"
+                >
+                  {{ t("pf.backupSkipped", { size: fmtBytes(preflight.backup.totalBytes ?? 0) }) }}
+                </span>
+                <span v-else class="min-w-0 flex-1 leading-4 text-hazard">{{ t("pf.backupFailed") }}</span>
+              </div>
+            </div>
+            <p v-else-if="preflight" class="readout mt-3 text-[10px] text-hazard">
+              {{ t("pf.failed") }}{{ preflight.error ? ` · ${preflight.error}` : "" }}
+            </p>
 
             <!-- 失败现场：阶段 + 是否回滚 + 原始原因，全部留在弹框里 -->
             <div v-if="switchError" class="mt-3 border border-hazard">
