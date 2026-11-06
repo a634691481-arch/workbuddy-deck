@@ -716,3 +716,47 @@ decision(forced-on) = Skip("当前账号未被限流")
 ### 回顾
 - 「让用户知道」= 常驻可见 + 有倒计时 + 可取消，而不是 3 秒飘窗
 - 同一动作只能有一个执行者：倒计时线程在跑时，按钮只举旗不开新线程
+
+## 2026-11-06 切换提示残留修复 + 三大新功能
+
+### 1. 切换成功后提示条残留（bug）
+- [x] 根因：手动切换路径无终态事件；自动切换只有 2min 巡检发 `auto-switch`，
+      1s/60s 两个入口结束后没人清 App.vue 的 `switchStage`
+- [x] 修复：`switch_workbuddy_account` 与 `auto_switch_run` 结束统一发 `switch-finished`；
+      App.vue 监听后清 stage/pending/倒计时
+- [x] 顺手修：rustc 1.99 新 clippy lint 5 处（含上轮遗留的 `auto_switch` 测试缺 3 个新字段——
+      clippy 不带 `--tests` 时测不到，教训：改 struct 字段要跑 `cargo test --no-run`）
+
+### 2. 账号分组与标签
+- [x] core `modules/account_groups.rs`：`account_groups.json`（groups + members 两段），
+      `*_at(root)` 可测；5 条单测（含损坏存档拒绝覆盖）
+- [x] `auto_switch::candidates()` 过滤「排除自动切换」组的成员
+- [x] 4 条命令 + api 契约 + `useAccountGroups` 共享状态
+- [x] 账号页：页头分组筛选 chips（含计数/⊘ 标记）、备注编辑三合一（备注/分组/标签）、
+      分组管理弹框（新建/排除开关/两击删除）
+- [x] 任务页：AccountList 底部「按组勾选」下拉 → 勾选组员并把作用域切到「所选账号」
+
+### 3. 异常提醒中心
+- [x] `src-tauri/src/alerts.rs`：五类信号（余额<3天/健康critical/到期3·7天/切换失败/连续错误≥3），
+      数据 = `account_overview` 结果缓存（口径与界面一致）
+- [x] 指纹去重 + `alerts_state.json`（忽略 7 天静默、首评不轰炸）
+- [x] 后台 10 分钟轮询，新提醒发 `alerts://new`；前端失焦才发系统通知
+- [x] 标题栏铃铛（critical 计数红色反白）+ 下拉面板（单条/全部忽略）
+- [x] i18n `t()` 加 `{name}` 插值参数（提醒文案复用）
+
+### 4. 切换前安全检查
+- [x] `src-tauri/src/preflight.rs` + 命令 `switch_preflight`：源/目标会话数、
+      目标将删除清单（前 5 条 + 计数）、备份（正文逐文件 sha256 + manifest 哈希）
+- [x] 体积护栏：>512MB 不生成半份备份，弹框红字说明总量
+- [x] 切换确认弹框内嵌安全检查块；检查失败降级显示不拦切换
+
+### 验证
+- [x] core `cargo test --lib`：860 passed / 0 failed
+- [x] 应用 `cargo test --lib`：16 passed；两端 clippy `-D warnings` 0 警告
+- [x] vue-tsc 0 错误；vite build 通过
+- [ ] 端到端：真机点一次「设为当前」看安全检查块与备份目录（本会话即 WB，无法代测）
+
+### 回顾
+- 终态事件要在**动作**层发，不能只在某个入口发——入口可以有三个，收尾只能有一个
+- 测试写公开函数 = 写真实存档；core 一律 `*_at(root)` 模式
+- 提醒/预测类功能的数据口径必须与界面同源（缓存界面结果），否则两处数字对不上比没有还糟

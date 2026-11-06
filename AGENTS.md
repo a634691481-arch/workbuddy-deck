@@ -145,6 +145,25 @@ StatusBar   24px  ● READY · 最近刷新 · 账号数 · 日志数
   后端最多等 10 分钟，超时按取消处理。
 - **切换的硬约束（勿删）**：① 会话替换 `replaced !== true` 时 fail-closed，不写认证；
   ② 写后读磁盘校验 uid，`identity-mismatch` 必须回滚；③ 历史写入失败不得影响切换结果。
+- **切换终态事件（勿删）**：`switch_workbuddy_account` 与 `auto_switch_run` 结束时都发
+  `switch-finished`；自动切换三个入口（1s/60s/2min）只有 2min 巡检另发 `auto-switch`。
+  前端全局提示条（App.vue `switchStage`）只靠 `switch-finished` 关闭——漏发就是「正在切换」永久残留。
+- **账号分组与标签（2026-11-06）**：存档在 core `modules/account_groups.rs`
+  （`~/.wb-switch/account_groups.json`，与账号库**分离**，上游同步不覆盖）。
+  编辑入口只在账号页（备注编辑面板三合一：备注/分组/标签）；任务页「按组勾选」只读；
+  勾了「排除自动切换」的组，成员在 core `auto_switch::candidates()` 就被过滤（含 `auto_switch_check`）。
+  测试必须用 `*_at(root)` 私有变体，**禁止**直接测公开函数（会写真存档）。
+- **异常提醒中心（2026-11-06）**：`src-tauri/src/alerts.rs`，五类信号
+  （balance<3天 / health critical / expiring 3·7 天 / switch 24h 失败 / runfail ≥3 条错误通知）。
+  账号侧数据来自 `account_overview` 返回前写入的 `alerts_overview_cache.json`——
+  **提醒口径 = 界面口径，不另算一套**。指纹去重 + `alerts_state.json`（忽略 7 天静默；
+  首次评估只记 seen 不通知）。后台 10 分钟一轮，新提醒发 `alerts://new`，
+  前端失焦才弹系统通知（前台只有铃铛角标）。
+- **切换前安全检查（2026-11-06）**：`switch_preflight`（`src-tauri/src/preflight.rs`），
+  打开确认弹框时拉：源/目标会话数 + 目标将删除清单（前 5 条）+ 备份
+  （`~/.wb-switch/backups/switch-preflight-<ts>/`，正文 + manifest 逐文件 sha256）。
+  体积护栏：正文 >512MB **不生成半份备份**，结果里 `skipped:reason=size` 让弹框红字警示。
+  检查失败不拦切换（`ok:false` 只降级显示），但备份 skipped/失败必须让用户看见。
 - **用量预测 = `account_forecast`**（core `modules/forecast.rs`，纯本地、不发请求）：
   卡片余额后跟 `≈2.4 天`，<3 天红、<7 天高亮正文色。三条口径都别改：
   ① 只把**余额下降**算消耗——签到/领奖会让余额上升，那不是负消耗；
