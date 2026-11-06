@@ -1448,6 +1448,16 @@ fn window_in_foreground(app: &tauri::AppHandle) -> bool {
         .unwrap_or(false)
 }
 
+/// 把主窗口拉回屏幕前台（最小化 / 被遮挡 / 失焦时）。
+/// 自动切换要用户确认时调用：限流提示条得让用户第一眼看到，而不是自己去点任务栏。
+fn focus_main_window(app: &tauri::AppHandle) {
+    if let Some(win) = app.get_webview_window("main") {
+        let _ = win.unminimize();
+        let _ = win.show();
+        let _ = win.set_focus();
+    }
+}
+
 /// 当前是否有待确认的切换（前端启动/重挂时补画提示条）。
 #[tauri::command]
 pub fn auto_switch_pending() -> Value {
@@ -1518,15 +1528,20 @@ async fn auto_switch_run(app: tauri::AppHandle, ask: bool) -> Value {
     }
 
     if ask && cfg.ask_before_switch {
-        // 后台：只提醒，不动手。把名额还回去，用户回来点「立即切换」再走一遍。
-        if !window_in_foreground(&app) && cfg.notify_when_background {
+        // 窗口不在前台就主动拉回来：确认条要让用户第一眼看到，而不是自己去点软件
+        let was_background = !window_in_foreground(&app);
+        if was_background {
+            focus_main_window(&app);
+        }
+        // 后台拿不回焦点（系统拒绝抢焦点等）：只提醒，不动手。把名额还回去，用户回来点「立即切换」再走一遍。
+        if was_background && !window_in_foreground(&app) && cfg.notify_when_background {
             auto_switch::end_switch(false, config::now_ms());
             AUTO_SWITCH_RUNNING.store(false, Ordering::SeqCst);
             let mut payload = preview.clone();
             payload["action"] = json!("notify");
             payload["awaitingConfirm"] = json!(true);
             payload["reason"] = json!(format!(
-                "{}（窗口在后台，等你确认后再切换）",
+                "{}（窗口已带到前台，等你确认后再切换）",
                 preview.get("reason").and_then(Value::as_str).unwrap_or("")
             ));
             let _ = app.emit("auto-switch-notify", payload.clone());

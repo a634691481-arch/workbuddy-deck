@@ -29,7 +29,7 @@ const zh = {
   "as.pendingReason": "原因",
   "as.pendingTarget": "目标",
   "as.switchNow": "立即切换",
-  "as.pendingBackground": "窗口在后台，已发通知：回来确认后才切换",
+  "as.pendingBackground": "已把窗口带到前台，等你确认后才切换",
   "as.cancel": "取消本轮",
   "as.ask": "切换前先询问",
   "as.askHint": "关掉后回到「倒计时结束直接切」",
