@@ -143,6 +143,12 @@ onMounted(async () => {
       switchStage.value = "";
       switchPending.value = null;
     });
+    // 手动切换不走 `auto-switch` 事件；命令返回时统一发终态，避免「正在切换 / 切换完成」永久残留。
+    void listen("switch-finished", () => {
+      stopTicker();
+      switchStage.value = "";
+      switchPending.value = null;
+    });
   }
   if (!isTauri()) return;
   try {

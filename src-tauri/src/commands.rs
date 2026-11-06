@@ -60,13 +60,11 @@ pub fn import_local_accounts() -> Value {
     let mut errors: Vec<Value> = Vec::new();
     let mut skipped = 0;
     // 只要国内版登录态：国际版不导入
-    for variant in [WbVariant::Cn] {
-        match account::import_local_if_absent(variant) {
-            Ok(Some(meta)) => imported.push(meta),
-            // 库里已有同 uid：装过 workbuddy-switch 的机器走到这里，必须空转
-            Ok(None) => skipped += 1,
-            Err(error) => errors.push(json!({ "variant": variant.as_str(), "error": error })),
-        }
+    match account::import_local_if_absent(WbVariant::Cn) {
+        Ok(Some(meta)) => imported.push(meta),
+        // 库里已有同 uid：装过 workbuddy-switch 的机器走到这里，必须空转
+        Ok(None) => skipped += 1,
+        Err(error) => errors.push(json!({ "variant": WbVariant::Cn.as_str(), "error": error })),
     }
     json!({
         "ok": true,
@@ -169,11 +167,9 @@ fn open_in_browser(url: &str) -> Result<(), String> {
 ///
 /// 不再拉起主程序：用户要的是「点一下就在浏览器登录」，多跳一步是多余动作。
 #[tauri::command]
-pub async fn start_login(variant: Option<String>) -> Value {
+pub async fn start_login(_variant: Option<String>) -> Value {
     // 只做国内版：入参里的 intl/ai 一律按国内版处理（前端已无档位入口）
-    let variant = match variant.as_deref() {
-        _ => WbVariant::Cn,
-    };
+    let variant = WbVariant::Cn;
     let res = match oauth::oauth_start(variant).await {
         Ok(res) => res,
         Err(error) => return json!({ "ok": false, "error": error }),
@@ -605,10 +601,6 @@ pub async fn refresh_all_tokens() -> Value {
     })
 }
 
-/// 账号卡片总览：
-/// - `refresh=false`：读本地采集快照，离线秒回（余额为上次采集值）；
-/// - `refresh=true`：并发（4 路）拉官方积分资源包，带积分包明细与近期到期。
-/// 只读命令；`get_credit_expiry` 内部会照常落采集快照，与积分统计共用一份。
 /// WorkBuddy 运行状态 + 当前登录账号（读 auth 文件，与账号库按 uid/email 匹配）。
 ///
 /// 判定口径与 workbuddy-switch 一致：auth 里的 uid 命中账号的 id/uid，或 email 相等。
@@ -764,16 +756,18 @@ pub async fn switch_workbuddy_account(app: tauri::AppHandle, account_id: String)
             "rolledBack": false,
         });
     }
+    let app_for_progress = app.clone();
     let progress: switch::ProgressFn = Box::new(move |message| {
-        let _ = app.emit("switch-progress", json!({ "message": message }));
+        let _ = app_for_progress.emit("switch-progress", json!({ "message": message }));
     });
+    let app_for_finish = app.clone();
     let outcome = tauri::async_runtime::spawn_blocking(move || {
         // restart=true + replace_sessions=true：即原项目的「完全同步」切换。
         switch::switch_account_detailed(Some(&progress), &account_id, true, false, &[], &[], true)
     })
     .await;
 
-    match outcome {
+    let payload = match outcome {
         Ok((result, diagnostics)) => switch_payload(result, &diagnostics),
         Err(join_error) => json!({
             "ok": false,
@@ -785,7 +779,17 @@ pub async fn switch_workbuddy_account(app: tauri::AppHandle, account_id: String)
             "rolledBack": false,
             "sessionsDirty": false,
         }),
-    }
+    };
+    // `switch-progress` 的最后一条只是阶段文案，不代表流程结束。
+    // 统一补终态事件，让全局提示条无论成功、失败还是回滚都能关闭。
+    let _ = app_for_finish.emit(
+        "switch-finished",
+        json!({
+            "ok": payload.get("ok").and_then(Value::as_bool).unwrap_or(false),
+            "result": payload.get("result").cloned().unwrap_or(Value::Null),
+        }),
+    );
+    payload
 }
 
 /// 把 core 的「结果 + 诊断」拼成前端唯一契约。
@@ -848,6 +852,11 @@ fn account_health_of(
     })
 }
 
+/// 账号卡片总览：
+/// - `refresh=false`：读本地采集快照，离线秒回（余额为上次采集值）；
+/// - `refresh=true`：并发（4 路）拉官方积分资源包，带积分包明细与近期到期。
+///
+/// 只读命令；`get_credit_expiry` 内部会照常落采集快照，与积分统计共用一份。
 #[tauri::command]
 pub async fn account_overview(app: tauri::AppHandle, refresh: Option<bool>) -> Value {
     const CONCURRENCY: usize = 4;
@@ -1533,6 +1542,16 @@ async fn auto_switch_run(app: tauri::AppHandle, ask: bool) -> Value {
     auto_switch::end_switch(ok, config::now_ms());
     AUTO_SWITCH_RUNNING.store(false, Ordering::SeqCst);
 
+    // 终态事件：三个入口（1s 快路径 / 60s 兜底 / 2min 巡检）都从这里返回，
+    // 只有巡检会另发 `auto-switch`；不补这条，前两条路径的「正在切换」提示条会永久残留。
+    let _ = app.emit(
+        "switch-finished",
+        json!({
+            "ok": ok,
+            "action": outcome.as_ref().ok().and_then(|p| p.get("action").cloned()).unwrap_or(json!("switch")),
+        }),
+    );
+
     match outcome {
         Ok(payload) => payload,
         Err(join_error) => json!({
@@ -1842,7 +1861,7 @@ pub async fn purge_archived_tasks(app: tauri::AppHandle, relaunch: Option<bool>)
 pub fn app_ready(app: tauri::AppHandle) {
     // 存量账号字段补齐（外部工具导入的记录可能只有 expires_at 秒级时间）：
     // 幂等、纯本地，失败不影响开窗。
-    let _ = std::panic::catch_unwind(|| wb_switch_core::modules::export_import::repair_store_fields());
+    let _ = std::panic::catch_unwind(wb_switch_core::modules::export_import::repair_store_fields);
     if let Some(window) = tauri::Manager::get_webview_window(&app, "main") {
         let _ = window.show();
         let _ = window.set_focus();
