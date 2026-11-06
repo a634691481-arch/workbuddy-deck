@@ -315,6 +315,20 @@ const zh = {
   "ag.newPh": "新分组名（如：主力 / 备用 / 勿动）",
   "ag.add": "新建",
   "ag.memberSaveFail": "备注已保存，但分组/标签保存失败",
+  "alr.title": "提醒",
+  "alr.empty": "没有需要关注的异常",
+  "alr.critical": "紧急",
+  "alr.warn": "注意",
+  "alr.dismiss": "忽略（7 天内不再提醒）",
+  "alr.dismissAll": "全部忽略",
+  "alr.hint": "余额 / 到期 / 健康 / 切换失败 / 连续错误，每 10 分钟评估一次；忽略只静默 7 天。",
+  "alr.balance": "{label} 余额约 {days} 天耗尽",
+  "alr.health": "{label} 健康分 {score}/100",
+  "alr.expiring": "{label} 的「{pkg}」{days} 天内到期",
+  "alr.switch": "{label} 最近一次切换失败，详情见运行日志",
+  "alr.runfail": "24 小时内已累计 {count} 条错误",
+  "alr.notifyCritical": "WorkBuddy 异常（紧急）",
+  "alr.notifyWarn": "WorkBuddy 异常",
   "ac.noMatch": "没有匹配的账号，试试清空搜索条件",
   "ac.emptyStep1": "点「导入本机」把当前 WorkBuddy 登录的账号收进来，或点「浏览器登录」加新号",
   "ac.emptyStep2": "到「系统设置 → 自动化」打开每日签到与成长任务",
@@ -893,6 +907,20 @@ const en: Record<I18nKey, string> = {
   "ag.newPh": "New group name (e.g. main / backup)",
   "ag.add": "ADD",
   "ag.memberSaveFail": "Note saved, but groups/tags failed",
+  "alr.title": "ALERTS",
+  "alr.empty": "Nothing needs your attention",
+  "alr.critical": "CRITICAL",
+  "alr.warn": "WARN",
+  "alr.dismiss": "Dismiss (silent for 7 days)",
+  "alr.dismissAll": "DISMISS ALL",
+  "alr.hint": "Balance / expiry / health / switch failures / repeated errors, evaluated every 10 min; dismissals last 7 days.",
+  "alr.balance": "{label} balance runs out in ~{days} days",
+  "alr.health": "{label} health score {score}/100",
+  "alr.expiring": "{label} package \u201c{pkg}\u201d expires in {days} days",
+  "alr.switch": "{label} last account switch failed, see logs",
+  "alr.runfail": "{count} errors in the last 24 hours",
+  "alr.notifyCritical": "WorkBuddy alert (critical)",
+  "alr.notifyWarn": "WorkBuddy alert",
   "ac.noMatch": "No account matches, clear the search",
   "ac.emptyStep1": "Click IMPORT LOCAL to pull the signed-in WorkBuddy account, or BROWSER LOGIN",
   "ac.emptyStep2": "Enable daily check-in and growth tasks in Settings → Automation",
@@ -1182,7 +1210,9 @@ export function toggleLocale() {
   setLocale(locale.value === "zh" ? "en" : "zh");
 }
 
-/** 取词。读 locale.value → 模板里调用即自动重渲染。 */
-export function t(key: I18nKey): string {
-  return dict[locale.value][key] ?? dict.zh[key] ?? key;
+/** 取词。读 locale.value → 模板里调用即自动重渲染。`params` 做 `{name}` 插值（提醒文案用）。 */
+export function t(key: I18nKey, params?: Record<string, string>): string {
+  const text = dict[locale.value][key] ?? dict.zh[key] ?? key;
+  if (!params) return text;
+  return text.replace(/\{(\w+)\}/g, (match, name: string) => params[name] ?? match);
 }

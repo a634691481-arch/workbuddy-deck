@@ -5,6 +5,7 @@
 //! - 左键点托盘图标 = 显示窗口；右键弹快捷菜单（签到 / 日常 / 显示 / 退出）。
 //! - 真正退出只能通过托盘菜单「退出」，避免误关导致后台任务中断。
 
+mod alerts;
 mod commands;
 mod executor;
 mod export;
@@ -90,6 +91,9 @@ pub fn run() {
             commands::account_group_save,
             commands::account_group_remove,
             commands::account_member_save,
+            commands::alerts_list,
+            commands::alerts_dismiss,
+            commands::alerts_dismiss_all,
             commands::update_check,
             commands::update_install,
             commands::update_config_get,
@@ -182,6 +186,9 @@ pub fn run() {
 
             // 自动更新轮询：启动 8s 后首查，之后每 6 小时（可在设置里关闭）
             update::spawn_poller(app.handle().clone());
+
+            // 异常提醒中心：启动 20s 首评，之后每 10 分钟
+            alerts::spawn_poller(app.handle().clone());
             Ok(())
         })
         // 关闭即隐藏：保留后台执行与托盘，不销毁 WebView（下次显示无需重建）

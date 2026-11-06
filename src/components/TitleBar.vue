@@ -2,13 +2,14 @@
 // 窗口控制依赖 Tauri 宿主；浏览器预览时 win 为 null，按钮照常渲染但不生效（不白屏）。
 import { computed, onMounted, ref } from "vue";
 import { getCurrentWindow } from "@tauri-apps/api/window";
-import { Eye, EyeOff, Minus, Moon, Square, Sun, X } from "lucide-vue-next";
+import { Eye, EyeOff, Bell, Minus, Moon, Square, Sun, X } from "lucide-vue-next";
 
 import { locale, setLocale, t } from "@/lib/i18n";
 import { loadingBar } from "@/lib/loading-bar";
 import { isTauri } from "@/lib/tauri-env";
 import { maskAll, setMaskAll } from "@/lib/task-meta";
 import { setWindowBackdrop } from "@/lib/api";
+import { useAlerts } from "@/composables/useAlerts";
 import {
   ACCENTS,
   DENSITIES,
@@ -50,11 +51,14 @@ import { useUpdate } from "@/composables/useUpdate";
 const win = isTauri() ? getCurrentWindow() : null;
 const { current: rev, loadConfig } = useUpdate();
 
+// 异常提醒中心：铃铛角标 + 下拉面板
+const { alerts, criticalCount, dismiss, dismissAll, alertText, load: loadAlerts } = useAlerts();
+
 /** 有 IPC 在飞（或刚结束的收尾窗口）就显示滑动态。 */
 const busy = computed(() => loadingBar.inflight.value > 0 || loadingBar.tail.value);
 
 // 标题栏「外观」弹层：主题 / 圆角 / 主题色 / 密度 / 扫描线 / 数字格式
-const panel = ref<"" | "appearance">("");
+const panel = ref<"" | "appearance" | "alerts">("");
 /** 只要不是默认外观（亮色或改过色/圆角/密度/扫描线），按钮就高亮，方便看出当前非默认 */
 const appearanceDirty = computed(
   () =>
@@ -71,7 +75,9 @@ const appearanceDirty = computed(
     stroke.value !== "normal" ||
     contrast.value,
 );
-function togglePanel(name: "appearance") {
+function togglePanel(name: "appearance" | "alerts") {
+  // 打开提醒面板时刷新一次：铃铛数字与最新评估对齐
+  if (name === "alerts" && panel.value !== "alerts") void loadAlerts().catch(() => {});
   panel.value = panel.value === name ? "" : name;
 }
 
@@ -101,6 +107,24 @@ async function toggleBackdrop(next: "off" | "on") {
     </div>
 
     <div class="flex items-stretch self-stretch">
+      <!-- 异常提醒中心：铃铛 + 角标（critical 计数），点开下拉面板 -->
+      <button
+        class="relative flex items-center gap-1.5 border-l border-border px-2 text-[10px] uppercase tracking-[0.1em]"
+        :class="alerts.length > 0 ? 'text-hazard' : 'text-faint hover:text-foreground'"
+        :title="t('alr.title')"
+        @click="togglePanel('alerts')"
+      >
+        <Bell class="size-3" />
+        {{ t("alr.title") }}
+        <span
+          v-if="alerts.length > 0"
+          class="readout ml-0.5 min-w-4 border px-1 text-[9px] leading-4"
+          :class="criticalCount > 0 ? 'border-hazard bg-hazard text-white' : 'border-border-strong text-muted-foreground'"
+        >
+          {{ alerts.length }}
+        </span>
+      </button>
+
       <!-- 外观：主题 / 圆角 / 主题色 / 密度 / 扫描线 / 数字格式 统一入口 -->
       <button
         class="flex items-center gap-1.5 border-l border-border px-2 text-[10px] uppercase tracking-[0.1em]"
@@ -475,6 +499,59 @@ async function toggleBackdrop(next: "off" | "on") {
           </button>
         </div>
       </div>
+    </div>
+    </Transition>
+
+    <!-- 异常提醒面板：与外观面板同款贴边下拉 -->
+    <Transition name="wb-pop">
+    <div
+      v-if="panel === 'alerts'"
+      class="absolute right-40 top-full z-50 max-h-[70vh] w-80 overflow-y-auto border border-border-strong bg-card"
+    >
+      <header class="sticky top-0 flex items-center justify-between gap-2 border-b border-border bg-card px-3 py-2 wb-flat">
+        <span class="lbl text-foreground">{{ t("alr.title") }}</span>
+        <button
+          v-if="alerts.length > 0"
+          type="button"
+          class="lbl text-faint hover:text-hazard"
+          @click="dismissAll()"
+        >
+          {{ t("alr.dismissAll") }}
+        </button>
+      </header>
+      <div v-if="alerts.length === 0" class="px-3 py-8 text-center text-[10px] text-faint">
+        {{ t("alr.empty") }}
+      </div>
+      <div
+        v-for="item in alerts"
+        :key="item.fingerprint"
+        class="group flex items-start gap-2 border-b border-border/60 px-3 py-2 last:border-b-0"
+      >
+        <span
+          class="mt-1 size-1.5 shrink-0"
+          :class="item.level === 'critical' ? 'bg-hazard' : 'bg-border-strong'"
+          :title="item.level === 'critical' ? t('alr.critical') : t('alr.warn')"
+        />
+        <div class="min-w-0 flex-1">
+          <p class="break-all text-[10px] leading-4" :class="item.level === 'critical' ? 'text-foreground' : 'text-muted-foreground'">
+            {{ alertText(item) }}
+          </p>
+          <p class="readout mt-0.5 text-[8px] text-faint">
+            {{ new Date(item.ts).toLocaleString() }}
+          </p>
+        </div>
+        <button
+          type="button"
+          class="lbl shrink-0 px-1 text-[9px] text-faint opacity-0 transition-opacity group-hover:opacity-100 hover:text-foreground"
+          :title="t('alr.dismiss')"
+          @click="dismiss(item.fingerprint)"
+        >
+          ✕
+        </button>
+      </div>
+      <footer v-if="alerts.length > 0" class="border-t border-border px-3 py-1.5 wb-flat">
+        <p class="text-[8px] leading-3 text-faint">{{ t("alr.hint") }}</p>
+      </footer>
     </div>
     </Transition>
 

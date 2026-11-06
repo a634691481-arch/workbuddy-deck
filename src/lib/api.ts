@@ -462,6 +462,37 @@ export const accountGroupRemove = (id: string) =>
 export const accountMemberSave = (accountId: string, groups: string[], tags: string[]) =>
   invoke<{ ok: boolean }>("account_member_save", { accountId, groups, tags });
 
+// ───────────────────────── 异常提醒中心 ─────────────────────────
+
+export type AlertKind = "balance" | "health" | "expiring" | "switch" | "runfail";
+export type AlertLevel = "critical" | "warn";
+
+/** data 字段按 kind 不同：balance{daysLeft} health{score,reasons} expiring{packageName,remaining,expireAt} switch{result,stage,error} runfail{count} */
+export interface AlertItem {
+  fingerprint: string;
+  kind: AlertKind;
+  level: AlertLevel;
+  accountId: string;
+  accountLabel: string;
+  ts: number;
+  data: Record<string, unknown>;
+}
+
+export interface AlertsData {
+  ok: boolean;
+  alerts: AlertItem[];
+  dismissedCount: number;
+  evaluatedAt: number;
+}
+
+export const alertsList = () => invoke<AlertsData>("alerts_list");
+
+export const alertsDismiss = (fingerprint: string) =>
+  invoke<{ ok: boolean }>("alerts_dismiss", { fingerprint });
+
+export const alertsDismissAll = () =>
+  invoke<{ ok: boolean; dismissed: number }>("alerts_dismiss_all");
+
 /** 单个积分包（官方资源包口径，字段与 core 的 credits 模块一致）。 */
 export interface AccountPackage {
   packageCode?: string | null;

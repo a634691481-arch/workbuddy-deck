@@ -948,6 +948,8 @@ pub async fn account_overview(app: tauri::AppHandle, refresh: Option<bool>) -> V
             })
             .collect();
         crate::tray::refresh(&app);
+        // 提醒中心的账号侧数据源：与界面同口径，不另算一套
+        crate::alerts::cache_overview(&rows, collected_at);
         return json!({
             "ok": true,
             "mode": "local",
@@ -1048,6 +1050,8 @@ pub async fn account_overview(app: tauri::AppHandle, refresh: Option<bool>) -> V
 
     // 用户刚看过余额：顺手把托盘读数刷新到最新，不用等下一次启动。
     crate::tray::refresh(&app);
+    // 到期明细只在官方口径里有，缓存给提醒中心用（与界面同口径）
+    crate::alerts::cache_overview(&rows, collected_at);
     json!({
         "ok": true,
         "mode": "official",
@@ -1386,6 +1390,23 @@ pub fn account_member_save(
     tags: Vec<String>,
 ) -> Result<Value, String> {
     account_groups::set_member(&account_id, &groups, &tags)
+}
+
+// ───────────────────────── 异常提醒中心 ─────────────────────────
+
+#[tauri::command]
+pub fn alerts_list() -> Value {
+    crate::alerts::list()
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn alerts_dismiss(fingerprint: String) -> Value {
+    crate::alerts::dismiss(&fingerprint)
+}
+
+#[tauri::command]
+pub fn alerts_dismiss_all() -> Value {
+    crate::alerts::dismiss_all()
 }
 
 /// 自动切换的进程内互斥：1s 快路径 / 60s 兜底 / 2min 巡检三个入口共用。
