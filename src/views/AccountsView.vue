@@ -20,6 +20,7 @@ import {
   Pencil,
   RotateCw,
   Star,
+  Tags,
   Trash2,
   Upload,
   UserPlus,
@@ -43,6 +44,7 @@ import {
 } from "@/lib/api";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useAccountIo } from "@/composables/useAccountIo";
+import { useAccountGroups } from "@/composables/useAccountGroups";
 import { useLogin } from "@/composables/useLogin";
 import { useShell } from "@/composables/useShell";
 import { useListAnim } from "@/composables/useListAnim";
@@ -51,6 +53,19 @@ import { mask } from "@/lib/task-meta";
 
 const { setAccountCount, go } = useShell();
 const cardsEl = useListAnim();
+// 分组与标签：编辑入口在本页，任务页按组勾选共用同一份状态
+const {
+  groups,
+  load: loadGroups,
+  memberOf,
+  groupNameOf,
+  groupMemberIds,
+  saveGroup,
+  removeGroup: removeGroupById,
+  setMember,
+} = useAccountGroups();
+/** 分组筛选（空 = 全部） */
+const groupFilter = ref("");
 
 const rows = ref<AccountOverviewRow[]>([]);
 const mode = ref<"local" | "official">("local");
@@ -243,6 +258,7 @@ onMounted(async () => {
   // 先本地秒开，再后台补官方口径（失败不覆盖本地结果）；当前登录态并行查
   await load(false);
   void loadWbStatus();
+  void loadGroups().catch(() => {});
   if (rows.value.length > 0) void load(true);
 });
 
@@ -275,14 +291,28 @@ const { exportAccounts, importAccounts } = useAccountIo({
   },
 });
 
+/** 成员编辑草稿：与备注共用同一个编辑面板（一次交互改完备注 / 分组 / 标签） */
+const memberDraftGroups = ref<string[]>([]);
+const memberDraftTags = ref("");
+
 function startNote(row: AccountOverviewRow) {
   editingId.value = row.accountId;
   noteDraft.value = row.note ?? "";
+  memberDraftGroups.value = [...memberOf(row.accountId).groups];
+  memberDraftTags.value = memberOf(row.accountId).tags.join(" ");
 }
 
 function cancelNote() {
   editingId.value = "";
   noteDraft.value = "";
+  memberDraftGroups.value = [];
+  memberDraftTags.value = "";
+}
+
+function toggleDraftGroup(groupId: string) {
+  const index = memberDraftGroups.value.indexOf(groupId);
+  if (index >= 0) memberDraftGroups.value.splice(index, 1);
+  else memberDraftGroups.value.push(groupId);
 }
 
 async function saveNote(row: AccountOverviewRow) {
@@ -293,6 +323,16 @@ async function saveNote(row: AccountOverviewRow) {
     if (!result.ok) {
       say(result.error ?? "保存失败", "err");
       return;
+    }
+    // 分组 / 标签是独立存档，失败不回滚备注（备注已生效），单独报错
+    const tags = memberDraftTags.value
+      .split(/[\s,，]+/)
+      .map((tag) => tag.trim())
+      .filter(Boolean);
+    try {
+      await setMember(row.accountId, memberDraftGroups.value, tags);
+    } catch {
+      say(t("ag.memberSaveFail"), "err");
     }
     say(t("ac.saved"));
     cancelNote();
@@ -489,15 +529,19 @@ const viewMode = ref<"cards" | "list">("cards");
 
 const visibleRows = computed(() => {
   const keyword = query.value.trim().toLowerCase();
-  const base = keyword
+  let base = keyword
     ? orderedRows.value.filter((row) => {
-        const haystack = [row.label, row.accountId]
+        const haystack = [row.label, row.accountId, ...memberOf(row.accountId).tags]
           .filter(Boolean)
           .join(" ")
           .toLowerCase();
         return haystack.includes(keyword);
       })
     : [...orderedRows.value];
+  // 分组筛选在搜索之后：两个条件是「与」关系
+  if (groupFilter.value) {
+    base = base.filter((row) => memberOf(row.accountId).groups.includes(groupFilter.value));
+  }
 
   switch (sortBy.value) {
     case "balance":
@@ -512,6 +556,76 @@ const visibleRows = computed(() => {
       return base;
   }
 });
+
+/** 分组管理弹框 */
+const groupsPanel = ref(false);
+const newGroupName = ref("");
+const groupBusy = ref(false);
+const groupError = ref("");
+const pendingGroupDelete = ref("");
+let groupDeleteTimer = 0;
+
+async function addGroup() {
+  const name = newGroupName.value.trim();
+  if (!name || groupBusy.value) return;
+  groupBusy.value = true;
+  groupError.value = "";
+  try {
+    await saveGroup(null, name, false);
+    newGroupName.value = "";
+  } catch (cause) {
+    groupError.value = cause instanceof Error ? cause.message : String(cause);
+  } finally {
+    groupBusy.value = false;
+  }
+}
+
+async function toggleGroupExclude(groupId: string) {
+  const group = groups.value.find((item) => item.id === groupId);
+  if (!group) return;
+  groupBusy.value = true;
+  groupError.value = "";
+  try {
+    await saveGroup(group.id, group.name, !group.excludeAutoSwitch);
+  } catch (cause) {
+    groupError.value = cause instanceof Error ? cause.message : String(cause);
+  } finally {
+    groupBusy.value = false;
+  }
+}
+
+async function removeGroupClick(groupId: string) {
+  if (pendingGroupDelete.value !== groupId) {
+    pendingGroupDelete.value = groupId;
+    window.clearTimeout(groupDeleteTimer);
+    groupDeleteTimer = window.setTimeout(() => {
+      pendingGroupDelete.value = "";
+    }, 8000);
+    return;
+  }
+  pendingGroupDelete.value = "";
+  groupBusy.value = true;
+  groupError.value = "";
+  try {
+    await removeGroupById(groupId);
+    if (groupFilter.value === groupId) groupFilter.value = "";
+  } catch (cause) {
+    groupError.value = cause instanceof Error ? cause.message : String(cause);
+  } finally {
+    groupBusy.value = false;
+  }
+}
+
+function closeGroupsPanel() {
+  groupsPanel.value = false;
+  groupError.value = "";
+  newGroupName.value = "";
+  pendingGroupDelete.value = "";
+}
+
+/** 卡片上的分组名列表（去重） */
+const groupNamesOf = (row: AccountOverviewRow) =>
+  memberOf(row.accountId).groups.map(groupNameOf).filter(Boolean);
 
 /** 最近一条额度的到期时刻（没有就排到最后）。 */
 function expiryOf(row: AccountOverviewRow): number {
@@ -826,10 +940,52 @@ async function doSwitch() {
         <span class="readout text-[9px] text-faint">{{ visibleRows.length }}/{{ rows.length }}</span>
         <button
           type="button"
+          class="flex h-6 items-center gap-1 border border-border-strong px-1.5 text-[9px] uppercase tracking-[0.08em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+          :title="t('ag.manageHint')"
+          @click="groupsPanel = true"
+        >
+          <Tags class="size-3" />
+          {{ t("ag.manage") }}<span v-if="groups.length" class="text-faint">·{{ groups.length }}</span>
+        </button>
+        <button
+          type="button"
           class="ml-auto flex h-6 items-center border border-border-strong px-1.5 text-[9px] uppercase tracking-[0.08em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
           @click="viewMode = viewMode === 'cards' ? 'list' : 'cards'"
         >
           {{ viewMode === "cards" ? t("ac.viewList") : t("ac.viewCards") }}
+        </button>
+      </div>
+
+      <!-- 分组筛选：有分组才出现；⊘ = 该组不参与自动切换 -->
+      <div v-if="groups.length > 0" class="mt-1.5 flex w-full flex-wrap items-center gap-1">
+        <span class="lbl shrink-0 text-[9px] text-faint">// {{ t("ag.filter") }}</span>
+        <button
+          type="button"
+          class="lbl border px-1.5 py-0.5 text-[9px] transition-colors"
+          :class="
+            groupFilter === ''
+              ? 'border-foreground bg-foreground text-background'
+              : 'border-border-strong text-muted-foreground hover:border-foreground hover:text-foreground'
+          "
+          @click="groupFilter = ''"
+        >
+          {{ t("ag.all") }}
+        </button>
+        <button
+          v-for="group in groups"
+          :key="group.id"
+          type="button"
+          class="lbl border px-1.5 py-0.5 text-[9px] transition-colors"
+          :class="
+            groupFilter === group.id
+              ? 'border-foreground bg-foreground text-background'
+              : 'border-border-strong text-muted-foreground hover:border-foreground hover:text-foreground'
+          "
+          :title="group.excludeAutoSwitch ? t('ag.excludeOn') : t('ag.excludeOff')"
+          @click="groupFilter = groupFilter === group.id ? '' : group.id"
+        >
+          #{{ group.name }}<span class="ml-0.5 text-faint">{{ groupMemberIds.get(group.id)?.length ?? 0 }}</span>
+          <span v-if="group.excludeAutoSwitch" class="ml-0.5">⊘</span>
         </button>
       </div>
     </header>
@@ -1078,53 +1234,104 @@ async function doSwitch() {
             </button>
           </div>
 
-          <!-- 备注 / 删除 -->
+          <!-- 备注 / 分组 / 标签 / 删除 -->
           <div class="border-t border-border px-3 py-1.5">
-            <div v-if="editingId === row.accountId" class="flex items-center gap-1">
-              <input
-                v-model="noteDraft"
-                class="min-w-0 flex-1 border border-border-strong bg-background px-1.5 py-0.5 text-[10px] text-foreground outline-none focus:border-hazard"
-                :placeholder="t('ac.note')"
-                maxlength="40"
-                @keyup.enter="saveNote(row)"
-                @keyup.esc="cancelNote"
-              />
-              <button
-                type="button"
-                class="border border-border-strong px-1.5 py-0.5 text-[9px] text-foreground hover:border-foreground disabled:opacity-40"
-                :disabled="savingNote"
-                @click="saveNote(row)"
-              >
-                OK
-              </button>
-              <button type="button" class="px-1 text-[9px] text-faint hover:text-foreground" @click="cancelNote">
-                ✕
-              </button>
+            <div v-if="editingId === row.accountId" class="flex flex-col gap-1.5">
+              <div class="flex items-center gap-1">
+                <input
+                  v-model="noteDraft"
+                  class="min-w-0 flex-1 border border-border-strong bg-background px-1.5 py-0.5 text-[10px] text-foreground outline-none focus:border-hazard"
+                  :placeholder="t('ac.note')"
+                  maxlength="40"
+                  @keyup.enter="saveNote(row)"
+                  @keyup.esc="cancelNote"
+                />
+                <button
+                  type="button"
+                  class="border border-border-strong px-1.5 py-0.5 text-[9px] text-foreground hover:border-foreground disabled:opacity-40"
+                  :disabled="savingNote"
+                  @click="saveNote(row)"
+                >
+                  OK
+                </button>
+                <button type="button" class="px-1 text-[9px] text-faint hover:text-foreground" @click="cancelNote">
+                  ✕
+                </button>
+              </div>
+              <!-- 分组勾选：一次可属多组 -->
+              <div v-if="groups.length > 0" class="flex flex-wrap items-center gap-1">
+                <span class="lbl shrink-0 text-[8px] text-faint">{{ t("ag.groups") }}</span>
+                <button
+                  v-for="group in groups"
+                  :key="group.id"
+                  type="button"
+                  class="lbl border px-1 py-0.5 text-[8px] transition-colors"
+                  :class="
+                    memberDraftGroups.includes(group.id)
+                      ? 'border-foreground bg-foreground text-background'
+                      : 'border-border-strong text-muted-foreground hover:border-foreground hover:text-foreground'
+                  "
+                  @click="toggleDraftGroup(group.id)"
+                >
+                  #{{ group.name }}
+                </button>
+              </div>
+              <div class="flex items-center gap-1">
+                <span class="lbl shrink-0 text-[8px] text-faint">{{ t("ag.tags") }}</span>
+                <input
+                  v-model="memberDraftTags"
+                  class="min-w-0 flex-1 border border-border-strong bg-background px-1.5 py-0.5 text-[10px] text-foreground outline-none focus:border-hazard"
+                  :placeholder="t('ag.tagsPh')"
+                  maxlength="80"
+                  @keyup.enter="saveNote(row)"
+                />
+              </div>
             </div>
-            <div v-else class="flex items-center justify-between gap-2">
-              <button
-                type="button"
-                class="min-w-0 flex-1 truncate text-left text-[9px] text-muted-foreground hover:text-foreground"
-                :title="row.note ? mask(row.note) : t('ac.edit')"
-                @click="startNote(row)"
+            <template v-else>
+              <div
+                v-if="groupNamesOf(row).length > 0 || memberOf(row.accountId).tags.length > 0"
+                class="flex flex-wrap items-center gap-1 pb-1"
               >
-                <span class="lbl mr-1 text-faint">{{ t("ac.note") }}</span>
-                {{ row.note ? mask(row.note) : "—" }}
-              </button>
-              <button
-                type="button"
-                class="flex shrink-0 items-center gap-1 border px-1.5 py-0.5 text-[9px] transition-colors"
-                :class="
-                  pendingDelete === row.accountId
-                    ? 'border-hazard bg-hazard-soft text-hazard'
-                    : 'border-border-strong text-muted-foreground hover:border-foreground hover:text-foreground'
-                "
-                @click="remove(row)"
-              >
-                <template v-if="pendingDelete === row.accountId">{{ t("ac.confirm") }}</template>
-                <template v-else><Trash2 class="size-2.5" />{{ t("ac.del") }}</template>
-              </button>
-            </div>
+                <span
+                  v-for="name in groupNamesOf(row)"
+                  :key="`g-${name}`"
+                  class="lbl border border-border-strong px-1 text-[8px] text-muted-foreground"
+                >
+                  #{{ name }}
+                </span>
+                <span
+                  v-for="tag in memberOf(row.accountId).tags"
+                  :key="`t-${tag}`"
+                  class="lbl border border-hazard/50 px-1 text-[8px] text-hazard/90"
+                >
+                  {{ tag }}
+                </span>
+              </div>
+              <div class="flex items-center justify-between gap-2">
+                <button
+                  type="button"
+                  class="min-w-0 flex-1 truncate text-left text-[9px] text-muted-foreground hover:text-foreground"
+                  :title="row.note ? mask(row.note) : t('ac.edit')"
+                  @click="startNote(row)"
+                >
+                  <span class="lbl mr-1 text-faint">{{ t("ac.note") }}</span>
+                  {{ row.note ? mask(row.note) : "—" }}
+                </button>
+                <button
+                  type="button"
+                  class="flex shrink-0 items-center gap-1 border px-1.5 py-0.5 text-[9px] transition-colors"
+                  :class="
+                    pendingDelete === row.accountId
+                      ? 'border-hazard bg-hazard-soft text-hazard'
+                      : 'border-border-strong text-muted-foreground hover:border-foreground hover:text-foreground'
+                  "
+                  @click="remove(row)"
+                >
+                  <template v-if="pendingDelete === row.accountId">{{ t("ac.confirm") }}</template>
+                  <template v-else><Trash2 class="size-2.5" />{{ t("ac.del") }}</template>
+                </button>
+              </div>
+            </template>
           </div>
         </article>
       </div>
@@ -1422,6 +1629,93 @@ async function doSwitch() {
             >
               <Loader2 v-if="switching" class="size-3 animate-spin" />
               {{ switching ? t("ac.switching") : t("ac.switchGo") }}
+            </button>
+          </footer>
+        </div>
+      </div>
+    </Transition>
+  </Teleport>
+
+  <!-- 分组管理：新建 / 删除 / 排除自动切换 -->
+  <Teleport to="body">
+    <Transition name="wb-modal">
+      <div
+        v-if="groupsPanel"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4"
+        role="dialog"
+        aria-modal="true"
+        @click.self="closeGroupsPanel"
+      >
+        <div class="w-full max-w-[420px] border border-border-strong bg-card wb-modal-card">
+          <header class="flex shrink-0 items-start justify-between gap-3 border-b border-border px-3 py-2 wb-flat">
+            <div class="min-w-0">
+              <div class="text-[13px] text-foreground">{{ t("ag.panelTitle") }}</div>
+              <div class="mt-0.5 text-[10px] leading-4 text-muted-foreground">{{ t("ag.panelDesc") }}</div>
+            </div>
+            <button type="button" class="shrink-0 px-1 text-[11px] text-faint hover:text-foreground" @click="closeGroupsPanel">
+              ✕
+            </button>
+          </header>
+
+          <div class="max-h-[50vh] overflow-y-auto px-3 py-2">
+            <p v-if="groupError" class="mb-2 border border-hazard bg-hazard-soft px-2 py-1 text-[10px] text-hazard">
+              {{ groupError }}
+            </p>
+            <p v-if="groups.length === 0" class="py-6 text-center text-[10px] text-faint">{{ t("ag.empty") }}</p>
+            <div
+              v-for="group in groups"
+              :key="group.id"
+              class="flex items-center gap-2 border-b border-border/60 py-1.5 last:border-b-0"
+            >
+              <span class="min-w-0 flex-1 truncate text-[11px] text-foreground" :title="`#${group.name}`">
+                #{{ group.name }}
+                <span class="lbl ml-1 text-[8px] text-faint">{{ groupMemberIds.get(group.id)?.length ?? 0 }}</span>
+              </span>
+              <label
+                class="flex shrink-0 cursor-pointer items-center gap-1 text-[9px] text-muted-foreground hover:text-foreground"
+                :title="t('ag.excludeHint')"
+              >
+                <input
+                  type="checkbox"
+                  class="accent-hazard"
+                  :checked="group.excludeAutoSwitch"
+                  :disabled="groupBusy"
+                  @change="toggleGroupExclude(group.id)"
+                />
+                {{ t("ag.exclude") }}
+              </label>
+              <button
+                type="button"
+                class="shrink-0 border px-1.5 py-0.5 text-[9px] transition-colors"
+                :class="
+                  pendingGroupDelete === group.id
+                    ? 'border-hazard bg-hazard-soft text-hazard'
+                    : 'border-border-strong text-muted-foreground hover:border-hazard hover:text-hazard'
+                "
+                @click="removeGroupClick(group.id)"
+              >
+                <template v-if="pendingGroupDelete === group.id">{{ t("ac.confirm") }}</template>
+                <template v-else><Trash2 class="size-2.5" /></template>
+              </button>
+            </div>
+          </div>
+
+          <footer class="flex items-center gap-1.5 border-t border-border px-3 py-2 wb-flat">
+            <input
+              v-model="newGroupName"
+              class="readout min-w-0 flex-1 border border-border-strong bg-background px-1.5 py-1 text-[10px] text-foreground outline-none focus:border-hazard"
+              :placeholder="t('ag.newPh')"
+              maxlength="16"
+              @keyup.enter="addGroup"
+            />
+            <button
+              type="button"
+              class="flex items-center gap-1 border border-foreground bg-foreground px-2 py-1 text-[10px] uppercase tracking-[0.1em] text-background transition-opacity hover:opacity-85 disabled:opacity-40"
+              :disabled="groupBusy || !newGroupName.trim()"
+              @click="addGroup"
+            >
+              <Loader2 v-if="groupBusy" class="size-3 animate-spin" />
+              {{ t("ag.add") }}
             </button>
           </footer>
         </div>

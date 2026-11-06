@@ -8,12 +8,20 @@ import { t } from "@/lib/i18n";
 import { mask } from "@/lib/task-meta";
 import { cn } from "@/lib/utils";
 
+/** 分组速选：由任务页根据分组数据算好传进来，这里只展示与转发。 */
+export interface GroupChip {
+  id: string;
+  name: string;
+  ids: string[];
+}
+
 const props = defineProps<{
   accounts: AccountSummary[];
   selected: Set<string>;
   activeId: string | null;
   runningLabel: string;
   width: number;
+  groupChips?: GroupChip[];
 }>();
 
 const emit = defineEmits<{
@@ -23,6 +31,7 @@ const emit = defineEmits<{
   invert: [];
   clear: [];
   resize: [width: number];
+  selectIds: [ids: string[]];
 }>();
 
 /** 账号增删只在账号管理页做，这里只负责「带路」。 */
@@ -37,9 +46,18 @@ const filtered = computed(() => {
   return props.accounts.filter((item) => item.label.toLowerCase().includes(q));
 });
 
+/** 分组速选：值复位到占位项，避免误导「当前停留在哪个组」。 */
+function onGroupPick(event: Event) {
+  const select = event.target as HTMLSelectElement;
+  const id = select.value;
+  select.value = "";
+  if (!id) return;
+  const chip = props.groupChips?.find((item) => item.id === id);
+  if (chip && chip.ids.length > 0) emit("selectIds", chip.ids);
+}
+
 /** 键盘导航用：ArrowDown/Up 移动选中账号，Enter 打开，Space 勾选。 */
-function onKeydown(event: KeyboardEvent) {
-  const index = filtered.value.findIndex((item) => item.id === props.activeId);
+function onKeydown(event: KeyboardEvent) {  const index = filtered.value.findIndex((item) => item.id === props.activeId);
   if (event.key === "ArrowDown" || event.key === "ArrowUp") {
     event.preventDefault();
     if (filtered.value.length === 0) return;
@@ -191,6 +209,17 @@ const unitNo = (index: number) => String(index + 1).padStart(2, "0");
     <div class="flex h-7 shrink-0 items-center gap-2 border-t border-border px-2">
       <button class="lbl text-muted-foreground hover:text-hazard" @click="emit('selectAll')">[A] {{ t("al.selectAll") }}</button>
       <button class="lbl text-muted-foreground hover:text-hazard" @click="emit('invert')">[I] {{ t("al.invert") }}</button>
+      <!-- 分组速选：选完即把作用域切到「所选账号」 -->
+      <select
+        v-if="groupChips && groupChips.length > 0"
+        class="lbl max-w-24 border border-border-strong bg-input px-0.5 text-[9px] text-muted-foreground outline-none focus:border-hazard"
+        @change="onGroupPick"
+      >
+        <option value="">{{ t("al.pickGroup") }}</option>
+        <option v-for="chip in groupChips" :key="chip.id" :value="chip.id">
+          #{{ chip.name }} ({{ chip.ids.length }})
+        </option>
+      </select>
       <span class="lbl readout ml-auto text-faint">{{ selected.size }}/{{ accounts.length }}</span>
       <button class="lbl text-faint hover:text-foreground" @click="emit('clear')" :title="t('al.clear')">[C]</button>
     </div>

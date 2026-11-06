@@ -16,6 +16,7 @@ use std::path::PathBuf;
 use serde_json::{json, Value};
 
 use crate::modules::account;
+use crate::modules::account_groups;
 use crate::modules::auth_file;
 use crate::modules::config::{atomic_write, now_ms, store_dir};
 use crate::modules::credit_usage;
@@ -378,8 +379,17 @@ pub fn candidates(now: i64) -> Vec<Candidate> {
         }
     }
 
+    // 分组级排除：勾了「排除自动切换」的分组，成员一律不进候选。
+    // 损坏的分组存档按空处理——分组是增强能力，不能反过来把自动切换搞瘫。
+    let group_excluded = account_groups::excluded_auto_switch_ids();
     accounts
         .iter()
+        .filter(|acc| {
+            acc.get("id")
+                .and_then(Value::as_str)
+                .map(|id| !group_excluded.contains(id))
+                .unwrap_or(true)
+        })
         .filter_map(|acc| {
             let id = acc.get("id").and_then(Value::as_str)?.to_string();
             Some(Candidate {
@@ -647,6 +657,9 @@ mod tests {
             excluded_account_ids: Vec::new(),
             min_remaining: 50.0,
             require_same_variant: true,
+            ask_before_switch: true,
+            notify_when_background: true,
+            countdown_seconds: 15,
         }
     }
 

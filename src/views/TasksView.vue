@@ -18,6 +18,7 @@ import TaskTable from "@/components/TaskTable.vue";
 import TelemetryBar from "@/components/TelemetryBar.vue";
 import { useAssistant } from "@/composables/useAssistant";
 import { useBalance } from "@/composables/useBalance";
+import { useAccountGroups } from "@/composables/useAccountGroups";
 import { t } from "@/lib/i18n";
 import { isDone, mask } from "@/lib/task-meta";
 import { isTauri } from "@/lib/tauri-env";
@@ -64,6 +65,23 @@ const {
 // 未完成明细默认收起（与失败条一致）
 const showPending = ref(false);
 
+// 分组速选：只读分组数据，编辑入口在账号管理页
+const { groups, load: loadGroups, groupMemberIds } = useAccountGroups();
+const groupChips = computed(() =>
+  groups.value.map((group) => ({
+    id: group.id,
+    name: group.name,
+    ids: (groupMemberIds.value.get(group.id) ?? []).filter((id) =>
+      accounts.value.some((item) => item.id === id),
+    ),
+  })),
+);
+/** 按组勾选：选完把作用域也切到「所选账号」，点执行就是跑这一组 */
+function selectGroupIds(ids: string[]) {
+  selected.value = new Set(ids);
+  scope.value = "selected";
+}
+
 const { balance, loading: balanceLoading, load: loadBalance, total, totalLoading, totalFailed, loadTotal } =
   useBalance();
 
@@ -73,6 +91,7 @@ watch(() => accounts.value.length, () => void loadTotal(), { immediate: true });
 let unlisteners: UnlistenFn[] = [];
 onMounted(async () => {
   if (!isTauri()) return;
+  void loadGroups().catch(() => {});
   unlisteners.push(await listen("tray://refresh", () => void refreshAll()));
   unlisteners.push(
     await listen<string>("tray://done", (event) => pushLog(`托盘任务「${event.payload}」已完成`, "ok")),
@@ -138,11 +157,13 @@ function retryFailures() {
         :active-id="activeId"
         :running-label="run.running ? run.current : ''"
         :width="sidebarWidth"
+        :group-chips="groupChips"
         @select="selectAccount"
         @toggle="toggleSelect"
         @select-all="selectAll"
         @invert="invert"
         @clear="clearSelection"
+        @select-ids="selectGroupIds"
         @resize="resizeSidebar"
       />
 

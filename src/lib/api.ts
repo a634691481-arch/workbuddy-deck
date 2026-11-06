@@ -429,6 +429,39 @@ export const accountDelete = (accountId: string) =>
 export const accountSetNote = (accountId: string, note: string) =>
   invoke<{ ok: boolean; error?: string }>("account_set_note", { accountId, note });
 
+// ───────────────────────── 账号分组与标签 ─────────────────────────
+
+export interface AccountGroupDef {
+  id: string;
+  name: string;
+  excludeAutoSwitch: boolean;
+  createdAt: number;
+}
+
+export interface AccountMemberDef {
+  groups: string[];
+  tags: string[];
+}
+
+export interface AccountGroupsData {
+  ok: boolean;
+  error?: string;
+  groups: AccountGroupDef[];
+  /** 账号 id → 归属与标签 */
+  members: Record<string, AccountMemberDef>;
+}
+
+export const accountGroupsList = () => invoke<AccountGroupsData>("account_groups_list");
+
+export const accountGroupSave = (id: string | null, name: string, excludeAutoSwitch: boolean) =>
+  invoke<{ ok: boolean; group: AccountGroupDef }>("account_group_save", { id, name, excludeAutoSwitch });
+
+export const accountGroupRemove = (id: string) =>
+  invoke<{ ok: boolean }>("account_group_remove", { id });
+
+export const accountMemberSave = (accountId: string, groups: string[], tags: string[]) =>
+  invoke<{ ok: boolean }>("account_member_save", { accountId, groups, tags });
+
 /** 单个积分包（官方资源包口径，字段与 core 的 credits 模块一致）。 */
 export interface AccountPackage {
   packageCode?: string | null;

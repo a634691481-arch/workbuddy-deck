@@ -1,4 +1,5 @@
 pub mod account;
+pub mod account_groups;
 pub mod auth_file;
 pub mod auto_switch;
 pub mod checkin;

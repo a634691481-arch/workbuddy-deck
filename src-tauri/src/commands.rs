@@ -19,8 +19,8 @@ use wb_switch_core::modules::credit_usage;
 use wb_switch_core::modules::growth_tasks;
 use wb_switch_core::modules::variant::WbVariant;
 use wb_switch_core::modules::{
-    account, auth_file, checkin, credits, error_log, export_import, forecast, limits,
-    auto_switch, health, notifications, oauth, process, refresh, switch, switch_history,
+    account, account_groups, auth_file, checkin, credits, error_log, export_import, forecast,
+    limits, auto_switch, health, notifications, oauth, process, refresh, switch, switch_history,
 };
 
 use crate::executor;
@@ -1351,6 +1351,43 @@ pub fn auto_switch_set(patch: Value) -> Value {
 /// 自动切换的 3 秒倒计时状态：期间用户可以取消（正在打字时不被强行关窗）。
 static AUTO_SWITCH_CANCEL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 static AUTO_SWITCH_PENDING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+// ───────────────────────── 账号分组与标签 ─────────────────────────
+// 存档在 core `account_groups`（`~/.wb-switch/account_groups.json`），与账号库分离，
+// 上游工具同步账号库时不会冲掉用户的分组。
+
+#[tauri::command]
+pub fn account_groups_list() -> Value {
+    account_groups::load()
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn account_group_save(
+    id: Option<String>,
+    name: String,
+    exclude_auto_switch: Option<bool>,
+) -> Result<Value, String> {
+    account_groups::upsert_group(
+        id.as_deref(),
+        &name,
+        exclude_auto_switch.unwrap_or(false),
+        config::now_ms(),
+    )
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn account_group_remove(id: String) -> Result<Value, String> {
+    account_groups::remove_group(&id)
+}
+
+#[tauri::command(rename_all = "camelCase")]
+pub fn account_member_save(
+    account_id: String,
+    groups: Vec<String>,
+    tags: Vec<String>,
+) -> Result<Value, String> {
+    account_groups::set_member(&account_id, &groups, &tags)
+}
+
 /// 自动切换的进程内互斥：1s 快路径 / 60s 兜底 / 2min 巡检三个入口共用。
 static AUTO_SWITCH_RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
 
