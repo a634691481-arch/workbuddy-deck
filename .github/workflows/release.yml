@@ -110,6 +110,9 @@ jobs:
     needs: build
     runs-on: ubuntu-22.04
     steps:
+      # 没有 checkout 就拿不到 scripts/gen_cn_manifest.py（上一版就是这么红的）
+      - uses: actions/checkout@v4
+
       - name: Verify updater manifest is published
         env:
           TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
