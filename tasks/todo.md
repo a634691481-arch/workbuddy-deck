@@ -760,3 +760,22 @@ decision(forced-on) = Skip("当前账号未被限流")
 - 终态事件要在**动作**层发，不能只在某个入口发——入口可以有三个，收尾只能有一个
 - 测试写公开函数 = 写真实存档；core 一律 `*_at(root)` 模式
 - 提醒/预测类功能的数据口径必须与界面同源（缓存界面结果），否则两处数字对不上比没有还糟
+
+## 2026-11-07 代码审查（Standards + Spec 双轴）后的修复轮
+
+- [x] 双轴审查：4 个并行 agent 定位 + 修复（提醒数据源 / 备份 / 前端 / 拆分）
+- [x] 提醒中心：`forecast.daysLeft` + `health.grade` 纠正（原读错字段，5 类告警 3 类永不触发）
+- [x] 连续失败口径：`level=error` 或 warning 含失败语义，24h ≥3；词典排除「异常」防自我放大
+- [x] `alerts.rs` 334 行 → `alerts/` 七个文件（最大 229 行），魔法值全提常量，13 条单测
+- [x] 铃铛角标改 critical 计数（原显示全部条数）
+- [x] 备份 fail-closed：`.staging` + 逐文件回读校验 sha256 + 全成功才 rename；任一失败删目录并报 failedFile
+- [x] 取消本轮也发 `switch-finished`（提示条不再残留到下次）
+- [x] 拉窗后等 250ms 再判 `is_focused`，避免读到旧值放弃倒计时；文案改「窗口未能切到前台」
+- [x] `account_groups` 385 行 → `mod/store/tests`（最大 187 行）
+- [x] 账号页 1829 行 → 1539 行：`AccountGroupDialog` / `AccountSwitchDialog` 抽出，两步确认统一 `useArmedConfirm`
+- [x] 验证：core 860 / 应用 30 全绿；两端 clippy 0；vue-tsc 0；build 通过
+
+### 回顾
+- 审查要分轴：Standards 全绿也可能功能全错（字段名读错编译期无感）
+- 子 agent 结论要复核：它报的「GroupChip 无人引用」是假阳性，实际模板在用
+- 拆文件先定「谁是数据持有方」：弹框只搬模板 + emit，逻辑留视图，风险最小
