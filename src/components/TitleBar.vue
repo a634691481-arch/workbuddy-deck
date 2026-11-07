@@ -107,21 +107,20 @@ async function toggleBackdrop(next: "off" | "on") {
     </div>
 
     <div class="flex items-stretch self-stretch">
-      <!-- 异常提醒中心：铃铛 + 角标（critical 计数），点开下拉面板 -->
+      <!-- 异常提醒中心：铃铛 + 角标（critical 计数，0 时不显示角标），点开下拉面板 -->
       <button
         class="relative flex items-center gap-1.5 border-l border-border px-2 text-[10px] uppercase tracking-[0.1em]"
-        :class="alerts.length > 0 ? 'text-hazard' : 'text-faint hover:text-foreground'"
+        :class="criticalCount > 0 ? 'text-hazard' : 'text-faint hover:text-foreground'"
         :title="t('alr.title')"
         @click="togglePanel('alerts')"
       >
         <Bell class="size-3" />
         {{ t("alr.title") }}
         <span
-          v-if="alerts.length > 0"
-          class="readout ml-0.5 min-w-4 border px-1 text-[9px] leading-4"
-          :class="criticalCount > 0 ? 'border-hazard bg-hazard text-white' : 'border-border-strong text-muted-foreground'"
+          v-if="criticalCount > 0"
+          class="readout ml-0.5 min-w-4 border border-hazard bg-hazard px-1 text-[9px] leading-4 text-white"
         >
-          {{ alerts.length }}
+          {{ criticalCount }}
         </span>
       </button>
 

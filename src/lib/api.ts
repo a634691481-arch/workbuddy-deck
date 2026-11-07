@@ -464,19 +464,52 @@ export const accountMemberSave = (accountId: string, groups: string[], tags: str
 
 // ───────────────────────── 异常提醒中心 ─────────────────────────
 
-export type AlertKind = "balance" | "health" | "expiring" | "switch" | "runfail";
 export type AlertLevel = "critical" | "warn";
 
-/** data 字段按 kind 不同：balance{daysLeft} health{score,reasons} expiring{packageName,remaining,expireAt} switch{result,stage,error} runfail{count} */
-export interface AlertItem {
+/** 提醒公共字段：kind 决定 data 的形状，见下面的 discriminated union。 */
+interface AlertBase {
   fingerprint: string;
-  kind: AlertKind;
   level: AlertLevel;
   accountId: string;
   accountLabel: string;
   ts: number;
-  data: Record<string, unknown>;
 }
+
+/** 余额 <3 天（data 来自 core 的 forecast） */
+export interface BalanceAlert extends AlertBase {
+  kind: "balance";
+  data: { daysLeft: number };
+}
+
+/** 健康分 critical（reasons 为原因码，前端翻成文案） */
+export interface HealthAlert extends AlertBase {
+  kind: "health";
+  data: { score: number; reasons: string[] };
+}
+
+/** 积分包即将到期（3 / 7 天两档） */
+export interface ExpiringAlert extends AlertBase {
+  kind: "expiring";
+  data: { packageName: string | null; remaining: number; expireAt: number };
+}
+
+/** 24h 内切换失败 */
+export interface SwitchAlert extends AlertBase {
+  kind: "switch";
+  data: { result: string; stage: string | null; error: string | null };
+}
+
+/** 24h 内错误通知聚合 */
+export interface RunfailAlert extends AlertBase {
+  kind: "runfail";
+  data: { count: number };
+}
+
+/** 按 kind 区分的提醒条目（与 src-tauri/src/alerts.rs 输出一一对应）。 */
+export type AlertItem = BalanceAlert | HealthAlert | ExpiringAlert | SwitchAlert | RunfailAlert;
+
+/** 提醒类别（从 AlertItem 派生，避免两处枚举漂移）。 */
+export type AlertKind = AlertItem["kind"];
 
 export interface AlertsData {
   ok: boolean;

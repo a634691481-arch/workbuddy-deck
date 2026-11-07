@@ -948,8 +948,8 @@ pub async fn account_overview(app: tauri::AppHandle, refresh: Option<bool>) -> V
             })
             .collect();
         crate::tray::refresh(&app);
-        // 提醒中心的账号侧数据源：与界面同口径，不另算一套
-        crate::alerts::cache_overview(&rows, collected_at);
+        // 提醒中心的账号侧数据源：与界面同口径，并补上 forecast 的 daysLeft / confidence
+        crate::alerts::cache_overview(&rows, &forecast_by_account, collected_at);
         return json!({
             "ok": true,
             "mode": "local",
@@ -1050,8 +1050,8 @@ pub async fn account_overview(app: tauri::AppHandle, refresh: Option<bool>) -> V
 
     // 用户刚看过余额：顺手把托盘读数刷新到最新，不用等下一次启动。
     crate::tray::refresh(&app);
-    // 到期明细只在官方口径里有，缓存给提醒中心用（与界面同口径）
-    crate::alerts::cache_overview(&rows, collected_at);
+    // 到期明细只在官方口径里有，缓存给提醒中心用（与界面同口径 + forecast 字段）
+    crate::alerts::cache_overview(&rows, &forecast_by_account, collected_at);
     json!({
         "ok": true,
         "mode": "official",
@@ -1532,8 +1532,11 @@ async fn auto_switch_run(app: tauri::AppHandle, ask: bool) -> Value {
         let was_background = !window_in_foreground(&app);
         if was_background {
             focus_main_window(&app);
+            // set_focus 到 is_focused 反映到事件循环有延迟：先等一小段再判定，
+            // 否则会读到旧的 false 直接放弃倒计时（等于白拉了窗口）。
+            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
         }
-        // 后台拿不回焦点（系统拒绝抢焦点等）：只提醒，不动手。把名额还回去，用户回来点「立即切换」再走一遍。
+        // 拉不回焦点（系统拒绝抢焦点等）：只提醒，不动手。把名额还回去，用户回来点「立即切换」再走一遍。
         if was_background && !window_in_foreground(&app) && cfg.notify_when_background {
             auto_switch::end_switch(false, config::now_ms());
             AUTO_SWITCH_RUNNING.store(false, Ordering::SeqCst);
@@ -1541,7 +1544,7 @@ async fn auto_switch_run(app: tauri::AppHandle, ask: bool) -> Value {
             payload["action"] = json!("notify");
             payload["awaitingConfirm"] = json!(true);
             payload["reason"] = json!(format!(
-                "{}（窗口已带到前台，等你确认后再切换）",
+                "{}（窗口未能切到前台，等你确认后再切换）",
                 preview.get("reason").and_then(Value::as_str).unwrap_or("")
             ));
             let _ = app.emit("auto-switch-notify", payload.clone());
@@ -1583,6 +1586,11 @@ async fn auto_switch_run(app: tauri::AppHandle, ask: bool) -> Value {
         if AUTO_SWITCH_CANCEL.load(Ordering::SeqCst) {
             auto_switch::end_switch(false, config::now_ms());
             AUTO_SWITCH_RUNNING.store(false, Ordering::SeqCst);
+            // 取消也要发终态：提示条可能正处在进度态，不补这条会残留到下次切换
+            let _ = app.emit(
+                "switch-finished",
+                json!({ "ok": false, "action": "cancelled" }),
+            );
             return json!({ "action": "cancelled", "reason": "用户取消了本次自动切换" });
         }
     }

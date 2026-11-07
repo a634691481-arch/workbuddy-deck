@@ -136,10 +136,13 @@ StatusBar   24px  ● READY · 最近刷新 · 账号数 · 日志数
   批量任务在跑就不切；③ `auto_switch::try_begin_switch` 跨进程占位（`inFlightAt`，10 分钟 TTL，
   成功才写 `lastSwitchAt` 冷却）。三个入口（1s 事件快路径 / 60s 兜底 / 2min 巡检）统一调这一个函数，
   **不许再各写一份切换**——历史上就是这样 16 秒内对同一目标连切两次、会话被替换两遍。
-- **自动切换先问用户（2026-11-05）**：`askBeforeSwitch`（默认开）+ `notifyWhenBackground`（默认开）+
-  `countdownSeconds`（0–120，0 = 一直等你点，默认 15）。前台：常驻提示条显示
-  「目标 / 原因 / 倒计时」+ [立即切换][取消本轮]，倒计时结束才切；后台（失焦或最小化）：
-  **不动手**，只发系统通知 + 提示条待确认，用户点「立即切换」才走 `auto_switch_confirm`。
+- **自动切换先问用户（2026-11-05；2026-11-07 改后台行为）**：`askBeforeSwitch`（默认开）+
+  `notifyWhenBackground`（默认开）+ `countdownSeconds`（0–120，0 = 一直等你点，默认 15）。
+  前台：常驻提示条显示「目标 / 原因 / 倒计时」+ [立即切换][取消本轮]，倒计时结束才切；
+  后台（失焦或最小化）：**先把主窗口拉到前台**（`commands.rs` 的 `focus_main_window`：
+  `unminimize` + `show` + `set_focus`），确认条要让用户第一眼看到，点「立即切换」才走
+  `auto_switch_confirm`；**只有拉不回焦点**（系统拒绝抢焦点等）才退回「只发系统通知 + 提示条待确认」。
+  **别把拉窗口逻辑删回「只发通知」**——那样限流确认条会藏在任务栏后面，用户根本看不到。
   两个坑：① 倒计时中点心「立即切换」只举 `AUTO_SWITCH_CONFIRM` 旗，不能再起一次
   （会撞自己的名额闸门）；② 0 秒模式用 `awaitingConfirm` 表示，前端不要起 ticker，
   后端最多等 10 分钟，超时按取消处理。

@@ -3,7 +3,7 @@
  * - 数据源：后端每 10 分钟评估一次（账号缓存 + 切换历史 + 错误通知），失焦才弹系统通知。
  * - 忽略是 7 天静默：同一指纹 7 天内不再骚扰；面板里可单条 / 全部忽略。
  */
-import { computed, onMounted, onBeforeUnmount, ref } from "vue";
+import { computed, onMounted, ref } from "vue";
 
 import {
   alertsDismiss,
@@ -16,8 +16,6 @@ import { t } from "@/lib/i18n";
 import { mask } from "@/lib/task-meta";
 
 const alerts = ref<AlertItem[]>([]);
-const dismissedCount = ref(0);
-const loaded = ref(false);
 let unlisten: (() => void) | null = null;
 
 const criticalCount = computed(
@@ -28,8 +26,6 @@ async function load() {
   const result = await alertsList();
   if (!result.ok) return;
   alerts.value = result.alerts ?? [];
-  dismissedCount.value = result.dismissedCount ?? 0;
-  loaded.value = true;
 }
 
 async function dismiss(fingerprint: string) {
@@ -47,23 +43,21 @@ function alertText(item: AlertItem): string {
   const label = mask(item.accountLabel || item.accountId);
   switch (item.kind) {
     case "balance":
-      return t("alr.balance", { label, days: String((item.data.daysLeft as number ?? 0).toFixed(1)) });
+      return t("alr.balance", { label, days: item.data.daysLeft.toFixed(1) });
     case "health":
-      return t("alr.health", { label, score: String(item.data.score ?? 0) });
+      return t("alr.health", { label, score: String(item.data.score) });
     case "expiring": {
-      const days = Math.max(0, Math.ceil(((item.data.expireAt as number ?? 0) - Date.now()) / 86_400_000));
+      const days = Math.max(0, Math.ceil((item.data.expireAt - Date.now()) / 86_400_000));
       return t("alr.expiring", {
         label,
-        pkg: String(item.data.packageName ?? ""),
+        pkg: item.data.packageName ?? "",
         days: String(days),
       });
     }
     case "switch":
       return t("alr.switch", { label });
     case "runfail":
-      return t("alr.runfail", { count: String(item.data.count ?? 0) });
-    default:
-      return label;
+      return t("alr.runfail", { count: String(item.data.count) });
   }
 }
 
@@ -96,8 +90,5 @@ export function useAlerts() {
     });
     unlisten = off;
   });
-  onBeforeUnmount(() => {
-    // 模块级单例监听：组件卸载不注销（TitleBar 常驻，这里只是防御性占位）
-  });
-  return { alerts, dismissedCount, criticalCount, loaded, load, dismiss, dismissAll, alertText };
+  return { alerts, criticalCount, load, dismiss, dismissAll, alertText };
 }
