@@ -8,6 +8,8 @@
 import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
 import { MorphIcon, type IconNode } from "morphicons/vue";
 import { Check, LoaderCircle, RefreshCw } from "lucide";
+import AccountGroupDialog from "@/components/AccountGroupDialog.vue";
+import AccountSwitchDialog from "@/components/AccountSwitchDialog.vue";
 import AnimatedNumber from "@/components/ui/AnimatedNumber.vue";
 import {
   ArrowLeftRight,
@@ -20,7 +22,6 @@ import {
   Pencil,
   RotateCw,
   Star,
-  ShieldCheck,
   Tags,
   Trash2,
   Upload,
@@ -48,13 +49,14 @@ import {
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { useAccountIo } from "@/composables/useAccountIo";
 import { useAccountGroups } from "@/composables/useAccountGroups";
+import { useArmedConfirm } from "@/composables/useArmedConfirm";
 import { useLogin } from "@/composables/useLogin";
 import { useShell } from "@/composables/useShell";
 import { useListAnim } from "@/composables/useListAnim";
 import { t, type I18nKey } from "@/lib/i18n";
 import { mask } from "@/lib/task-meta";
 
-const { setAccountCount, go } = useShell();
+const { setAccountCount } = useShell();
 const cardsEl = useListAnim();
 // 分组与标签：编辑入口在本页，任务页按组勾选共用同一份状态
 const {
@@ -82,9 +84,8 @@ const refreshDone = ref(false);
 const editingId = ref("");
 const noteDraft = ref("");
 const savingNote = ref(false);
-const pendingDelete = ref("");
-/** 删除确认 8s 后自动撤销（与命令区二次确认同节奏）。 */
-let confirmTimer: number | undefined;
+/** 账号删除：第一次点进入确认态，8s 内再点才真删（与命令区二次确认同节奏） */
+const { armedId: pendingDelete, arm: armDelete } = useArmedConfirm();
 
 function say(text: string, level: "ok" | "err" = "ok") {
   toast.value = { text, level };
@@ -332,10 +333,16 @@ async function saveNote(row: AccountOverviewRow) {
       .split(/[\s,，]+/)
       .map((tag) => tag.trim())
       .filter(Boolean);
+    let memberSaved = false;
     try {
-      await setMember(row.accountId, memberDraftGroups.value, tags);
+      memberSaved = (await setMember(row.accountId, memberDraftGroups.value, tags)).ok;
     } catch {
+      memberSaved = false;
+    }
+    // toast 只有一个槽位：失败就到此为止，别再用「已保存」把错误盖掉
+    if (!memberSaved) {
       say(t("ag.memberSaveFail"), "err");
+      return;
     }
     say(t("ac.saved"));
     cancelNote();
@@ -347,15 +354,7 @@ async function saveNote(row: AccountOverviewRow) {
 
 /** 第一次点只是进入确认态，第二次才真删。 */
 async function remove(row: AccountOverviewRow) {
-  if (pendingDelete.value !== row.accountId) {
-    pendingDelete.value = row.accountId;
-    window.clearTimeout(confirmTimer);
-    confirmTimer = window.setTimeout(() => {
-      pendingDelete.value = "";
-    }, 8000);
-    return;
-  }
-  pendingDelete.value = "";
+  if (armDelete(row.accountId)) return;
   const result = await accountDelete(row.accountId);
   if (!result.ok) {
     say(result.error ?? "删除失败", "err");
@@ -560,22 +559,35 @@ const visibleRows = computed(() => {
   }
 });
 
-/** 分组管理弹框 */
-const groupsPanel = ref(false);
-const newGroupName = ref("");
+/** 分组管理弹框：弹框只管输入，写操作与状态仍在本页 */
+const groupDialogOpen = ref(false);
 const groupBusy = ref(false);
 const groupError = ref("");
-const pendingGroupDelete = ref("");
-let groupDeleteTimer = 0;
 
-async function addGroup() {
-  const name = newGroupName.value.trim();
-  if (!name || groupBusy.value) return;
+/** 分组成员数（弹框列表右侧的计数） */
+const groupCounts = computed(() => {
+  const counts: Record<string, number> = {};
+  for (const [groupId, accountIds] of groupMemberIds.value) counts[groupId] = accountIds.length;
+  return counts;
+});
+
+/** 关掉弹框前清错误：下次打开不该还挂着上一轮的红字 */
+function openGroupDialog() {
+  groupError.value = "";
+  groupDialogOpen.value = true;
+}
+
+function closeGroupDialog() {
+  groupDialogOpen.value = false;
+  groupError.value = "";
+}
+
+/** 三个写操作共用一套 busy / 错误透传，避免各自抄一遍 try-catch */
+async function runGroupOp(op: () => Promise<unknown>) {
   groupBusy.value = true;
   groupError.value = "";
   try {
-    await saveGroup(null, name, false);
-    newGroupName.value = "";
+    await op();
   } catch (cause) {
     groupError.value = cause instanceof Error ? cause.message : String(cause);
   } finally {
@@ -583,47 +595,27 @@ async function addGroup() {
   }
 }
 
-async function toggleGroupExclude(groupId: string) {
+const createGroup = (name: string) => void runGroupOp(() => saveGroup(null, name, false));
+
+/** 改名只换显示名，排除标记必须原样带回去（saveGroup 是全量覆盖） */
+function renameGroup(groupId: string, name: string) {
   const group = groups.value.find((item) => item.id === groupId);
   if (!group) return;
-  groupBusy.value = true;
-  groupError.value = "";
-  try {
-    await saveGroup(group.id, group.name, !group.excludeAutoSwitch);
-  } catch (cause) {
-    groupError.value = cause instanceof Error ? cause.message : String(cause);
-  } finally {
-    groupBusy.value = false;
-  }
+  void runGroupOp(() => saveGroup(group.id, name, group.excludeAutoSwitch));
 }
 
-async function removeGroupClick(groupId: string) {
-  if (pendingGroupDelete.value !== groupId) {
-    pendingGroupDelete.value = groupId;
-    window.clearTimeout(groupDeleteTimer);
-    groupDeleteTimer = window.setTimeout(() => {
-      pendingGroupDelete.value = "";
-    }, 8000);
-    return;
-  }
-  pendingGroupDelete.value = "";
-  groupBusy.value = true;
-  groupError.value = "";
-  try {
+function toggleGroupExclude(groupId: string, exclude: boolean) {
+  const group = groups.value.find((item) => item.id === groupId);
+  if (!group) return;
+  void runGroupOp(() => saveGroup(group.id, group.name, exclude));
+}
+
+function removeGroup(groupId: string) {
+  void runGroupOp(async () => {
     await removeGroupById(groupId);
+    // 删掉的组如果正被筛选中，筛选条件跟着清空（否则列表空白且无法自愈）
     if (groupFilter.value === groupId) groupFilter.value = "";
-  } catch (cause) {
-    groupError.value = cause instanceof Error ? cause.message : String(cause);
-  } finally {
-    groupBusy.value = false;
-  }
-}
-
-function closeGroupsPanel() {
-  groupsPanel.value = false;
-  groupError.value = "";
-  newGroupName.value = "";
-  pendingGroupDelete.value = "";
+  });
 }
 
 /** 卡片上的分组名列表（去重） */
@@ -707,28 +699,9 @@ const switchError = ref<null | {
   message: string;
 }>(null);
 
-const switchBullets = computed(() => t("ac.switchBullets").split("\n"));
-
-/** 阶段 → 文案。未知阶段原样显示（后端新增阶段时不至于空白）。 */
-const STAGE_KEYS: Record<string, I18nKey> = {
-  start: "ac.stageStart",
-  session: "ac.stageSession",
-  auth_write: "ac.stageAuthWrite",
-  verify: "ac.stageVerify",
-  launch: "ac.stageLaunch",
-  done: "ac.stageDone",
-};
-const stageLabel = (stage: string) => (STAGE_KEYS[stage] ? t(STAGE_KEYS[stage]) : stage || "-");
-
 /** 切换前安全检查：源/目标会话数 + 将删除清单 + 备份信息（打开弹框时拉） */
 const preflight = ref<SwitchPreflight | null>(null);
 const preflightLoading = ref(false);
-
-function fmtBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${bytes} B`;
-}
 
 async function loadPreflight(accountId: string) {
   preflight.value = null;
@@ -968,7 +941,7 @@ async function doSwitch() {
           type="button"
           class="flex h-6 items-center gap-1 border border-border-strong px-1.5 text-[9px] uppercase tracking-[0.08em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
           :title="t('ag.manageHint')"
-          @click="groupsPanel = true"
+          @click="openGroupDialog"
         >
           <Tags class="size-3" />
           {{ t("ag.manage") }}<span v-if="groups.length" class="text-faint">·{{ groups.length }}</span>
@@ -1536,288 +1509,31 @@ async function doSwitch() {
       </div>
     </Transition>
   </Teleport>
-    <!-- 完全同步切换确认弹框：复刻原项目「切换到目标账号」的警示结构 -->
-    <Teleport to="body">
-    <Transition name="wb-modal">
 
-      <div
-        v-if="switchTarget"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4"
-        role="dialog"
-        aria-modal="true"
-        @click.self="closeSwitch"
-      >
-        <div class="flex max-h-[85vh] w-full max-w-[480px] flex-col border border-border-strong bg-card wb-modal-card">
-          <header class="flex shrink-0 items-start justify-between gap-3 border-b border-border px-3 py-2 wb-flat">
-            <div class="min-w-0">
-              <div class="text-[13px] text-foreground">
-                {{ t("ac.switchTitle") }}「{{ mask(switchTarget.label) }}」
-              </div>
-              <div class="readout mt-0.5 text-[9px] text-faint">{{ t("ac.switchSubtitle") }}</div>
-            </div>
-            <button
-              type="button"
-              class="shrink-0 px-1 text-[11px] text-faint hover:text-foreground"
-              :disabled="switching"
-              @click="closeSwitch"
-            >
-              ✕
-            </button>
-          </header>
+  <!-- 完全同步切换确认弹框：警示结构 + 安全检查 + 失败现场，状态与调用留在本页 -->
+  <AccountSwitchDialog
+    :target="switchTarget"
+    :switching="switching"
+    :progress="switchProgress"
+    :error="switchError"
+    :preflight="preflight"
+    :preflight-loading="preflightLoading"
+    @close="closeSwitch"
+    @confirm="doSwitch"
+  />
 
-          <div class="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-            <div class="border border-hazard bg-hazard-soft px-3 py-2.5">
-              <div class="flex items-center gap-1.5 text-[11px] text-hazard">
-                <CircleAlert class="size-3.5 shrink-0" />
-                {{ t("ac.switchWarn") }}
-              </div>
-              <ul class="mt-1.5 list-disc space-y-1 pl-5 text-[10px] leading-4 text-muted-foreground">
-                <li v-for="(bullet, bulletIndex) in switchBullets" :key="bulletIndex">{{ bullet }}</li>
-              </ul>
-            </div>
-
-            <!-- 切换前安全检查：源/目标会话数 + 将删除清单 + 备份 -->
-            <div v-if="preflightLoading" class="readout mt-3 flex items-center gap-2 text-[10px] text-muted-foreground">
-              <Loader2 class="size-3 animate-spin" />
-              {{ t("pf.loading") }}
-            </div>
-            <div v-else-if="preflight?.ok" class="mt-3 border border-border">
-              <div class="flex items-center gap-1.5 border-b border-border bg-muted px-3 py-1.5 text-[11px] text-foreground">
-                <ShieldCheck class="size-3.5 shrink-0" />
-                {{ t("pf.title") }}
-              </div>
-              <div class="flex gap-2 border-b border-border px-3 py-1.5 text-[10px]">
-                <span class="w-14 shrink-0 text-faint">{{ t("pf.source") }}</span>
-                <span class="readout min-w-0 flex-1 text-foreground">
-                  {{ preflight.source?.label ? mask(preflight.source.label) : t("pf.sourceUnknown") }}
-                  · {{ t("pf.sessionCount", { n: String(preflight.source?.sessionCount ?? 0) }) }}
-                </span>
-              </div>
-              <div class="flex gap-2 border-b border-border px-3 py-1.5 text-[10px]">
-                <span class="w-14 shrink-0 text-faint">{{ t("pf.target") }}</span>
-                <span class="readout min-w-0 flex-1 text-foreground">
-                  {{ t("pf.sessionCount", { n: String(preflight.target?.sessionCount ?? 0) }) }}
-                  <span class="text-hazard">{{ t("pf.willReplace") }}</span>
-                </span>
-              </div>
-              <!-- 将被删除的会话：只露前 5 条，全量在备份清单里 -->
-              <div
-                v-if="(preflight.target?.sessions?.length ?? 0) > 0"
-                class="border-b border-border px-3 py-1.5"
-              >
-                <p class="lbl mb-1 text-[8px] text-faint">{{ t("pf.deleteList") }}</p>
-                <ul class="space-y-0.5">
-                  <li
-                    v-for="item in preflight.target?.sessions.slice(0, 5)"
-                    :key="item.id"
-                    class="readout truncate text-[10px] text-muted-foreground"
-                    :title="item.title ?? item.id"
-                  >
-                    · {{ item.isPlayground ? t("pf.playground") : t("pf.space") }} {{ item.title || item.id }}
-                  </li>
-                  <li v-if="(preflight.target?.sessions?.length ?? 0) > 5" class="text-[9px] text-faint">
-                    {{ t("pf.more", { n: String((preflight.target?.sessions?.length ?? 0) - 5) }) }}
-                  </li>
-                </ul>
-              </div>
-              <!-- 备份：skipped 时红色警示（不拦切换，但必须让用户知道没有备份） -->
-              <div class="flex gap-2 px-3 py-1.5 text-[10px]">
-                <span class="w-14 shrink-0 text-faint">{{ t("pf.backup") }}</span>
-                <div
-                  v-if="preflight.backup && !preflight.backup.skipped"
-                  class="readout min-w-0 flex-1 break-all leading-4 text-muted-foreground"
-                  :title="preflight.backup.path"
-                >
-                  {{ t("pf.backupOk", {
-                    n: String(preflight.backup.fileCount ?? 0),
-                    size: fmtBytes(preflight.backup.totalBytes ?? 0),
-                  }) }}
-                  <span class="block text-faint">sha256 {{ (preflight.backup.manifestSha256 ?? "").slice(0, 16) }}…</span>
-                </div>
-                <span
-                  v-else-if="preflight.backup?.reason === 'size'"
-                  class="min-w-0 flex-1 leading-4 text-hazard"
-                >
-                  {{ t("pf.backupSkipped", { size: fmtBytes(preflight.backup.totalBytes ?? 0) }) }}
-                </span>
-                <span v-else class="min-w-0 flex-1 leading-4 text-hazard">{{ t("pf.backupFailed") }}</span>
-              </div>
-            </div>
-            <p v-else-if="preflight" class="readout mt-3 text-[10px] text-hazard">
-              {{ t("pf.failed") }}{{ preflight.error ? ` · ${preflight.error}` : "" }}
-            </p>
-
-            <!-- 失败现场：阶段 + 是否回滚 + 原始原因，全部留在弹框里 -->
-            <div v-if="switchError" class="mt-3 border border-hazard">
-              <div
-                class="flex items-center gap-1.5 border-b border-hazard bg-hazard-soft px-3 py-2 text-[11px] text-hazard"
-              >
-                <CircleAlert class="size-3.5 shrink-0" />
-                {{
-                  switchError.rolledBack
-                    ? switchError.sessionsDirty
-                      ? t("ac.switchRolledBackDirty")
-                      : t("ac.switchRolledBack")
-                    : t("ac.switchBlocked")
-                }}
-              </div>
-              <div class="flex gap-2 border-b border-border px-3 py-1.5 text-[10px]">
-                <span class="w-14 shrink-0 text-faint">{{ t("ac.switchStage") }}</span>
-                <span class="readout min-w-0 flex-1 text-foreground">{{
-                  stageLabel(switchError.stage)
-                }}</span>
-              </div>
-              <div
-                v-if="switchError.identity"
-                class="flex gap-2 border-b border-border px-3 py-1.5 text-[10px]"
-              >
-                <span class="w-14 shrink-0 text-faint">{{ t("ac.switchIdentity") }}</span>
-                <span class="readout min-w-0 flex-1 text-foreground">{{
-                  switchError.identity
-                }}</span>
-              </div>
-              <div
-                v-if="switchError.sessionsDirty"
-                class="flex gap-2 border-b border-border px-3 py-1.5 text-[10px]"
-              >
-                <span class="w-14 shrink-0 text-faint">{{ t("ac.switchSessions") }}</span>
-                <span class="min-w-0 flex-1 leading-4 text-hazard">{{
-                  t("ac.switchSessionsDirty")
-                }}</span>
-              </div>
-              <p
-                class="readout whitespace-pre-wrap break-words px-3 py-2 text-[10px] leading-4 text-muted-foreground"
-              >
-                {{ switchError.message }}
-              </p>
-              <button
-                type="button"
-                class="w-full border-t border-border px-3 py-1.5 text-left text-[10px] uppercase tracking-[0.1em] text-faint transition-colors hover:text-foreground"
-                @click="
-                  go('logs');
-                  closeSwitch();
-                "
-              >
-                {{ t("ac.switchViewLog") }}
-              </button>
-            </div>
-
-            <p v-if="switching" class="readout mt-3 flex items-center gap-2 text-[10px] text-foreground">
-              <Loader2 class="size-3 animate-spin" />
-              {{ switchProgress || t("ac.switching") }}
-            </p>
-            <p v-else class="readout mt-3 text-[10px] text-muted-foreground">{{ t("ac.switchFoot") }}</p>
-          </div>
-
-          <footer class="flex shrink-0 items-center justify-end gap-2 border-t border-border px-3 py-2">
-            <button
-              type="button"
-              class="border border-border-strong px-3 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
-              :disabled="switching"
-              @click="closeSwitch"
-            >
-              {{ t("ac.close") }}
-            </button>
-            <button
-              type="button"
-              class="flex items-center gap-1.5 bg-hazard px-3 py-1 text-[10px] uppercase tracking-[0.1em] text-white transition-opacity hover:opacity-85 disabled:opacity-40"
-              :disabled="switching"
-              @click="doSwitch"
-            >
-              <Loader2 v-if="switching" class="size-3 animate-spin" />
-              {{ switching ? t("ac.switching") : t("ac.switchGo") }}
-            </button>
-          </footer>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
-
-  <!-- 分组管理：新建 / 删除 / 排除自动切换 -->
-  <Teleport to="body">
-    <Transition name="wb-modal">
-      <div
-        v-if="groupsPanel"
-        class="fixed inset-0 z-50 flex items-center justify-center bg-background/80 p-4"
-        role="dialog"
-        aria-modal="true"
-        @click.self="closeGroupsPanel"
-      >
-        <div class="w-full max-w-[420px] border border-border-strong bg-card wb-modal-card">
-          <header class="flex shrink-0 items-start justify-between gap-3 border-b border-border px-3 py-2 wb-flat">
-            <div class="min-w-0">
-              <div class="text-[13px] text-foreground">{{ t("ag.panelTitle") }}</div>
-              <div class="mt-0.5 text-[10px] leading-4 text-muted-foreground">{{ t("ag.panelDesc") }}</div>
-            </div>
-            <button type="button" class="shrink-0 px-1 text-[11px] text-faint hover:text-foreground" @click="closeGroupsPanel">
-              ✕
-            </button>
-          </header>
-
-          <div class="max-h-[50vh] overflow-y-auto px-3 py-2">
-            <p v-if="groupError" class="mb-2 border border-hazard bg-hazard-soft px-2 py-1 text-[10px] text-hazard">
-              {{ groupError }}
-            </p>
-            <p v-if="groups.length === 0" class="py-6 text-center text-[10px] text-faint">{{ t("ag.empty") }}</p>
-            <div
-              v-for="group in groups"
-              :key="group.id"
-              class="flex items-center gap-2 border-b border-border/60 py-1.5 last:border-b-0"
-            >
-              <span class="min-w-0 flex-1 truncate text-[11px] text-foreground" :title="`#${group.name}`">
-                #{{ group.name }}
-                <span class="lbl ml-1 text-[8px] text-faint">{{ groupMemberIds.get(group.id)?.length ?? 0 }}</span>
-              </span>
-              <label
-                class="flex shrink-0 cursor-pointer items-center gap-1 text-[9px] text-muted-foreground hover:text-foreground"
-                :title="t('ag.excludeHint')"
-              >
-                <input
-                  type="checkbox"
-                  class="accent-hazard"
-                  :checked="group.excludeAutoSwitch"
-                  :disabled="groupBusy"
-                  @change="toggleGroupExclude(group.id)"
-                />
-                {{ t("ag.exclude") }}
-              </label>
-              <button
-                type="button"
-                class="shrink-0 border px-1.5 py-0.5 text-[9px] transition-colors"
-                :class="
-                  pendingGroupDelete === group.id
-                    ? 'border-hazard bg-hazard-soft text-hazard'
-                    : 'border-border-strong text-muted-foreground hover:border-hazard hover:text-hazard'
-                "
-                @click="removeGroupClick(group.id)"
-              >
-                <template v-if="pendingGroupDelete === group.id">{{ t("ac.confirm") }}</template>
-                <template v-else><Trash2 class="size-2.5" /></template>
-              </button>
-            </div>
-          </div>
-
-          <footer class="flex items-center gap-1.5 border-t border-border px-3 py-2 wb-flat">
-            <input
-              v-model="newGroupName"
-              class="readout min-w-0 flex-1 border border-border-strong bg-background px-1.5 py-1 text-[10px] text-foreground outline-none focus:border-hazard"
-              :placeholder="t('ag.newPh')"
-              maxlength="16"
-              @keyup.enter="addGroup"
-            />
-            <button
-              type="button"
-              class="flex items-center gap-1 border border-foreground bg-foreground px-2 py-1 text-[10px] uppercase tracking-[0.1em] text-background transition-opacity hover:opacity-85 disabled:opacity-40"
-              :disabled="groupBusy || !newGroupName.trim()"
-              @click="addGroup"
-            >
-              <Loader2 v-if="groupBusy" class="size-3 animate-spin" />
-              {{ t("ag.add") }}
-            </button>
-          </footer>
-        </div>
-      </div>
-    </Transition>
-  </Teleport>
+  <!-- 分组管理：弹框只做展示与输入，新建 / 改名 / 删除 / 排除自动切换都在本页执行 -->
+  <AccountGroupDialog
+    :open="groupDialogOpen"
+    :groups="groups"
+    :busy="groupBusy"
+    :error="groupError"
+    :counts="groupCounts"
+    @close="closeGroupDialog"
+    @create="createGroup"
+    @rename="renameGroup"
+    @remove="removeGroup"
+    @toggle-exclude="toggleGroupExclude"
+  />
   </div>
 </template>

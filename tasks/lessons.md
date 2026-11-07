@@ -21,3 +21,17 @@
 
 规则：新增 job 先自查三件事——checkout、permissions、有没有用 heredoc。
 发版前用 `python -c "import yaml;yaml.safe_load(...)"` 校验，再等 CI 结果，不要连推三个 tag。
+
+## 2026-11-07 代码审查抓到的四类病（一次全犯）
+
+1. **凭记忆读字段名**：提醒中心读 `health.daysLeft` / `health.status`，实际 `daysLeft` 在
+   `forecast`、等级字段叫 `grade`。→ 结果五类告警三类永不触发，编译期完全看不出来。
+   规则：跨模块取字段前先打开对方的 struct / json! 定义，别信「应该有」。
+2. **备份不 fail-closed**：中途 `Err(_) => continue`，最后照样报「已备份 N 个文件」。
+   规则：备份/迁移这类「用户以为能救」的动作，任一文件失败即整份作废（临时目录 + 全成功才 rename）。
+3. **单文件/单函数无上限**：`alerts.rs` 334 行、`evaluate()` 141 行、`account_groups.rs` 385 行。
+   规则：文件过 300 行、函数过 60 行就当场拆，别等 review 抓。
+4. **toast 单槽被后一条覆盖**：失败提示后紧跟 `say(已保存)`，用户只看得到成功。
+   规则：同一流程里错误分支必须 `return`，不能靠「下一条不会覆盖」的侥幸。
+
+另：`cargo clippy` 不编译测试代码，测试文件里的字段缺失只有 `cargo test` 才发现——加字段后必须跑一次 `cargo test --lib`。
