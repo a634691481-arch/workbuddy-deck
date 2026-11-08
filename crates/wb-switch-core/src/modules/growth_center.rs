@@ -14,6 +14,7 @@
 //! | Buddy 能量 | GET `/buddy/quota` → `affordable` / `max_open_count` |
 //! | 能量开盒 | POST `/buddy/open` `{count, client_token}` |
 //! | 能量余额 | GET `/energy` → `balance` |
+//! | 徽章资产 | GET `/badges` → `badges[]` / `max_cert` |
 //!
 //! 安全边界：
 //! - **写操作不重试**（[`RetryClass::Write`]），每轮每类最多 1 次；
@@ -250,6 +251,79 @@ pub fn open_count(affordable: i64, max_open: i64) -> i64 {
     affordable.max(0).min(cap)
 }
 
+/// 文本字段：缺失 / 类型不符一律给空串，前端不用再判 `undefined`。
+fn text_of(value: Option<&Value>) -> String {
+    value
+        .and_then(Value::as_str)
+        .unwrap_or_default()
+        .to_string()
+}
+
+/// 布尔字段兼容 `true/false` 与 `1/0` 两种形状。
+fn bool_of(value: Option<&Value>) -> bool {
+    match value {
+        Some(Value::Bool(flag)) => *flag,
+        Some(Value::Number(n)) => n.as_i64().unwrap_or(0) != 0,
+        _ => false,
+    }
+}
+
+/// 整数字段：缺失 / 类型不符给 0（只读展示，不因数据异常报错）。
+fn int_of(data: &Value, key: &str) -> i64 {
+    data.get(key).and_then(Value::as_i64).unwrap_or(0)
+}
+
+/// 单枚徽章 → 前端契约（camelCase）。
+pub fn badge_row(badge: &Value) -> Value {
+    json!({
+        "taskId": text_of(badge.get("task_id")),
+        "code": text_of(badge.get("code")),
+        "title": text_of(badge.get("title")),
+        "badgeName": text_of(badge.get("badge_name")),
+        "earned": bool_of(badge.get("earned")),
+        "claimed": bool_of(badge.get("claimed")),
+        "claimable": bool_of(badge.get("claimable")),
+        "url": text_of(badge.get("url")),
+        "taskType": text_of(badge.get("task_type")),
+    })
+}
+
+fn max_cert_row(cert: &Value) -> Value {
+    json!({
+        "earned": bool_of(cert.get("earned")),
+        "url": text_of(cert.get("url")),
+        "badgeId": text_of(cert.get("badge_id")),
+        "shareUuid": text_of(cert.get("share_uuid")),
+        "earnedAt": text_of(cert.get("earned_at")),
+        "recordId": text_of(cert.get("record_id")),
+        "claimed": bool_of(cert.get("claimed")),
+    })
+}
+
+/// `/badges` 的 `data` → `{badges: [...], maxCert: {...} | null}`。
+pub fn parse_badges(data: &Value) -> Value {
+    let badges: Vec<Value> = data
+        .get("badges")
+        .and_then(Value::as_array)
+        .map(|rows| rows.iter().map(badge_row).collect())
+        .unwrap_or_default();
+    let max_cert = data
+        .get("max_cert")
+        .filter(|cert| cert.is_object())
+        .map(max_cert_row);
+    json!({ "badges": badges, "maxCert": max_cert })
+}
+
+/// `/buddy/quota` 的 `data` → 前端契约（camelCase，缺字段给 0）。
+pub fn parse_buddy_quota(data: &Value) -> Value {
+    json!({
+        "balance": int_of(data, "balance"),
+        "costPerOpen": int_of(data, "cost_per_open"),
+        "affordable": int_of(data, "affordable"),
+        "maxOpenCount": int_of(data, "max_open_count"),
+    })
+}
+
 fn client_token() -> String {
     format!("u-{}", uuid::Uuid::new_v4())
 }
@@ -317,6 +391,39 @@ async fn call_for(account: &Value, cfg: &Value) -> Result<Call, Value> {
         uid: uid_of(account),
         budget: TimeBudget::new(budget_seconds(cfg)),
     })
+}
+
+/// 单次资产查询的预算：两个只读接口，30 秒足够，不占用成长中心轮次预算。
+const ASSET_BUDGET_SECONDS: u64 = 30;
+
+/// 只读资产查询用的调用上下文（不读配置、不落日志）。
+async fn asset_call(account: &Value) -> Result<Call, String> {
+    let token = resolve_token(account).await.map_err(|err| err.message())?;
+    Ok(Call {
+        token,
+        uid: uid_of(account),
+        budget: TimeBudget::new(ASSET_BUDGET_SECONDS),
+    })
+}
+
+/// 徽章资产：`GET /badges` → `{badges, maxCert}`（camelCase）。
+pub async fn badges(account: &Value) -> Result<Value, String> {
+    let call = asset_call(account).await?;
+    let reply = call.get("/badges").await;
+    if !reply.ok() {
+        return Err(reply.message());
+    }
+    Ok(parse_badges(payload(&reply)))
+}
+
+/// 能量开盒配额：`GET /buddy/quota` → `{balance, costPerOpen, affordable, maxOpenCount}`。
+pub async fn buddy_quota(account: &Value) -> Result<Value, String> {
+    let call = asset_call(account).await?;
+    let reply = call.get("/buddy/quota").await;
+    if !reply.ok() {
+        return Err(reply.message());
+    }
+    Ok(parse_buddy_quota(payload(&reply)))
 }
 
 // ---------------------------------------------------------------------------
@@ -950,6 +1057,100 @@ mod tests {
         assert_eq!(open_count(1, 0), 1);
         assert_eq!(open_count(0, 3), 0);
         assert_eq!(open_count(-1, 3), 0);
+    }
+
+    #[test]
+    fn badges_map_to_camel_case() {
+        let data = json!({
+            "badges": [{
+                "task_id": "t-1",
+                "code": "first_checkin",
+                "title": "首次签到",
+                "earned": true,
+                "url": "https://x/b.png",
+                "share_uuid": "u-1",
+                "record_id": "r-1",
+                "claimed": false,
+                "claimable": 1,
+                "badge_name": "早鸟",
+                "task_type": "daily",
+                "unknown_field": "ignored",
+            }],
+            "max_cert": {
+                "earned": true,
+                "url": "https://x/max.png",
+                "badge_id": "b-max",
+                "share_uuid": "u-max",
+                "earned_at": "2026-11-01T10:00:00Z",
+                "record_id": "r-max",
+                "claimed": true,
+            },
+        });
+        let out = parse_badges(&data);
+        let badge = &out["badges"][0];
+        assert_eq!(badge["taskId"], "t-1");
+        assert_eq!(badge["code"], "first_checkin");
+        assert_eq!(badge["title"], "首次签到");
+        assert_eq!(badge["badgeName"], "早鸟");
+        assert_eq!(badge["earned"], true);
+        assert_eq!(badge["claimed"], false);
+        // 数字 1 也当 true（服务端两种形状都出现过）。
+        assert_eq!(badge["claimable"], true);
+        assert_eq!(badge["url"], "https://x/b.png");
+        assert_eq!(badge["taskType"], "daily");
+        assert!(badge.get("task_id").is_none(), "原始下划线字段不外泄");
+
+        let cert = &out["maxCert"];
+        assert_eq!(cert["badgeId"], "b-max");
+        assert_eq!(cert["shareUuid"], "u-max");
+        assert_eq!(cert["earnedAt"], "2026-11-01T10:00:00Z");
+        assert_eq!(cert["recordId"], "r-max");
+        assert_eq!(cert["claimed"], true);
+    }
+
+    #[test]
+    fn badges_tolerate_missing_fields() {
+        let out = parse_badges(&json!({ "badges": [{}, {"task_id": "only-id"}] }));
+        let first = &out["badges"][0];
+        assert_eq!(first["taskId"], "");
+        assert_eq!(first["earned"], false);
+        assert_eq!(first["claimable"], false);
+        assert_eq!(out["badges"][1]["taskId"], "only-id");
+        // 没有 max_cert → null；形状不对也不 panic。
+        assert!(out["maxCert"].is_null());
+        assert!(parse_badges(&json!({})).get("badges").unwrap().is_array());
+        assert!(
+            parse_badges(&json!({"badges": "nope", "max_cert": 3}))["badges"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
+        assert!(parse_badges(&json!({"max_cert": 3}))["maxCert"].is_null());
+    }
+
+    #[test]
+    fn buddy_quota_parses_and_defaults_to_zero() {
+        let out = parse_buddy_quota(&json!({
+            "affordable": 1,
+            "balance": 18,
+            "cost_per_open": 10,
+            "max_open_count": 5,
+        }));
+        assert_eq!(out["balance"], 18);
+        assert_eq!(out["costPerOpen"], 10);
+        assert_eq!(out["affordable"], 1);
+        assert_eq!(out["maxOpenCount"], 5);
+
+        // 缺字段：全部给 0，不 panic。
+        let empty = parse_buddy_quota(&json!({}));
+        assert_eq!(empty["balance"], 0);
+        assert_eq!(empty["costPerOpen"], 0);
+        assert_eq!(empty["affordable"], 0);
+        assert_eq!(empty["maxOpenCount"], 0);
+        // 类型不符同样降级为 0。
+        let bad = parse_buddy_quota(&json!({"balance": "18", "max_open_count": null}));
+        assert_eq!(bad["balance"], 0);
+        assert_eq!(bad["maxOpenCount"], 0);
     }
 
     #[test]

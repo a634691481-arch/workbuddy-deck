@@ -48,8 +48,40 @@ export interface GrowthRow {
   tasks?: GrowthTask[];
 }
 
-/** 签到状态：`raw` 是服务端原始字段，放到「原始响应」页展示。 */
-export interface CheckinStatus {
+/** 成长中心徽章（`/v2/activity/growth/badges`）。 */
+export interface GrowthBadge {
+  taskId: number;
+  code: string;
+  title: string;
+  badgeName: string;
+  earned: boolean;
+  claimed: boolean;
+  claimable: boolean;
+  url: string;
+  taskType: string;
+}
+
+/** 盲盒额度（`/activity/growth/buddy/quota`）：能量余额与还能开几次。 */
+export interface BuddyQuota {
+  ok: boolean;
+  balance: number;
+  costPerOpen: number;
+  affordable: number;
+  maxOpenCount: number;
+  error?: string;
+}
+
+export interface GrowthAssets {
+  ok: boolean;
+  badges: GrowthBadge[];
+  quota: BuddyQuota | null;
+  error?: string;
+}
+
+export const growthAssets = (accountId?: string) =>
+  invoke<GrowthAssets>("growth_assets", { accountId });
+
+/** 签到状态：`raw` 是服务端原始字段，放到「原始响应」页展示。 */export interface CheckinStatus {
   ok?: boolean;
   todayCheckedIn?: boolean;
   statusUnsupported?: boolean;

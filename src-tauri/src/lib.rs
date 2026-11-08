@@ -52,6 +52,7 @@ pub fn run() {
             commands::cancel_run,
             commands::run_checkin,
             commands::run_growth,
+            commands::growth_assets,
             commands::run_travel,
             commands::run_daily,
             commands::launch_main_app,

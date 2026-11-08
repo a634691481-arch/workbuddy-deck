@@ -14,7 +14,7 @@ const props = defineProps<{
   disabled: boolean;
 }>();
 
-const emit = defineEmits<{ signin: [] }>();
+const emit = defineEmits<{ signin: []; growth: [] }>();
 
 const rawNumber = (key: string): number | string => {
   const value = props.detail?.checkin.raw?.[key];
@@ -60,6 +60,10 @@ const checkinError = () =>
           ⚠ {{ checkinError() }}
         </span>
       </div>
+
+      <Button variant="outline" size="sm" class="my-1.5 mr-2" @click="emit('growth')">
+        {{ t("gr.entry") }}
+      </Button>
 
       <Button
         variant="outline"

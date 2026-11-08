@@ -779,3 +779,19 @@ decision(forced-on) = Skip("当前账号未被限流")
 - 审查要分轴：Standards 全绿也可能功能全错（字段名读错编译期无感）
 - 子 agent 结论要复核：它报的「GroupChip 无人引用」是假阳性，实际模板在用
 - 拆文件先定「谁是数据持有方」：弹框只搬模板 + emit，逻辑留视图，风险最小
+
+## 2026-11-08 成长中心三件套（徽章墙 / 盲盒额度 / 任务看板）
+
+- [ ] 后端：core 加 `badges()` + `buddy_quota()`，命令 `growth_assets`（并发、单侧失败不影响另一侧）
+- [ ] 前端：`GrowthDrawer.vue`（徽章网格 / 盲盒四格 / 任务四态）+ AccountHeader「成长」入口
+- [ ] 提示：契约 `growthAssets()` + i18n `gr.*` 已就位
+- [ ] 验证：core 单测 / 双端 clippy / vue-tsc / build
+- [ ] 完成后跑 code-review（Standards + Spec 双轴）
+
+接口实测依据：
+- `GET /v2/activity/growth/badges` → `data.badges[].{task_id,code,title,earned,claimed,claimable,url,badge_name,task_type}`
+- `GET /activity/growth/buddy/quota` → `{affordable,balance,cost_per_open,max_open_count}`
+- `GET /v2/activity/growth/tasks` → `accept_status` ∈ accepted/completed/claimed，`progress{current,target}`
+
+### 回顾
+（待完成）

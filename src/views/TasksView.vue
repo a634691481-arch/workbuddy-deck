@@ -12,6 +12,7 @@ import AccountList from "@/components/AccountList.vue";
 import ActionBar from "@/components/ActionBar.vue";
 import AppToolbar from "@/components/AppToolbar.vue";
 import AutoDailyPanel from "@/components/AutoDailyPanel.vue";
+import GrowthDrawer from "@/components/GrowthDrawer.vue";
 import LogPanel from "@/components/LogPanel.vue";
 import StatusBar from "@/components/StatusBar.vue";
 import TaskTable from "@/components/TaskTable.vue";
@@ -19,6 +20,7 @@ import TelemetryBar from "@/components/TelemetryBar.vue";
 import { useAssistant } from "@/composables/useAssistant";
 import { useBalance } from "@/composables/useBalance";
 import { useAccountGroups } from "@/composables/useAccountGroups";
+import { growthAssets, type BuddyQuota, type GrowthBadge } from "@/lib/api";
 import { t } from "@/lib/i18n";
 import { isDone, mask } from "@/lib/task-meta";
 import { isTauri } from "@/lib/tauri-env";
@@ -64,6 +66,49 @@ const {
 
 // 未完成明细默认收起（与失败条一致）
 const showPending = ref(false);
+
+// 成长抽屉：徽章/盲盒额度走 growth_assets，任务直接用当前账号的 detail.growth.tasks
+const growthOpen = ref(false);
+const growthLoading = ref(false);
+const growthError = ref("");
+const growthBadges = ref<GrowthBadge[]>([]);
+const growthQuota = ref<BuddyQuota | null>(null);
+const growthClaiming = ref(false);
+
+async function loadGrowth() {
+  growthLoading.value = true;
+  growthError.value = "";
+  try {
+    const result = await growthAssets(activeId.value ?? undefined);
+    growthBadges.value = result.badges ?? [];
+    growthQuota.value = result.quota ?? null;
+    if (result.ok !== true) growthError.value = result.error ?? "";
+  } catch (error) {
+    growthBadges.value = [];
+    growthQuota.value = null;
+    growthError.value = String(error);
+  } finally {
+    growthLoading.value = false;
+  }
+}
+
+function openGrowth() {
+  growthOpen.value = true;
+  void loadGrowth();
+}
+
+/** 领取 = 复用批量「成长」动作，跑完重拉徽章与额度（领取会改这两块）。 */
+async function claimGrowth() {
+  const id = activeId.value;
+  if (!id || growthClaiming.value) return;
+  growthClaiming.value = true;
+  try {
+    await runAction("growth", [id]);
+    await loadGrowth();
+  } finally {
+    growthClaiming.value = false;
+  }
+}
 
 // 分组速选：只读分组数据，编辑入口在账号管理页
 const { groups, load: loadGroups, groupMemberIds } = useAccountGroups();
@@ -176,6 +221,7 @@ function retryFailures() {
           :signing="busyAction === 'single'"
           :disabled="busy"
           @signin="signinOnce"
+          @growth="openGrowth"
         />
 
         <TelemetryBar
@@ -296,6 +342,19 @@ function retryFailures() {
       :last-refresh="lastRefresh"
       :log-count="logs.length"
       :running="run.running"
+    />
+
+    <GrowthDrawer
+      :open="growthOpen"
+      :badges="growthBadges"
+      :quota="growthQuota"
+      :tasks="tasks"
+      :loading="growthLoading"
+      :error="growthError"
+      :claiming="growthClaiming"
+      @close="growthOpen = false"
+      @refresh="loadGrowth"
+      @claim="claimGrowth"
     />
   </div>
 </template>

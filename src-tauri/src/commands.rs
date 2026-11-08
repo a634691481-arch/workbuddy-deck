@@ -16,6 +16,7 @@ use tauri::Manager;
 
 use wb_switch_core::modules::config;
 use wb_switch_core::modules::credit_usage;
+use wb_switch_core::modules::growth_center;
 use wb_switch_core::modules::growth_tasks;
 use wb_switch_core::modules::variant::WbVariant;
 use wb_switch_core::modules::{
@@ -376,6 +377,51 @@ run_command!(run_checkin, "checkin");
 run_command!(run_growth, "growth");
 run_command!(run_travel, "travel");
 run_command!(run_daily, "daily");
+
+/// 成长中心资产（只读）：徽章列表 + 能量开盒配额。
+///
+/// 未传 `account_id` 时用当前登录账号；两个请求并发，单边失败不影响另一边，
+/// `ok` 仅在两边都成功时为 true。
+#[tauri::command]
+pub async fn growth_assets(account_id: Option<String>) -> Value {
+    let id = account_id
+        .map(|id| id.trim().to_string())
+        .filter(|id| !id.is_empty())
+        .or_else(auto_switch::current_account_id);
+    let Some(id) = id else {
+        return json!({
+            "ok": false, "badges": [], "quota": Value::Null, "error": "未找到当前登录账号",
+        });
+    };
+    let Some(acc) = account::find_account(&id) else {
+        return json!({
+            "ok": false, "badges": [], "quota": Value::Null, "error": "账号不存在",
+        });
+    };
+    let acc = fresh(acc).await;
+    let (badges, quota) = tokio::join!(
+        growth_center::badges(&acc),
+        growth_center::buddy_quota(&acc)
+    );
+    let errors: Vec<String> = [badges.as_ref().err(), quota.as_ref().err()]
+        .into_iter()
+        .flatten()
+        .cloned()
+        .collect();
+    json!({
+        "ok": errors.is_empty(),
+        "badges": badges
+            .ok()
+            .map(|assets| assets["badges"].clone())
+            .unwrap_or_else(|| json!([])),
+        "quota": quota.ok().unwrap_or(Value::Null),
+        "error": if errors.is_empty() {
+            Value::Null
+        } else {
+            json!(errors.join("; "))
+        },
+    })
+}
 
 /// 每日自动执行：读配置 + 最近日志一起返回，前端一次请求画完整面板。
 #[tauri::command]
