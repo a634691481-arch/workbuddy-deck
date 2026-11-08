@@ -782,11 +782,11 @@ decision(forced-on) = Skip("当前账号未被限流")
 
 ## 2026-11-08 成长中心三件套（徽章墙 / 盲盒额度 / 任务看板）
 
-- [ ] 后端：core 加 `badges()` + `buddy_quota()`，命令 `growth_assets`（并发、单侧失败不影响另一侧）
-- [ ] 前端：`GrowthDrawer.vue`（徽章网格 / 盲盒四格 / 任务四态）+ AccountHeader「成长」入口
+- [x] 后端：core 加 `badges()` + `buddy_quota()`，命令 `growth_assets`（并发、单侧失败不影响另一侧）
+- [x] 前端：`GrowthDrawer.vue`（徽章网格 / 盲盒四格 / 任务四态）+ AccountHeader「成长」入口
 - [ ] 提示：契约 `growthAssets()` + i18n `gr.*` 已就位
-- [ ] 验证：core 单测 / 双端 clippy / vue-tsc / build
-- [ ] 完成后跑 code-review（Standards + Spec 双轴）
+- [x] 验证：core 22 / 应用 30 全绿；双端 clippy 0；vue-tsc 0；build 通过
+- [x] 完成后跑 code-review（Standards + Spec 双轴），11 条问题已修 10 条
 
 接口实测依据：
 - `GET /v2/activity/growth/badges` → `data.badges[].{task_id,code,title,earned,claimed,claimable,url,badge_name,task_type}`
@@ -794,4 +794,7 @@ decision(forced-on) = Skip("当前账号未被限流")
 - `GET /v2/activity/growth/tasks` → `accept_status` ∈ accepted/completed/claimed，`progress{current,target}`
 
 ### 回顾
-（待完成）
+- 契约字段名/类型必须对着真实响应写：`task_id` 是字符串不是数字，`quota` 没有 `ok` 字段，凭印象写会留下「恒显红条」这类静默 bug
+- 抽屉「刷新」只能承诺它真正刷的东西（额度），拉详情会闪骨架——文案比补逻辑更划算
+- 领取按钮叫「执行成长任务」而不是「一键领取」：后端跑的是整轮成长，文案要对得上行为
+- 已知债务：TasksView 360 行仍超 300；下一步把成长编排（打开/领取/结果行）整体挪进 composable
