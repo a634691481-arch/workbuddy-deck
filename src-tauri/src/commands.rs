@@ -378,6 +378,16 @@ run_command!(run_growth, "growth");
 run_command!(run_travel, "travel");
 run_command!(run_daily, "daily");
 
+/// `growth_assets` 的提前返回形态：与正常返回同字段，方便前端统一处理。
+fn assets_error(message: impl Into<String>) -> Value {
+    json!({
+        "ok": false,
+        "badges": [],
+        "quota": Value::Null,
+        "error": message.into(),
+    })
+}
+
 /// 成长中心资产（只读）：徽章列表 + 能量开盒配额。
 ///
 /// 未传 `account_id` 时用当前登录账号；两个请求并发，单边失败不影响另一边，
@@ -389,14 +399,10 @@ pub async fn growth_assets(account_id: Option<String>) -> Value {
         .filter(|id| !id.is_empty())
         .or_else(auto_switch::current_account_id);
     let Some(id) = id else {
-        return json!({
-            "ok": false, "badges": [], "quota": Value::Null, "error": "未找到当前登录账号",
-        });
+        return assets_error("未找到当前登录账号");
     };
     let Some(acc) = account::find_account(&id) else {
-        return json!({
-            "ok": false, "badges": [], "quota": Value::Null, "error": "账号不存在",
-        });
+        return assets_error("账号不存在");
     };
     let acc = fresh(acc).await;
     let (badges, quota) = tokio::join!(

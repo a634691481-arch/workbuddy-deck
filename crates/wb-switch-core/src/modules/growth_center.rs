@@ -14,7 +14,7 @@
 //! | Buddy 能量 | GET `/buddy/quota` → `affordable` / `max_open_count` |
 //! | 能量开盒 | POST `/buddy/open` `{count, client_token}` |
 //! | 能量余额 | GET `/energy` → `balance` |
-//! | 徽章资产 | GET `/badges` → `badges[]` / `max_cert` |
+//! | 徽章资产 | GET `/badges` → `badges[]` |
 //!
 //! 安全边界：
 //! - **写操作不重试**（[`RetryClass::Write`]），每轮每类最多 1 次；
@@ -288,30 +288,14 @@ pub fn badge_row(badge: &Value) -> Value {
     })
 }
 
-fn max_cert_row(cert: &Value) -> Value {
-    json!({
-        "earned": bool_of(cert.get("earned")),
-        "url": text_of(cert.get("url")),
-        "badgeId": text_of(cert.get("badge_id")),
-        "shareUuid": text_of(cert.get("share_uuid")),
-        "earnedAt": text_of(cert.get("earned_at")),
-        "recordId": text_of(cert.get("record_id")),
-        "claimed": bool_of(cert.get("claimed")),
-    })
-}
-
-/// `/badges` 的 `data` → `{badges: [...], maxCert: {...} | null}`。
+/// `/badges` 的 `data` → `{badges: [...]}`。
 pub fn parse_badges(data: &Value) -> Value {
     let badges: Vec<Value> = data
         .get("badges")
         .and_then(Value::as_array)
         .map(|rows| rows.iter().map(badge_row).collect())
         .unwrap_or_default();
-    let max_cert = data
-        .get("max_cert")
-        .filter(|cert| cert.is_object())
-        .map(max_cert_row);
-    json!({ "badges": badges, "maxCert": max_cert })
+    json!({ "badges": badges })
 }
 
 /// `/buddy/quota` 的 `data` → 前端契约（camelCase，缺字段给 0）。
@@ -406,7 +390,7 @@ async fn asset_call(account: &Value) -> Result<Call, String> {
     })
 }
 
-/// 徽章资产：`GET /badges` → `{badges, maxCert}`（camelCase）。
+/// 徽章资产：`GET /badges` → `{badges}`（camelCase）。
 pub async fn badges(account: &Value) -> Result<Value, String> {
     let call = asset_call(account).await?;
     let reply = call.get("/badges").await;
@@ -1076,15 +1060,6 @@ mod tests {
                 "task_type": "daily",
                 "unknown_field": "ignored",
             }],
-            "max_cert": {
-                "earned": true,
-                "url": "https://x/max.png",
-                "badge_id": "b-max",
-                "share_uuid": "u-max",
-                "earned_at": "2026-11-01T10:00:00Z",
-                "record_id": "r-max",
-                "claimed": true,
-            },
         });
         let out = parse_badges(&data);
         let badge = &out["badges"][0];
@@ -1099,13 +1074,8 @@ mod tests {
         assert_eq!(badge["url"], "https://x/b.png");
         assert_eq!(badge["taskType"], "daily");
         assert!(badge.get("task_id").is_none(), "原始下划线字段不外泄");
-
-        let cert = &out["maxCert"];
-        assert_eq!(cert["badgeId"], "b-max");
-        assert_eq!(cert["shareUuid"], "u-max");
-        assert_eq!(cert["earnedAt"], "2026-11-01T10:00:00Z");
-        assert_eq!(cert["recordId"], "r-max");
-        assert_eq!(cert["claimed"], true);
+        // 只有 badges 一个字段，max_cert 不再输出。
+        assert!(out.get("maxCert").is_none());
     }
 
     #[test]
@@ -1116,8 +1086,6 @@ mod tests {
         assert_eq!(first["earned"], false);
         assert_eq!(first["claimable"], false);
         assert_eq!(out["badges"][1]["taskId"], "only-id");
-        // 没有 max_cert → null；形状不对也不 panic。
-        assert!(out["maxCert"].is_null());
         assert!(parse_badges(&json!({})).get("badges").unwrap().is_array());
         assert!(
             parse_badges(&json!({"badges": "nope", "max_cert": 3}))["badges"]
@@ -1125,7 +1093,13 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
-        assert!(parse_badges(&json!({"max_cert": 3}))["maxCert"].is_null());
+        // 只有 max_cert 没有 badges：同样给空数组，不 panic。
+        assert!(
+            parse_badges(&json!({"max_cert": 3}))["badges"]
+                .as_array()
+                .unwrap()
+                .is_empty()
+        );
     }
 
     #[test]

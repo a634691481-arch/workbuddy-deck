@@ -1,13 +1,14 @@
 <script setup lang="ts">
-// 成长抽屉：徽章墙 + 盲盒额度 + 任务看板。
-// 纯展示：数据与写操作都在 TasksView（AGENTS.md §0 分层），关闭/刷新/领取只用 emit 回抛。
+// 成长抽屉：只做布局（外壳 + 头部 + 盲盒额度卡），徽章墙与任务看板拆成子组件。
+// 纯展示：数据与写操作在 useGrowthCenter / TasksView（AGENTS.md §0），只用 emit 回抛。
 import { computed, onBeforeUnmount, watch } from "vue";
-import { CircleAlert, Inbox, Loader2, Lock } from "lucide-vue-next";
+import { CircleAlert, Inbox, Loader2 } from "lucide-vue-next";
 
+import GrowthBadgeGrid from "@/components/GrowthBadgeGrid.vue";
+import GrowthTaskBoard from "@/components/GrowthTaskBoard.vue";
 import Button from "@/components/ui/Button.vue";
 import type { BuddyQuota, GrowthBadge, GrowthTask } from "@/lib/api";
-import { t, type I18nKey } from "@/lib/i18n";
-import { progressOf } from "@/lib/task-meta";
+import { t } from "@/lib/i18n";
 
 const props = withDefaults(
   defineProps<{
@@ -18,16 +19,16 @@ const props = withDefaults(
     loading: boolean;
     error?: string;
     claiming?: boolean;
+    /** 领取完成后的结果行（可领取数前后对比） */
+    note?: string;
+    /** 批量任务运行中：领取按钮不可点，避免点了没反应。 */
+    busy?: boolean;
   }>(),
-  { error: "", claiming: false },
+  { error: "", claiming: false, busy: false, note: "" },
 );
 
 const emit = defineEmits<{ close: []; refresh: []; claim: [] }>();
 
-/** 后端可能带 locked 标记，但前端契约（GrowthTask）未声明：按可选字段安全读取。 */
-const lockedOf = (task: GrowthTask) => (task as GrowthTask & { locked?: boolean }).locked === true;
-
-const earnedCount = computed(() => props.badges.filter((badge) => badge.earned).length);
 const affordable = computed(() => props.quota?.affordable ?? 0);
 const showLoading = computed(
   () =>
@@ -39,42 +40,6 @@ const showLoading = computed(
 const empty = computed(
   () => !props.loading && !props.error && props.badges.length === 0 && !props.quota && props.tasks.length === 0,
 );
-
-/** 四态看板：可领取 = 做完未领（completed），已领取 = claimed。 */
-type GroupKey = "claimable" | "inProgress" | "notStarted" | "claimed";
-const GROUP_DEFS: { key: GroupKey; labelKey: I18nKey }[] = [
-  { key: "claimable", labelKey: "gr.claimable" },
-  { key: "inProgress", labelKey: "gr.inProgress" },
-  { key: "notStarted", labelKey: "gr.notStarted" },
-  { key: "claimed", labelKey: "gr.claimed" },
-];
-
-function groupOf(task: GrowthTask): GroupKey {
-  if (lockedOf(task)) return "notStarted";
-  switch (task.accept_status) {
-    case "completed":
-      return "claimable";
-    case "accepted":
-      return "inProgress";
-    case "claimed":
-      return "claimed";
-    default:
-      return "notStarted";
-  }
-}
-
-const groups = computed(() =>
-  GROUP_DEFS.map((def) => ({
-    ...def,
-    items: props.tasks.filter((task) => groupOf(task) === def.key),
-  })).filter((group) => group.items.length > 0),
-);
-
-/** 徽章图 404/失效时隐藏，不留破图空框。 */
-function hideImage(event: Event) {
-  const image = event.target as HTMLImageElement | null;
-  if (image) image.style.display = "none";
-}
 
 /** Esc 关闭（与点遮罩 / 点 ✕ 等价） */
 function onKeydown(event: KeyboardEvent) {
@@ -128,7 +93,7 @@ onBeforeUnmount(() => {
           </header>
 
           <div class="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
-            <!-- 错误：原文透出，便于排查接口 -->
+            <!-- 错误：只按 error prop 判断，原文透出便于排查接口 -->
             <div v-if="props.error" class="border border-hazard bg-hazard-soft px-3 py-2">
               <div class="flex items-center gap-1.5 text-[11px] text-hazard">
                 <CircleAlert class="size-3.5 shrink-0" />
@@ -159,57 +124,7 @@ onBeforeUnmount(() => {
 
             <template v-else>
               <!-- a) 徽章墙 -->
-              <section class="border border-border bg-panel">
-                <header class="flex items-center gap-1.5 border-b border-border px-2 py-1.5">
-                  <span class="lbl text-hazard">[</span>
-                  <span class="lbl lbl-ink">{{ t("gr.badges") }}</span>
-                  <span class="lbl text-hazard">]</span>
-                  <span class="readout ml-auto text-[10px] text-faint">
-                    {{ t("gr.earned") }} {{ earnedCount }}/{{ props.badges.length }}
-                  </span>
-                </header>
-
-                <div
-                  v-if="props.badges.length > 0"
-                  class="grid grid-cols-2 gap-2 p-2 md:grid-cols-3 xl:grid-cols-4"
-                >
-                  <div
-                    v-for="badge in props.badges"
-                    :key="badge.code"
-                    class="flex min-w-0 flex-col items-center gap-1 border border-border px-1.5 py-2"
-                    :class="badge.earned ? 'bg-card' : 'grayscale opacity-50'"
-                    :title="badge.badgeName || badge.title"
-                  >
-                    <div class="relative size-10 shrink-0">
-                      <img
-                        v-if="badge.url"
-                        :src="badge.url"
-                        :alt="badge.badgeName || badge.title"
-                        loading="lazy"
-                        class="size-10 object-contain"
-                        @error="hideImage"
-                      />
-                      <span
-                        v-else
-                        class="flex size-10 items-center justify-center border border-dashed border-border text-[12px] text-faint"
-                      >
-                        ?
-                      </span>
-                      <Lock
-                        v-if="!badge.earned"
-                        class="absolute -bottom-1 -right-1 size-3 bg-panel text-faint"
-                      />
-                    </div>
-                    <span
-                      class="w-full truncate text-center text-[10px]"
-                      :class="badge.earned ? 'text-foreground' : 'text-faint'"
-                    >
-                      {{ badge.badgeName || badge.title || badge.code }}
-                    </span>
-                  </div>
-                </div>
-                <p v-else class="px-2 py-3 text-[10px] text-faint">{{ t("gr.empty") }}</p>
-              </section>
+              <GrowthBadgeGrid :badges="props.badges" />
 
               <!-- b) 盲盒额度 -->
               <section class="border border-border bg-panel">
@@ -248,91 +163,17 @@ onBeforeUnmount(() => {
                     </div>
                   </div>
                 </div>
-
-                <p
-                  v-if="props.quota && props.quota.ok !== true"
-                  class="readout border-t border-border px-2 py-1.5 text-[10px] text-hazard"
-                >
-                  {{ t("gr.error") }}{{ props.quota.error ? ` · ${props.quota.error}` : "" }}
-                </p>
               </section>
 
-              <!-- c) 任务看板：四态分组，只有「可领取」组给领取按钮 -->
-              <section class="border border-border bg-panel">
-                <header class="flex items-center gap-1.5 border-b border-border px-2 py-1.5">
-                  <span class="lbl text-hazard">[</span>
-                  <span class="lbl lbl-ink">{{ t("gr.tasks") }}</span>
-                  <span class="lbl text-hazard">]</span>
-                  <span class="readout ml-auto text-[10px] text-faint">
-                    {{ props.tasks.length }}
-                  </span>
-                </header>
-
-                <p v-if="groups.length === 0" class="px-2 py-3 text-[10px] text-faint">
-                  {{ t("gr.empty") }}
-                </p>
-
-                <div
-                  v-for="group in groups"
-                  :key="group.key"
-                  class="border-b border-border last:border-b-0"
-                >
-                  <div class="flex items-center gap-1.5 bg-muted/40 px-2 py-1">
-                    <span
-                      class="lbl"
-                      :class="group.key === 'claimable' ? 'text-hazard' : 'text-muted-foreground'"
-                    >
-                      {{ t(group.labelKey) }}
-                    </span>
-                    <span class="readout text-[9px] text-faint">
-                      {{ String(group.items.length).padStart(2, "0") }}
-                    </span>
-                    <Button
-                      v-if="group.key === 'claimable'"
-                      variant="default"
-                      size="sm"
-                      class="ml-auto"
-                      :disabled="props.claiming || props.loading"
-                      @click="emit('claim')"
-                    >
-                      <Loader2 v-if="props.claiming" class="size-3 animate-spin" />
-                      {{ t("gr.claim") }}
-                    </Button>
-                  </div>
-
-                  <ul>
-                    <li
-                      v-for="task in group.items"
-                      :key="task.task_code"
-                      class="flex items-center gap-2 border-t border-border/60 px-2 py-1.5"
-                      :class="lockedOf(task) ? 'opacity-50' : ''"
-                    >
-                      <div class="min-w-0 flex-1">
-                        <div
-                          class="truncate text-[11px]"
-                          :class="group.key === 'claimed' ? 'text-muted-foreground' : 'text-foreground'"
-                          :title="task.task_desc || task.title"
-                        >
-                          {{ task.title || task.task_code }}
-                        </div>
-                        <div class="readout text-[9px] text-faint">{{ progressOf(task) }}</div>
-                      </div>
-                      <span
-                        v-if="lockedOf(task)"
-                        class="shrink-0 border border-border px-1 text-[9px] text-faint"
-                      >
-                        {{ t("gr.lockedTask") }}
-                      </span>
-                      <span
-                        class="readout shrink-0 text-[10px]"
-                        :class="group.key === 'claimed' ? 'text-faint' : 'text-muted-foreground'"
-                      >
-                        +{{ task.reward_credit ?? 0 }}
-                      </span>
-                    </li>
-                  </ul>
-                </div>
-              </section>
+              <!-- c) 任务看板 -->
+              <GrowthTaskBoard
+                :tasks="props.tasks"
+                :loading="props.loading"
+                :claiming="props.claiming"
+                :busy="props.busy"
+                :note="props.note"
+                @claim="emit('claim')"
+              />
             </template>
           </div>
         </div>

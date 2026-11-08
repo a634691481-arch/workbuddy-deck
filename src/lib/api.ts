@@ -37,6 +37,8 @@ export interface GrowthTask {
   skipped?: string | null;
   /** 官方入口（workbuddy:// 深链或 https 页面） */
   jumpUrl?: string | null;
+  /** 服务端原样返回：进阶任务未解锁时为 true */
+  locked?: boolean;
 }
 
 export interface GrowthRow {
@@ -50,7 +52,8 @@ export interface GrowthRow {
 
 /** 成长中心徽章（`/v2/activity/growth/badges`）。 */
 export interface GrowthBadge {
-  taskId: number;
+  /** 后端 `task_id` 原样字符串（不是数字）。 */
+  taskId: string;
   code: string;
   title: string;
   badgeName: string;
@@ -63,12 +66,10 @@ export interface GrowthBadge {
 
 /** 盲盒额度（`/activity/growth/buddy/quota`）：能量余额与还能开几次。 */
 export interface BuddyQuota {
-  ok: boolean;
   balance: number;
   costPerOpen: number;
   affordable: number;
   maxOpenCount: number;
-  error?: string;
 }
 
 export interface GrowthAssets {
@@ -81,7 +82,8 @@ export interface GrowthAssets {
 export const growthAssets = (accountId?: string) =>
   invoke<GrowthAssets>("growth_assets", { accountId });
 
-/** 签到状态：`raw` 是服务端原始字段，放到「原始响应」页展示。 */export interface CheckinStatus {
+/** 签到状态：`raw` 是服务端原始字段，放到「原始响应」页展示。 */
+export interface CheckinStatus {
   ok?: boolean;
   todayCheckedIn?: boolean;
   statusUnsupported?: boolean;

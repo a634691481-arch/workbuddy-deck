@@ -20,7 +20,7 @@ import TelemetryBar from "@/components/TelemetryBar.vue";
 import { useAssistant } from "@/composables/useAssistant";
 import { useBalance } from "@/composables/useBalance";
 import { useAccountGroups } from "@/composables/useAccountGroups";
-import { growthAssets, type BuddyQuota, type GrowthBadge } from "@/lib/api";
+import { useGrowthCenter } from "@/composables/useGrowthCenter";
 import { t } from "@/lib/i18n";
 import { isDone, mask } from "@/lib/task-meta";
 import { isTauri } from "@/lib/tauri-env";
@@ -67,47 +67,48 @@ const {
 // 未完成明细默认收起（与失败条一致）
 const showPending = ref(false);
 
-// 成长抽屉：徽章/盲盒额度走 growth_assets，任务直接用当前账号的 detail.growth.tasks
-const growthOpen = ref(false);
-const growthLoading = ref(false);
-const growthError = ref("");
-const growthBadges = ref<GrowthBadge[]>([]);
-const growthQuota = ref<BuddyQuota | null>(null);
-const growthClaiming = ref(false);
+// 成长抽屉：徽章/盲盒额度走 useGrowthCenter，任务直接用当前账号的 detail.growth.tasks
+const {
+  open: growthOpen,
+  loading: growthLoading,
+  error: growthError,
+  badges: growthBadges,
+  quota: growthQuota,
+  claiming: growthClaiming,
+  openGrowth,
+  refresh: refreshGrowth,
+  claim: claimGrowth,
+} = useGrowthCenter();
 
-async function loadGrowth() {
-  growthLoading.value = true;
-  growthError.value = "";
-  try {
-    const result = await growthAssets(activeId.value ?? undefined);
-    growthBadges.value = result.badges ?? [];
-    growthQuota.value = result.quota ?? null;
-    if (result.ok !== true) growthError.value = result.error ?? "";
-  } catch (error) {
-    growthBadges.value = [];
-    growthQuota.value = null;
-    growthError.value = String(error);
-  } finally {
-    growthLoading.value = false;
-  }
+/** 领取完成后的结果行（抽屉内可见，不依赖 toast）。 */
+const growthNote = ref("");
+
+function openGrowthDrawer() {
+  openGrowth(activeId.value);
 }
 
-function openGrowth() {
-  growthOpen.value = true;
-  void loadGrowth();
+function reloadGrowth() {
+  void refreshGrowth(activeId.value);
+  growthNote.value = "";
 }
 
-/** 领取 = 复用批量「成长」动作，跑完重拉徽章与额度（领取会改这两块）。 */
-async function claimGrowth() {
+// 抽屉开着时切账号：徽章/额度跟着换，别让上一号的图挂在屏幕上
+watch(activeId, (id) => {
+  if (growthOpen.value) void refreshGrowth(id);
+});
+
+/** 领取复用批量「成长」动作；composable 不依赖 useAssistant，runner 由视图注入。 */
+async function claimGrowthTasks() {
   const id = activeId.value;
-  if (!id || growthClaiming.value) return;
-  growthClaiming.value = true;
-  try {
-    await runAction("growth", [id]);
-    await loadGrowth();
-  } finally {
-    growthClaiming.value = false;
-  }
+  if (!id) return;
+  const before = claimableCount.value;
+  await claimGrowth(id, (target) => runAction("growth", [target]));
+  // 看板数据在 detail.growth 里：跑完重拉详情才能看到 claimed 变化
+  await selectAccount(id);
+  growthNote.value = t("gr.claimNote", {
+    from: String(before),
+    to: String(claimableCount.value),
+  });
 }
 
 // 分组速选：只读分组数据，编辑入口在账号管理页
@@ -155,6 +156,10 @@ onBeforeUnmount(() => {
 
 const errorLogCount = computed(() => logs.value.filter((line) => line.level === "err").length);
 const tasks = computed(() => detail.value?.growth.tasks ?? []);
+/** 可领取数（做完未领）：领取前后对比用。 */
+const claimableCount = computed(
+  () => tasks.value.filter((task) => task.accept_status === "completed").length,
+);
 const taskDone = computed(() => tasks.value.filter(isDone).length);
 const signedToday = computed(() => detail.value?.checkin.todayCheckedIn === true);
 const balanceValue = computed(() =>
@@ -221,7 +226,7 @@ function retryFailures() {
           :signing="busyAction === 'single'"
           :disabled="busy"
           @signin="signinOnce"
-          @growth="openGrowth"
+          @growth="openGrowthDrawer"
         />
 
         <TelemetryBar
@@ -352,9 +357,11 @@ function retryFailures() {
       :loading="growthLoading"
       :error="growthError"
       :claiming="growthClaiming"
+      :note="growthNote"
+      :busy="run.running"
       @close="growthOpen = false"
-      @refresh="loadGrowth"
-      @claim="claimGrowth"
+      @refresh="reloadGrowth"
+      @claim="claimGrowthTasks"
     />
   </div>
 </template>
