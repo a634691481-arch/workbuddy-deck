@@ -10,6 +10,7 @@ import AppSidebar from "@/components/AppSidebar.vue";
 import BootOverlay from "@/components/BootOverlay.vue";
 import CommandPalette from "@/components/CommandPalette.vue";
 import TitleBar from "@/components/TitleBar.vue";
+import UpdateDialog from "@/components/UpdateDialog.vue";
 import AccountsView from "@/views/AccountsView.vue";
 import ArchivedView from "@/views/ArchivedView.vue";
 import CreditsView from "@/views/CreditsView.vue";
@@ -18,12 +19,27 @@ import SettingsView from "@/views/SettingsView.vue";
 import TasksView from "@/views/TasksView.vue";
 import TokensView from "@/views/TokensView.vue";
 import { useShell } from "@/composables/useShell";
+import { useUpdate } from "@/composables/useUpdate";
 import { autoSwitchCancel, autoSwitchConfirm, importLocalAccounts } from "@/lib/api";
 import { isTauri } from "@/lib/tauri-env";
 import { t } from "@/lib/i18n";
 import type { NavKey } from "@/lib/nav";
 
 const { accountCount, running, nav } = useShell();
+
+// 静默更新的可见层：下载/安装阶段弹框展示版本说明与进度，重启后由安装器接管
+const {
+  dialogOpen: updateOpen,
+  phase: updatePhase,
+  latest: updateLatest,
+  current: updateCurrent,
+  notes: updateNotes,
+  percent: updatePercent,
+  downloaded: updateDownloaded,
+  total: updateTotal,
+  message: updateMessage,
+  dismiss: dismissUpdate,
+} = useUpdate();
 
 // Ctrl/Cmd+K 命令面板：只做分区跳转，不复制业务动作
 const paletteOpen = ref(false);
@@ -256,6 +272,19 @@ const booting = ref(true);
         </template>
       </div>
     </Transition>
+
+    <UpdateDialog
+      :open="updateOpen"
+      :current="updateCurrent"
+      :latest="updateLatest"
+      :notes="updateNotes"
+      :percent="updatePercent"
+      :downloaded="updateDownloaded"
+      :total="updateTotal"
+      :phase="updatePhase"
+      :error="updateMessage"
+      @close="dismissUpdate"
+    />
 
     <CommandPalette :open="paletteOpen" @close="paletteOpen = false" @nav="nav = $event" />
 

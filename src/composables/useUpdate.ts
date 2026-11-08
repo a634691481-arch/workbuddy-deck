@@ -29,6 +29,14 @@ const autoCheck = ref(true);
 const mirror = ref("");
 
 /**
+ * 更新弹框的阶段：下载 → 校验/安装 → 重启。
+ * 只做展示，不改变后台安装流程（下载仍由后端 spawn 的 updater 完成）。
+ */
+export type UpdatePhase = "idle" | "downloading" | "installing" | "restarting" | "failed";
+const phase = ref<UpdatePhase>("idle");
+const dialogOpen = ref(false);
+
+/**
  * 静默更新：默认开启。检测到新版本后自己下载并安装，不弹任何提示；
  * 唯一让步是「批量任务正在跑」时等它空闲，避免把用户正在跑的批次直接掐掉。
  */
@@ -66,11 +74,26 @@ function wire() {
     const p = payload as UpdateProgress;
     downloaded.value = p.downloaded ?? 0;
     total.value = p.total ?? null;
+    // 进度条走满 = 下载结束，插件紧接着校验并启动安装器
+    if (
+      phase.value === "downloading" &&
+      typeof total.value === "number" &&
+      total.value > 0 &&
+      downloaded.value >= total.value
+    ) {
+      phase.value = "installing";
+    }
   });
   void bind("update://done", (payload) => {
     const done = payload as UpdateDone;
     installing.value = false;
-    if (!done.ok) message.value = done.error ?? "";
+    if (done.ok) {
+      // Windows 上插件启动安装器后会结束本进程；弹框保持到进程退出
+      phase.value = "restarting";
+      return;
+    }
+    phase.value = "failed";
+    message.value = done.error ?? "";
   });
 }
 
@@ -110,6 +133,9 @@ export function useUpdate() {
 
   const current = computed(() => status.value?.current ?? "");
   const hasUpdate = computed(() => status.value?.hasUpdate === true);
+  const latest = computed(() => status.value?.latest ?? "");
+  /** 更新说明：清单里的 notes；老清单可能没有，弹框里给兜底文案 */
+  const notes = computed(() => (status.value?.notes ?? "").trim());
 
   async function loadConfig() {
     if (!isTauri()) return;
@@ -148,14 +174,18 @@ export function useUpdate() {
     downloaded.value = 0;
     total.value = null;
     message.value = "";
+    dialogOpen.value = true;
+    phase.value = "downloading";
     try {
       const result = await updateInstall();
       if (!result.ok) {
         installing.value = false;
+        phase.value = "failed";
         message.value = result.error ?? "";
       }
     } catch (cause) {
       installing.value = false;
+      phase.value = "failed";
       message.value = cause instanceof Error ? cause.message : String(cause);
     }
   }
@@ -171,6 +201,11 @@ export function useUpdate() {
     }
     autoCheck.value = result.autoCheck;
     mirror.value = result.mirror;
+  }
+
+  /** 只有失败态允许关掉弹框；下载中/重启中关掉就看不到进度了。 */
+  function dismiss() {
+    if (phase.value === "failed" || phase.value === "idle") dialogOpen.value = false;
   }
 
   function setSilent(on: boolean) {
@@ -191,6 +226,11 @@ export function useUpdate() {
     current,
     hasUpdate,
     silent,
+    latest,
+    notes,
+    phase,
+    dialogOpen,
+    dismiss,
     loadConfig,
     check,
     install,
