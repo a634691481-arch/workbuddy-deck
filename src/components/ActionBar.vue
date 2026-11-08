@@ -103,7 +103,7 @@ onBeforeUnmount(clearPending);
 
     <!-- 中断 -->
     <div class="ml-auto flex items-center gap-2 border-l border-border px-2">
-      <span class="lbl w-[132px] shrink-0 text-right text-hazard">
+      <span class="lbl min-w-[132px] shrink-0 whitespace-nowrap text-right text-hazard">
         {{ pending !== "" ? t("ab.confirmHint") : "" }}
       </span>
       <Button
