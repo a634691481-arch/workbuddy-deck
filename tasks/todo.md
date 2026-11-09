@@ -810,3 +810,15 @@ decision(forced-on) = Skip("当前账号未被限流")
 ### 回顾
 - 静默 ≠ 不可见：用户要的是不打断，不是不知道；可见层只订阅事件，不参与安装时序
 - 阶段衔接用「进度满 100%」推断插件内部时点，比在后端拆 download/install 更安全（插件是原子调用）
+
+## 2026-11-09 暂停自动切换账号
+
+- [x] 注释 `start_rate_limit_watcher`（1s 快路径 + 60s 兜底）与 `commands::spawn_auto_switch`（2min 巡检）两处调用
+- [x] 两函数加 `#[allow(dead_code)]` 保留实现，恢复时取消注释即可
+- [x] 设置页「限流自动切换」显示「已停用（2026-11-09 暂时关闭）」，开关禁用
+- [x] 验证：clippy 0、vue-tsc 0、build 通过
+
+### 回顾
+- 本项目没有独立「到期」判据的自动切换；只有限流触发的 `auto_switch`。所谓「到期切换」若是
+  core `rotate` 那套（CodeBuddy CLI 防积分过期），本应用从未接线，无需改。
+- 停用要停「调度入口」而不是删命令：`auto_switch_apply` 保留，手动排查还能用。
