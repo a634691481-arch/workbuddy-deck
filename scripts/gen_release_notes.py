@@ -24,9 +24,17 @@ FOOTER = (
 
 
 def git(*args: str) -> str:
-    return subprocess.run(
-        ["git", *args], check=False, capture_output=True, text=True
-    ).stdout.strip()
+    # Windows runner 的默认编码不是 UTF-8：中文提交信息会在这里抛 UnicodeDecodeError，
+    # 显式指定 utf-8 并允许替换，宁可丢一两个字符也不能让发版失败。
+    result = subprocess.run(
+        ["git", *args],
+        check=False,
+        capture_output=True,
+        text=True,
+        encoding="utf-8",
+        errors="replace",
+    )
+    return result.stdout.strip()
 
 
 def previous_tag() -> str:
@@ -62,8 +70,20 @@ def build_body() -> str:
     return f"{head}\n\n{items}\n\n{FOOTER}"
 
 
+FALLBACK = (
+    "本次更新包含功能改进与问题修复。\n\n"
+    "Windows / Linux / macOS 安装包与 `latest.json` 由 CI 产出；"
+    "`.sig` 用于客户端校验，请勿单独分发安装包。"
+)
+
+
 def main() -> int:
-    body = build_body()
+    # 发布说明是锦上添花，绝不能因为它让整个发版失败：任何异常都退回通用文案。
+    try:
+        body = build_body()
+    except Exception as error:  # noqa: BLE001 - 兜底就是为了吞掉一切
+        print(f"release notes fallback: {error}", file=sys.stderr)
+        body = FALLBACK
     if "--print" in sys.argv:
         print(body)
         return 0
