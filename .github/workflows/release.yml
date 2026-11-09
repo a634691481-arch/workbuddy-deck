@@ -32,7 +32,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      # fetch-depth: 0：发布说明要按上一个 tag 生成，浅克隆拿不到 tag
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - uses: actions/setup-node@v4
         with:
@@ -56,6 +59,18 @@ jobs:
 
       - run: npm ci
 
+      # 发布说明：按上一个 tag 生成 markdown；同时会写进 latest.json 的 notes，
+      # 供应用内更新弹框的「本次更新内容」使用。
+      - name: Build release notes
+        id: notes
+        shell: bash
+        env:
+          # 手动触发时 GITHUB_REF_NAME 是分支名，优先用输入里的 tag
+          RELEASE_TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+        run: |
+          if command -v python3 >/dev/null 2>&1; then PY=python3; else PY=python; fi
+          "$PY" scripts/gen_release_notes.py
+
       # 每个平台只发自己的资产；latest.json 由 tauri-action 合并平台条目
       - uses: tauri-apps/tauri-action@v0
         env:
@@ -65,10 +80,7 @@ jobs:
         with:
           tagName: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
           releaseName: "WorkBuddy Deck ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}"
-          releaseBody: |
-            Windows / Linux / macOS 安装包与 `latest.json` 由 CI 产出，应用内「系统设置 → 自动更新」会发现本版本。
-            `.sig` 用于客户端校验，请勿单独分发安装包。
-            macOS 仅提供 Apple Silicon（aarch64）安装包，未签名，首次打开需右键 → 打开。
+          releaseBody: ${{ steps.notes.outputs.body }}
           releaseDraft: false
           prerelease: false
           includeUpdaterJson: true
