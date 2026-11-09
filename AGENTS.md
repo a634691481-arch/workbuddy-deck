@@ -146,6 +146,11 @@ StatusBar   24px  ● READY · 最近刷新 · 账号数 · 日志数
   两个坑：① 倒计时中点心「立即切换」只举 `AUTO_SWITCH_CONFIRM` 旗，不能再起一次
   （会撞自己的名额闸门）；② 0 秒模式用 `awaitingConfirm` 表示，前端不要起 ticker，
   后端最多等 10 分钟，超时按取消处理。
+- **自动切换暂停（2026-11-09）**：用户要求先关闭「自动切换账号」。两个调度入口已在 `src-tauri/src/lib.rs`
+  注释（`start_rate_limit_watcher` 的 1s/60s 与 `commands::spawn_auto_switch` 的 2min），两处都加了
+  `#[allow(dead_code)]` 保留实现；设置页显示「自动切换已停用」且开关禁用。
+  手动切换、`auto_switch_apply` 命令本身仍在（手动触发/恢复调试用）。**恢复时两个入口一起取消注释**，
+  只恢复一个会变成「1 秒响应但没巡检」或反之的半残状态。
 - **切换的硬约束（勿删）**：① 会话替换 `replaced !== true` 时 fail-closed，不写认证；
   ② 写后读磁盘校验 uid，`identity-mismatch` 必须回滚；③ 历史写入失败不得影响切换结果。
 - **切换终态事件（勿删）**：`switch_workbuddy_account` 与 `auto_switch_run` 结束时都发

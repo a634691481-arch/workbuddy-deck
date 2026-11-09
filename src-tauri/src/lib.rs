@@ -108,7 +108,9 @@ pub fn run() {
             vibrancy::set_backdrop,
         ])
         .setup(|app| {
-            start_rate_limit_watcher(app.handle().clone());
+            // 2026-11-09 用户要求暂时关闭「自动切换账号」：限流快路径/兜底轮询一并停掉。
+            // 恢复时把这行取消注释（与 spawn_auto_switch 一起恢复，只恢复一个会变成半残状态）。
+            // start_rate_limit_watcher(app.handle().clone());
 
             // 托盘菜单：快捷执行在上，退出压到最下面并与其他项分隔。
             let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
@@ -182,7 +184,9 @@ pub fn run() {
             tray::refresh(app.handle());
 
             // 限流巡检：默认关闭，开启后每 2 分钟判定一次
-            commands::spawn_auto_switch(app.handle().clone());
+            // 2026-11-09 用户要求暂时关闭「自动切换账号」：先注释调度入口，手动切换不受影响。
+            // 恢复时把下面一行取消注释即可（三个入口都挂在这个 spawn 里，不要只恢复其中之一）。
+            // commands::spawn_auto_switch(app.handle().clone());
 
             // 每日定时调度：常驻期间后台自转，到点自动跑「全部日常」
             scheduler::spawn(app.handle().clone());
@@ -229,6 +233,7 @@ pub fn run() {
 /// 命中新事件才解析——空闲开销基本为零，延迟 1 秒，足够。
 ///
 /// 60s 兜底轮询保留：hook 未安装时日志扫描路径仍能捞出限流，只是慢一点。
+#[allow(dead_code)] // 2026-11-09 自动切换暂停：实现保留，恢复调用即可
 fn start_rate_limit_watcher(app: tauri::AppHandle) {
     let app_for_hook = app.clone();
     wb_switch_core::modules::rate_limit_events::spawn_watcher(move || {

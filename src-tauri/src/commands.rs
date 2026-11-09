@@ -1754,6 +1754,7 @@ pub fn auto_switch_check() -> Value {
 /// **不再自己拼切换逻辑**：统一走 `auto_switch_apply`，那里有并发互斥、
 /// 批量任务闸门与「和手动一致」的完全同步。以前这里另写一份 plain 切换，
 /// 三个入口各切各的，导致同一目标 16 秒内被切两次。
+#[allow(dead_code)] // 2026-11-09 自动切换暂停：实现保留，恢复调用即可
 pub fn spawn_auto_switch(app: tauri::AppHandle) {
     tauri::async_runtime::spawn(async move {
         loop {

@@ -189,7 +189,9 @@ async function runAutoCheck() {
   }
 }
 
-const autoOn = computed(() => autoSwitch.value?.config.enabled === true);
+/** 2026-11-09 用户要求暂停自动切换：后端调度已注释，界面同步显示为关闭且不可操作。 */
+const AUTO_SWITCH_PAUSED = true;
+const autoOn = computed(() => !AUTO_SWITCH_PAUSED && autoSwitch.value?.config.enabled === true);
 const autoNotifyOnly = computed(() => autoSwitch.value?.config.notifyOnly !== false);
 const autoAsk = computed(() => autoSwitch.value?.config.askBeforeSwitch !== false);
 const autoBgNotify = computed(() => autoSwitch.value?.config.notifyWhenBackground !== false);
@@ -633,13 +635,16 @@ async function doClear() {
               type="button"
               class="readout border px-1.5 py-0.5 text-[8px] uppercase transition-colors disabled:opacity-40"
               :class="autoOn ? 'border-hazard bg-hazard-soft text-hazard' : 'border-border-strong text-faint hover:text-foreground'"
-              :disabled="autoBusy"
+              :disabled="autoBusy || AUTO_SWITCH_PAUSED"
               @click="patchAutoSwitch({ enabled: !autoOn })"
             >
               {{ autoOn ? t("st.autoOn") : t("st.autoOff") }}
             </button>
           </div>
-          <p class="border-b border-border/40 px-3 py-1.5 text-[9px] leading-4 text-faint">{{ t("st.autoSwitchHint") }}</p>
+          <p class="border-b border-border/40 px-3 py-1.5 text-[9px] leading-4 text-faint">
+            <span class="text-hazard">{{ t("st.autoSwitchOff") }}</span>
+            · {{ t("st.autoSwitchHint") }}
+          </p>
           <div class="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
             <div class="flex shrink-0 overflow-hidden">
               <button
