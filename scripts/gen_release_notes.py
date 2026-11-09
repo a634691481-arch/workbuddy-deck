@@ -50,7 +50,7 @@ def commits(prev: str) -> list[str]:
     keep = [
         line
         for line in lines
-        if not line.lower().startswith(("docs", "chore: release", "Merge "))
+        if not line.lower().startswith(("docs", "ci", "chore", "Merge "))
     ]
     return (keep or lines)[:MAX_LINES]
 

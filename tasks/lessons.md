@@ -35,3 +35,13 @@
    规则：同一流程里错误分支必须 `return`，不能靠「下一条不会覆盖」的侥幸。
 
 另：`cargo clippy` 不编译测试代码，测试文件里的字段缺失只有 `cargo test` 才发现——加字段后必须跑一次 `cargo test --lib`。
+
+## 2026-11-09 发版 CI：中文提交把 Windows job 打红
+
+- 现象：release workflow 只有 windows-latest 挂在「Build release notes」，ubuntu/mac 正常。
+- 原因：Python `subprocess.run(..., text=True)` 在 Windows runner 用系统默认编码（cp1252）解码
+  `git log` 的中文输出 → `UnicodeDecodeError`。
+- 修法：显式 `encoding="utf-8", errors="replace"`；整个说明生成包 try/except 兜底，
+  发布说明失败绝不能让发版失败；解释器用 `actions/setup-python`，别指望 runner 自带 `python3`。
+- 另：`npm run bump 0.1.28 --tag` 的 `--tag` 会被 npm 吞掉（要 `npm run bump 0.1.28 -- --tag`），
+  否则只改文件不提交/打 tag。
