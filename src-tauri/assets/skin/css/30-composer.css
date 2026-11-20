@@ -1,0 +1,588 @@
+/* Composer controls use light-theme component tokens even inside the dark skin. */
+html.workbuddy-dream-skin :is(
+  .wb-home-composer,
+  .input-area-container,
+  [class*="_input-area-container_"],
+  .wb-input-wrapper
+) button[class*="_trigger_"][title] {
+  color: var(--wbds-text) !important;
+  border-color: transparent !important;
+  background: transparent !important;
+}
+
+html.workbuddy-dream-skin :is(
+  .wb-home-composer,
+  .input-area-container,
+  [class*="_input-area-container_"],
+  .wb-input-wrapper
+) button[class*="_trigger_"][title]:is(:hover, :focus-visible, :active),
+html.workbuddy-dream-skin :is(
+  .wb-home-composer,
+  .input-area-container,
+  [class*="_input-area-container_"],
+  .wb-input-wrapper
+) button[class*="_trigger_"][title][class*="_triggerOpen_"] {
+  color: var(--wbds-interactive-text) !important;
+  border-color: color-mix(in srgb, var(--wbds-accent) 34%, transparent) !important;
+  background: color-mix(in srgb, var(--wbds-accent) 12%, var(--wbds-panel)) !important;
+}
+
+html.workbuddy-dream-skin :is(
+  .wb-home-composer,
+  .input-area-container,
+  [class*="_input-area-container_"],
+  .wb-input-wrapper
+) button[class*="_trigger_"][title] * {
+  color: inherit !important;
+}
+
+/* The chat composer has a separate untitled trigger for its cascading action
+   menu. WorkBuddy gives the open state a hard-coded #f2f2f2 surface. */
+html.workbuddy-dream-skin :is(
+  .input-area-container,
+  [class*="_input-area-container_"],
+  .wb-input-wrapper
+) button[aria-label="更多操作"][class*="_trigger_"] {
+  color: var(--wbds-text) !important;
+  border-color: transparent !important;
+  background: transparent !important;
+}
+
+html.workbuddy-dream-skin :is(
+  .input-area-container,
+  [class*="_input-area-container_"],
+  .wb-input-wrapper
+) button[aria-label="更多操作"][class*="_trigger_"]:is(
+  :hover,
+  :focus-visible,
+  :active,
+  [aria-expanded="true"],
+  [class*="_active_"]
+) {
+  color: var(--wbds-interactive-text) !important;
+  border-color: color-mix(in srgb, var(--wbds-accent) 34%, transparent) !important;
+  background: color-mix(in srgb, var(--wbds-accent) 13%, var(--wbds-panel)) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--wbds-accent) 7%, transparent) !important;
+}
+
+html.workbuddy-dream-skin :is(
+  .input-area-container,
+  [class*="_input-area-container_"],
+  .wb-input-wrapper
+) button[aria-label="更多操作"][class*="_trigger_"] * {
+  color: inherit !important;
+}
+
+html.workbuddy-dream-skin .wb-home-composer button[class*="_chip_"] {
+  color: var(--wbds-muted) !important;
+  border-color: transparent !important;
+  background: transparent !important;
+}
+
+html.workbuddy-dream-skin .wb-home-composer button[class*="_chip_"]:is(:hover, :focus-visible),
+html.workbuddy-dream-skin .wb-home-composer button[class*="_chip_"][class*="_chipOpen_"] {
+  color: var(--wbds-interactive-text) !important;
+  border-color: color-mix(in srgb, var(--wbds-accent) 30%, transparent) !important;
+  background: color-mix(in srgb, var(--wbds-accent) 10%, var(--wbds-panel)) !important;
+}
+
+html.workbuddy-dream-skin .wb-home-composer button[class*="_chip_"] * {
+  color: inherit !important;
+}
+
+html.workbuddy-dream-skin .wb-home-composer button[class*="_button_"]:has([class*="_label_"]) {
+  color: var(--wbds-text) !important;
+  border-color: transparent !important;
+  background: transparent !important;
+}
+
+html.workbuddy-dream-skin .wb-home-composer button[class*="_button_"]:has([class*="_label_"]):is(:hover, :focus-visible),
+html.workbuddy-dream-skin .wb-home-composer button[class*="_button_"]:has([class*="_label_"])[class*="_buttonOpen_"] {
+  color: var(--wbds-interactive-text) !important;
+  border-color: color-mix(in srgb, var(--wbds-accent) 30%, transparent) !important;
+  background: color-mix(in srgb, var(--wbds-accent) 10%, var(--wbds-panel)) !important;
+}
+
+html.workbuddy-dream-skin .wb-home-composer button[class*="_button_"]:has([class*="_label_"]) * {
+  color: inherit !important;
+}
+
+html.workbuddy-dream-skin [class*="_popover_"]:has([class*="_modelItem_"]) {
+  color: var(--wbds-text) !important;
+  border-color: var(--wbds-line) !important;
+  background: color-mix(in srgb, var(--wbds-background) 98.5%, transparent) !important;
+}
+
+html.workbuddy-dream-skin [class*="_popover_"]:has([class*="_modelItem_"]) :is(
+  [class*="_autoModeSection_"],
+  [class*="_groupLabel_"]
+) {
+  color: var(--wbds-text) !important;
+  border-color: var(--wbds-line) !important;
+  background: color-mix(in srgb, var(--wbds-background) 98.5%, transparent) !important;
+}
+
+html.workbuddy-dream-skin [class*="_popover_"]:has([class*="_modelItem_"]) [class*="_modelItem_"] {
+  color: var(--wbds-text) !important;
+  background: transparent !important;
+}
+
+html.workbuddy-dream-skin [class*="_popover_"]:has([class*="_modelItem_"]) [class*="_modelItem_"] * {
+  color: inherit !important;
+}
+
+html.workbuddy-dream-skin [class*="_popover_"]:has([class*="_modelItem_"]) [class*="_levelBadge_"] {
+  color: var(--wbds-text) !important;
+  border: 1px solid color-mix(in srgb, var(--wbds-line) 72%, transparent) !important;
+  background: var(--wbds-panel-alt) !important;
+}
+
+html.workbuddy-dream-skin [class*="_popover_"]:has([class*="_modelItem_"]) [class*="_modelItem_"]:is(
+  :hover,
+  [class*="_selected_"]
+),
+html.workbuddy-dream-skin [class*="_popover_"]:has([class*="_modelItem_"]) [class*="_footerActionItem_"]:hover {
+  color: var(--wbds-interactive-text) !important;
+  background: color-mix(in srgb, var(--wbds-accent) 12%, var(--wbds-panel)) !important;
+}
+
+html.workbuddy-dream-skin [class*="_popover_"]:has([class*="_modelItem_"]) [class*="_slider_"] {
+  background: color-mix(in srgb, var(--wbds-muted) 38%, var(--wbds-panel)) !important;
+}
+
+html.workbuddy-dream-skin [class*="_popover_"]:has([class*="_modelItem_"]) [class*="_slider_"]::before {
+  background: var(--wbds-accent-alt) !important;
+}
+
+html.workbuddy-dream-skin [class*="_popover_"]:has([class*="_modelItem_"]) input:checked + [class*="_slider_"] {
+  background: var(--wbds-accent) !important;
+}
+
+html.workbuddy-dream-skin [class*="_subMenu_"] {
+  color: var(--wbds-text) !important;
+  border: 1px solid var(--wbds-line) !important;
+  background: color-mix(in srgb, var(--wbds-background) 98.5%, transparent) !important;
+  box-shadow: 0 18px 46px rgba(0, 0, 0, .42) !important;
+}
+
+html.workbuddy-dream-skin [class*="_subMenu_"] :is(
+  [class*="_modelName_"],
+  [class*="_metaLabel_"],
+  [class*="_actionLabel_"]
+) {
+  color: var(--wbds-text) !important;
+}
+
+html.workbuddy-dream-skin [class*="_subMenu_"] :is(
+  [class*="_description_"],
+  [class*="_metaValue_"],
+  [class*="_actionValue_"]
+) {
+  color: var(--wbds-muted) !important;
+}
+
+html.workbuddy-dream-skin [class*="_subMenu_"] [class*="_divider_"] {
+  background: var(--wbds-line) !important;
+}
+
+html.workbuddy-dream-skin .wb-scene-tabs {
+  border: 1px solid var(--wbds-line) !important;
+  background: color-mix(in srgb, var(--wbds-panel) 90%, transparent) !important;
+}
+
+html.workbuddy-dream-skin .wb-scene-tabs > * {
+  color: var(--wbds-muted) !important;
+  background: transparent !important;
+}
+
+html.workbuddy-dream-skin .wb-scene-tabs > .active,
+html.workbuddy-dream-skin .wb-scene-tabs > [aria-selected="true"] {
+  color: var(--wbds-on-accent) !important;
+  background: var(--wbds-accent) !important;
+}
+
+html.workbuddy-dream-skin .update-toast-card {
+  color: var(--wbds-text) !important;
+  border-color: var(--wbds-line) !important;
+  background: color-mix(in srgb, var(--wbds-panel) 97%, transparent) !important;
+  box-shadow: 0 14px 34px rgba(0, 0, 0, .28) !important;
+}
+
+html.workbuddy-dream-skin .workbuddy-topbar {
+  color: var(--wbds-text) !important;
+  border-bottom: 1px solid var(--wbds-line) !important;
+  background: color-mix(in srgb, var(--wbds-background) 96%, transparent) !important;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .18) !important;
+  backdrop-filter: blur(18px) saturate(120%);
+}
+
+html.workbuddy-dream-skin .workbuddy-topbar * {
+  color: inherit !important;
+}
+
+html.workbuddy-dream-skin .conversation-list .conversation-agent-card[class*="_selected_"] {
+  color: var(--wbds-text) !important;
+  border: 1px solid color-mix(in srgb, var(--wbds-accent) 34%, transparent) !important;
+  background: color-mix(in srgb, var(--wbds-accent) 13%, var(--wbds-panel)) !important;
+  box-shadow: inset 3px 0 var(--wbds-accent) !important;
+}
+
+html.workbuddy-dream-skin .conversation-list .conversation-agent-card:hover,
+html.workbuddy-dream-skin .conversation-list [class*="_card_"]:hover {
+  color: var(--wbds-text) !important;
+  border-color: color-mix(in srgb, var(--wbds-accent) 28%, transparent) !important;
+  background: color-mix(in srgb, var(--wbds-accent) 10%, var(--wbds-panel)) !important;
+  box-shadow: inset 2px 0 color-mix(in srgb, var(--wbds-accent) 70%, transparent) !important;
+}
+
+html.workbuddy-dream-skin .conversation-list .conversation-list-tab-button:hover,
+html.workbuddy-dream-skin .conversation-list .conversation-list-tab-button-more:hover {
+  color: var(--wbds-interactive-text) !important;
+  border-color: color-mix(in srgb, var(--wbds-accent) 30%, transparent) !important;
+  background: color-mix(in srgb, var(--wbds-accent) 10%, var(--wbds-panel)) !important;
+}
+
+html.workbuddy-dream-skin .conversation-list :is(.conversation-list-tab-row.active, .conversation-list-tab-row:hover, .conversation-list-tab-button.active) {
+  color: var(--wbds-interactive-text) !important;
+  border-color: color-mix(in srgb, var(--wbds-accent) 30%, transparent) !important;
+  background: color-mix(in srgb, var(--wbds-accent) 12%, var(--wbds-panel)) !important;
+}
+
+html.workbuddy-dream-skin .conversation-list :is(.conversation-list-tab-row.active, .conversation-list-tab-row:hover, .conversation-list-tab-button.active) * {
+  color: inherit !important;
+  background-color: transparent !important;
+}
+
+html.workbuddy-dream-skin .conversation-list :is(.conversation-list-tab-button, .conversation-list-tab-button-more):is(:hover, :focus, :active) *,
+html.workbuddy-dream-skin .conversation-list :is(.conversation-list-tab-button, .conversation-list-tab-button-more):is(:hover, :focus, :active)::before,
+html.workbuddy-dream-skin .conversation-list :is(.conversation-list-tab-button, .conversation-list-tab-button-more):is(:hover, :focus, :active)::after {
+  color: inherit !important;
+  background-color: transparent !important;
+}
+
+html.workbuddy-dream-skin .growth-plan-entry {
+  color: var(--wbds-text) !important;
+  border: 1px solid color-mix(in srgb, var(--wbds-accent) 28%, transparent) !important;
+  background: color-mix(in srgb, var(--wbds-panel) 90%, transparent) !important;
+  box-shadow: 0 8px 22px rgba(0, 0, 0, .2) !important;
+}
+
+html.workbuddy-dream-skin .growth-plan-entry:hover {
+  color: var(--wbds-on-accent) !important;
+  background: var(--wbds-accent) !important;
+}
+
+html.workbuddy-dream-skin .quick-actions__item {
+  color: var(--wbds-muted) !important;
+  border-color: var(--wbds-line) !important;
+  background: color-mix(in srgb, var(--wbds-panel) 88%, transparent) !important;
+}
+
+html.workbuddy-dream-skin .quick-actions__item:hover {
+  color: var(--wbds-interactive-text) !important;
+  border-color: color-mix(in srgb, var(--wbds-accent) 48%, transparent) !important;
+  background: color-mix(in srgb, var(--wbds-accent) 12%, var(--wbds-panel)) !important;
+}
+
+html.workbuddy-dream-skin .quick-actions-sub__item {
+  color: var(--wbds-muted) !important;
+  border: 1px solid var(--wbds-line) !important;
+  background: color-mix(in srgb, var(--wbds-panel) 92%, transparent) !important;
+  box-shadow: inset 0 1px color-mix(in srgb, var(--wbds-accent-alt) 4%, transparent) !important;
+}
+
+html.workbuddy-dream-skin .quick-actions-sub__item:is(:hover, :focus-visible, :active) {
+  color: var(--wbds-interactive-text) !important;
+  border-color: color-mix(in srgb, var(--wbds-accent) 48%, transparent) !important;
+  background: color-mix(in srgb, var(--wbds-accent) 13%, var(--wbds-panel)) !important;
+}
+
+html.workbuddy-dream-skin .quick-actions-sub__item * {
+  color: inherit !important;
+  background-color: transparent !important;
+}
+
+html.workbuddy-dream-skin .quick-actions-sub-wrapper--fade-left::before {
+  background: linear-gradient(to right, color-mix(in srgb, var(--wbds-background) 98%, transparent), transparent) !important;
+}
+
+html.workbuddy-dream-skin .quick-actions-sub-wrapper--fade-right::after {
+  background: linear-gradient(to right, transparent, color-mix(in srgb, var(--wbds-background) 98%, transparent)) !important;
+}
+
+/* WorkBuddy 5.3.3 related playbooks shown below scene recommendations */
+html.workbuddy-dream-skin .wb-related-playbooks__card {
+  color: var(--wbds-text) !important;
+  border: 1px solid color-mix(in srgb, var(--wbds-line) 84%, transparent) !important;
+  background: color-mix(in srgb, var(--wbds-panel) 94%, transparent) !important;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, .22) !important;
+}
+
+html.workbuddy-dream-skin .wb-related-playbooks__card:is(:hover, :focus-visible) {
+  color: var(--wbds-interactive-text) !important;
+  border-color: color-mix(in srgb, var(--wbds-accent) 48%, transparent) !important;
+  background: color-mix(in srgb, var(--wbds-accent) 12%, var(--wbds-panel)) !important;
+}
+
+html.workbuddy-dream-skin .wb-related-playbooks__card-cover {
+  background: color-mix(in srgb, var(--wbds-panel-alt) 94%, transparent) !important;
+}
+
+html.workbuddy-dream-skin .wb-related-playbooks__card-title {
+  color: inherit !important;
+}
+
+html.workbuddy-dream-skin :is(.quick-actions__arrow, .wb-related-playbooks__arrow) {
+  color: var(--wbds-text) !important;
+  border-color: var(--wbds-line) !important;
+  background: color-mix(in srgb, var(--wbds-panel-alt) 94%, transparent) !important;
+}
+
+html.workbuddy-dream-skin :is(.quick-actions__arrow, .wb-related-playbooks__arrow):is(:hover, :focus-visible) {
+  color: var(--wbds-interactive-text) !important;
+  border-color: color-mix(in srgb, var(--wbds-accent) 48%, transparent) !important;
+  background: color-mix(in srgb, var(--wbds-accent) 12%, var(--wbds-panel)) !important;
+}
+
+html.workbuddy-dream-skin :is([role="tooltip"], .ant-tooltip-inner, [class*="tooltip" i]) {
+  color: var(--wbds-text) !important;
+  border: 1px solid var(--wbds-line) !important;
+  background: color-mix(in srgb, var(--wbds-background) 98%, transparent) !important;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, .34) !important;
+}
+
+html.workbuddy-dream-skin :is([role="tooltip"], .ant-tooltip-inner, [class*="tooltip" i]) * {
+  color: inherit !important;
+}
+
+html.workbuddy-dream-skin :is(
+  [role="menu"],
+  [role="listbox"],
+  .ant-popover-inner,
+  .ant-dropdown-menu,
+  [class*="popover" i],
+  [class*="dropdown-menu" i]
+) {
+  color: var(--wbds-text) !important;
+  border-color: var(--wbds-line) !important;
+  background: color-mix(in srgb, var(--wbds-background) 98%, transparent) !important;
+  box-shadow: 0 18px 46px rgba(0, 0, 0, .38) !important;
+}
+
+html.workbuddy-dream-skin :is(
+  [role="menu"],
+  [role="listbox"],
+  .ant-popover-inner,
+  .ant-dropdown-menu,
+  [class*="popover" i],
+  [class*="dropdown-menu" i]
+) > div {
+  color: inherit !important;
+  background-color: transparent !important;
+}
+
+html.workbuddy-dream-skin :is(
+  [role="menu"],
+  [role="listbox"],
+  .ant-popover-inner,
+  .ant-dropdown-menu,
+  [class*="popover" i],
+  [class*="dropdown-menu" i]
+) * {
+  color: inherit !important;
+}
+
+html.workbuddy-dream-skin :is(
+  [role="menu"],
+  [role="listbox"],
+  .ant-popover-inner,
+  .ant-dropdown-menu,
+  [class*="popover" i],
+  [class*="dropdown-menu" i]
+) :is(button, [role="menuitem"], [role="option"]):hover {
+  color: var(--wbds-interactive-text) !important;
+  background: color-mix(in srgb, var(--wbds-accent) 12%, var(--wbds-panel)) !important;
+}
+
+/* Cascading composer menus use an active class while the pointer is inside a
+   child panel. Keep that state themed after the direct-child reset above. */
+html.workbuddy-dream-skin :is(
+  [role="menu"],
+  [role="listbox"],
+  [class*="_panel_"]
+) :is(
+  button,
+  [role="menuitem"],
+  [role="option"]
+):is(
+  :hover,
+  :focus-visible,
+  [aria-selected="true"],
+  [class*="_itemActive_"],
+  [class*="_selected_"]
+) {
+  color: var(--wbds-interactive-text) !important;
+  border-color: color-mix(in srgb, var(--wbds-accent) 34%, transparent) !important;
+  background: color-mix(in srgb, var(--wbds-accent) 13%, var(--wbds-panel)) !important;
+}
+
+html.workbuddy-dream-skin :is(
+  [role="menu"],
+  [role="listbox"],
+  [class*="_panel_"]
+) :is(
+  button,
+  [role="menuitem"],
+  [role="option"]
+):is(
+  :hover,
+  :focus-visible,
+  [aria-selected="true"],
+  [class*="_itemActive_"],
+  [class*="_selected_"]
+) * {
+  color: inherit !important;
+}
+
+/* Mode choices are plain rows without a menuitem role in WorkBuddy 5.3.3. */
+html.workbuddy-dream-skin [role="menu"][class*="_panel_"] [class*="_row_"] {
+  color: var(--wbds-text) !important;
+  border-color: transparent !important;
+  background: transparent !important;
+}
+
+html.workbuddy-dream-skin [role="menu"][class*="_panel_"] [class*="_row_"]:is(
+  :hover,
+  :focus-visible,
+  [class*="_active_"],
+  [class*="_selected_"]
+) {
+  color: var(--wbds-interactive-text) !important;
+  border-color: color-mix(in srgb, var(--wbds-accent) 34%, transparent) !important;
+  background: color-mix(in srgb, var(--wbds-accent) 13%, var(--wbds-panel)) !important;
+}
+
+html.workbuddy-dream-skin [role="menu"][class*="_panel_"] [class*="_row_"] * {
+  color: inherit !important;
+}
+
+/* WorkBuddy 5.3.3 expert, skill and connector tabs */
+html.workbuddy-dream-skin :is(
+  .um-tab,
+  [class*="um-tab" i],
+  [class*="um-popover" i],
+  [class*="um-menu" i],
+  [class*="_umPopover_" i],
+  [data-radix-popper-content-wrapper]:has(.um-tab),
+  [data-radix-popper-content-wrapper]:has([class*="um-" i])
+) {
+  color: var(--wbds-text) !important;
+  border: 1px solid var(--wbds-line) !important;
+  background: color-mix(in srgb, var(--wbds-background) 96%, transparent) !important;
+  box-shadow: 0 18px 46px rgba(0, 0, 0, .42), 0 0 0 1px color-mix(in srgb, var(--wbds-accent) 18%, transparent) !important;
+  backdrop-filter: blur(10px) saturate(1.1) !important;
+}
+
+html.workbuddy-dream-skin :is(.um-tab, [class*="um-tab" i], [class*="um-menu" i]) * {
+  color: inherit !important;
+  background-color: transparent !important;
+}
+
+html.workbuddy-dream-skin :is(.um-tab, [class*="um-tab" i], [class*="um-menu" i]) :is(button, [role="button"], [role="menuitem"], a, li):is(:hover, :focus-visible, .active, [aria-selected="true"]) {
+  color: var(--wbds-interactive-text) !important;
+  background: color-mix(in srgb, var(--wbds-accent) 14%, var(--wbds-panel)) !important;
+  border-radius: 8px;
+}
+
+/* WorkBuddy 5.3.3 sidebar sub-navigation uses the wb-dropdown family. */
+html.workbuddy-dream-skin :is(
+  .conversation-list-expert-dropdown,
+  .conversation-list-more-dropdown
+) {
+  color: var(--wbds-text) !important;
+  border: 1px solid var(--wbds-line) !important;
+  background: color-mix(in srgb, var(--wbds-background) 98%, transparent) !important;
+  box-shadow: 0 18px 46px rgba(0, 0, 0, .42) !important;
+  backdrop-filter: blur(10px) saturate(1.1) !important;
+}
+
+html.workbuddy-dream-skin :is(
+  .conversation-list-expert-dropdown,
+  .conversation-list-more-dropdown
+) :is(.wb-dropdown__list, .wb-dropdown__item, .wb-dropdown__item-hit) {
+  color: inherit !important;
+  background: transparent !important;
+}
+
+html.workbuddy-dream-skin .wb-popover.wb-dropdown:is(
+  .conversation-list-expert-dropdown,
+  .conversation-list-more-dropdown
+) .wb-dropdown__item:is(
+  :hover,
+  :focus-within,
+  .wb-dropdown__item--selected
+) {
+  color: var(--wbds-interactive-text) !important;
+  background: color-mix(in srgb, var(--wbds-accent) 14%, var(--wbds-panel)) !important;
+}
+
+/* The tracking hit button covers the full row. It must stay visually
+   transparent while the parent row owns the hover surface. */
+html.workbuddy-dream-skin .wb-popover.wb-dropdown:is(
+  .conversation-list-expert-dropdown,
+  .conversation-list-more-dropdown
+) .wb-dropdown__item-hit:is(:hover, :focus, :focus-visible, :active) {
+  color: inherit !important;
+  border-color: transparent !important;
+  background: transparent !important;
+  box-shadow: none !important;
+}
+
+html.workbuddy-dream-skin .wb-popover.wb-dropdown:is(
+  .conversation-list-expert-dropdown,
+  .conversation-list-more-dropdown
+) .wb-dropdown__item :is(.wb-dropdown__icon, .wb-dropdown__label) {
+  color: inherit !important;
+  background: transparent !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+}
+
+html.workbuddy-dream-skin .wb-popover.wb-dropdown:is(
+  .conversation-list-expert-dropdown,
+  .conversation-list-more-dropdown
+) .wb-dropdown__item .wb-dropdown__icon :is(svg, path) {
+  color: currentColor !important;
+}
+
+html.workbuddy-dream-skin .conversation-sidebar :is([role="menuitem"], [role="option"], [class*="menu-item" i], [class*="submenu-item" i]):is(:hover, .active, [aria-selected="true"]) {
+  color: var(--wbds-interactive-text) !important;
+  background: color-mix(in srgb, var(--wbds-accent) 12%, var(--wbds-panel)) !important;
+}
+
+html.workbuddy-dream-skin .conversation-sidebar :is([role="menuitem"], [role="option"], [class*="menu-item" i], [class*="submenu-item" i]):is(:hover, .active, [aria-selected="true"]) * {
+  color: inherit !important;
+  background-color: transparent !important;
+}
+
+html.workbuddy-dream-skin :is(
+  [class*="skeleton" i],
+  [class*="shimmer" i],
+  .ant-skeleton-title,
+  .ant-skeleton-paragraph > li,
+  .ant-skeleton-avatar,
+  .ant-skeleton-button
+) {
+  border-color: transparent !important;
+  background-color: color-mix(in srgb, var(--wbds-panel) 90%, transparent) !important;
+  background-image: linear-gradient(90deg, color-mix(in srgb, var(--wbds-accent) 8%, transparent), color-mix(in srgb, var(--wbds-accent-alt) 20%, transparent), color-mix(in srgb, var(--wbds-accent) 8%, transparent)) !important;
+  background-size: 220% 100% !important;
+}
+
+html.workbuddy-dream-skin body:not(:has(.main-content--welcome)) #workbuddy-dream-skin-chrome :is(.wbds-brand, .wbds-status, .wbds-coordinate, .wbds-character) {
+  display: none !important;
+}
+
+html.workbuddy-dream-skin body:has(.settings-modal) #workbuddy-dream-skin-chrome {
+  display: none !important;
+}

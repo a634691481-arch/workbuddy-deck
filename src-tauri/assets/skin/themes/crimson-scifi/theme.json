@@ -1,0 +1,47 @@
+﻿{
+    "schemaVersion":  2,
+    "id":  "crimson-scifi",
+    "name":  "赤霄科幻",
+    "eyebrow":  "CRIMSON HUD DECK",
+    "tagline":  "让每一次编译都像点火起飞。",
+    "status":  "LOCAL LINK ACTIVE",
+    "images":  {
+                   "background":  "shared-image.jpg",
+                   "hero":  "shared-image.jpg",
+                   "character":  null
+               },
+    "layout":  {
+                   "backgroundPosition":  "50% 50%",
+                   "backgroundSize":  "cover",
+                   "heroPosition":  "68% 50%",
+                   "heroSize":  "cover",
+                   "characterPosition":  "right 18px top 180px",
+                   "characterSize":  "168px auto"
+               },
+    "effects":  {
+                    "backgroundOverlay":  0.72,
+                    "heroOverlay":  0.55,
+                    "characterOpacity":  0.88,
+                    "panelOpacity":  0.94
+                },
+    "colors":  {
+                   "background":  "#0B0C11",
+                   "panel":  "#14161D",
+                   "panelAlt":  "#1E212B",
+                   "accent":  "#E63946",
+                   "accentAlt":  "#FF6B7A",
+                   "secondary":  "#5E6472",
+                   "highlight":  "#F5F5F0",
+                   "text":  "#F2F3F6",
+                   "muted":  "#8B909E",
+                   "line":  "rgba(230, 57, 70, .28)"
+               },
+    "decoration":  {
+                       "mode":  "off",
+                       "style":  "crimson-scifi",
+                       "source":  "none",
+                       "variant":  "none"
+                   },
+    "style":  "crimson-scifi",
+    "appearance":  "dark"
+}

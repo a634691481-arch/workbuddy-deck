@@ -1,0 +1,66 @@
+/*
+ * 换肤外壳模板（skin.rs render_css 填充占位符）。
+ *
+ * 对齐 WorkDaddy daemon.js 背景层口径：
+ *   - 背景图铺 #root（多段渐变压暗 + 边缘可读渐变），容器必须显式透明
+ *   - 毛玻璃只保留在输入框主体（[class*="chat-input"]）
+ *   - 左侧会话列表全透明不模糊
+ */
+
+/* 1. 主题色板（内置浅色/深色模式时为空，纯原生同步） */
+__WBX_PALETTE__
+
+/* 2. 壁纸层：铺 #root，多段渐变压暗并保证边缘可读 */
+__WBX_WALL__
+
+/* 3. 容器透明：不显式透明，背景图透不出来（WorkDaddy daemon.js containerCss） */
+body[data-vscode-theme-name] .teams-container,
+body[data-vscode-theme-name] .teams-container.is-mac {
+  background: transparent !important;
+}
+body[data-vscode-theme-name] [data-view-id] {
+  background: transparent !important;
+}
+body[data-vscode-theme-name] .main-content {
+  background: transparent !important;
+}
+
+/* 左侧会话列表：全透明不模糊，让底图直接透出 */
+body[data-vscode-theme-name] .conversation-list,
+body[data-vscode-theme-name] [data-view-id="sidebar"] {
+  background: transparent !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+
+/* 输入框区域：半透明 + 模糊，唯一保留毛玻璃的地方 */
+body[data-vscode-theme-name] [class*="chat-input"] {
+  background: color-mix(in srgb, var(--wb-bg-primary, #0a0a0a) 40%, transparent) !important;
+  backdrop-filter: blur(__WBX_BLUR__px) saturate(1.15);
+  -webkit-backdrop-filter: blur(__WBX_BLUR__px) saturate(1.15);
+}
+
+/* 主内容区底部渐变：长文阅读时保证可读 */
+body[data-vscode-theme-name] [data-view-id="main-content"] {
+  background: linear-gradient(
+    180deg,
+    transparent 0 38%,
+    color-mix(in srgb, var(--wb-bg-primary, #0a0a0a) 55%, transparent) 100%
+  ) !important;
+}
+
+/* 主页整页透明（patch-19/20 口径）：主页容器也露出壁纸 */
+body[data-vscode-theme-name] .wb-home-page {
+  background: transparent !important;
+}
+body[data-vscode-theme-name] .wb-home-page section[class*="_container_"],
+body[data-vscode-theme-name] .wb-home-page [class*="_contentOverlayWrapper_"],
+body[data-vscode-theme-name] .wb-home-page [class*="_content_"],
+body[data-vscode-theme-name] .wb-home-page [class*="_mainArea_"] {
+  background: transparent !important;
+}
+
+/* 滚动条跟随主题，别在深色主题下露白 */
+body[data-vscode-theme-name] .monaco-scrollable-element > .scrollbar > .slider {
+  background: var(--wb-scrollbar-thumb, rgba(255, 255, 255, 0.2)) !important;
+}

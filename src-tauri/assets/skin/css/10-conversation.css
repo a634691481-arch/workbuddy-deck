@@ -1,0 +1,86 @@
+/* Conversation search */
+html.workbuddy-dream-skin .conversation-search-modal-overlay {
+  background: color-mix(in srgb, var(--wbds-background) 76%, transparent) !important;
+  backdrop-filter: blur(10px) saturate(.82) !important;
+}
+
+html.workbuddy-dream-skin .conversation-search-modal {
+  color: var(--wbds-text) !important;
+  border: 1px solid color-mix(in srgb, var(--wbds-accent) 30%, transparent) !important;
+  background: linear-gradient(150deg, color-mix(in srgb, var(--wbds-panel-alt) 98%, transparent), color-mix(in srgb, var(--wbds-background) 98%, transparent)) !important;
+  box-shadow: 0 34px 90px rgba(0, 0, 0, .52), inset 0 1px rgba(255, 255, 255, .06) !important;
+}
+
+html.workbuddy-dream-skin :is(.conversation-search-modal__header, .conversation-search-modal__body, .conversation-search-modal__list) {
+  color: var(--wbds-text) !important;
+  background: transparent !important;
+}
+
+html.workbuddy-dream-skin .conversation-search-modal__input-wrapper {
+  color: var(--wbds-text) !important;
+  border: 1px solid color-mix(in srgb, var(--wbds-accent) 22%, transparent) !important;
+  background: color-mix(in srgb, var(--wbds-panel) 88%, transparent) !important;
+}
+
+html.workbuddy-dream-skin .conversation-search-modal__input-wrapper:focus-within {
+  border-color: var(--wbds-accent) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--wbds-accent) 11%, transparent) !important;
+}
+
+html.workbuddy-dream-skin :is(.conversation-search-modal__input, .conversation-search-modal__item-title) {
+  color: var(--wbds-text) !important;
+}
+
+html.workbuddy-dream-skin :is(.conversation-search-modal__count, .conversation-search-modal__item-meta, .conversation-search-modal__item-meta-text) {
+  color: var(--wbds-muted) !important;
+}
+
+html.workbuddy-dream-skin :is(.conversation-search-modal__close, .conversation-search-modal__item) {
+  color: var(--wbds-text) !important;
+  border-color: transparent !important;
+  background: transparent !important;
+}
+
+html.workbuddy-dream-skin :is(.conversation-search-modal__close, .conversation-search-modal__item):is(:hover, :focus-visible, :active) {
+  color: var(--wbds-interactive-text) !important;
+  border-color: color-mix(in srgb, var(--wbds-accent) 22%, transparent) !important;
+  background: color-mix(in srgb, var(--wbds-accent) 13%, var(--wbds-panel)) !important;
+}
+
+html.workbuddy-dream-skin .conversation-search-modal__item:is(:hover, :focus-visible, :active) * {
+  color: inherit !important;
+}
+
+html.workbuddy-dream-skin .conversation-show-more-button,
+html.workbuddy-dream-skin .conversation-section-label:is(.conversation-section-label-tasks, .conversation-section-label-groups) {
+  color: var(--wbds-text) !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+}
+
+html.workbuddy-dream-skin .conversation-show-more-button:is(:hover, :focus-visible, :active),
+html.workbuddy-dream-skin .conversation-section-label:is(.conversation-section-label-tasks, .conversation-section-label-groups):is(:hover, :focus-within) {
+  color: var(--wbds-interactive-text) !important;
+  border-color: color-mix(in srgb, var(--wbds-accent) 24%, transparent) !important;
+  background: color-mix(in srgb, var(--wbds-accent) 13%, var(--wbds-panel)) !important;
+  box-shadow: inset 3px 0 var(--wbds-accent), 0 8px 18px rgba(0, 0, 0, .16) !important;
+}
+
+html.workbuddy-dream-skin .conversation-show-more-button:is(:hover, :focus-visible, :active) *,
+html.workbuddy-dream-skin .conversation-section-label:is(.conversation-section-label-tasks, .conversation-section-label-groups):is(:hover, :focus-within) * {
+  color: inherit !important;
+  background: transparent !important;
+}
+
+html.workbuddy-dream-skin .main-content {
+  color: var(--wbds-text) !important;
+  background:
+    linear-gradient(105deg, var(--wbds-hero-overlay-strong), var(--wbds-hero-overlay) 58%, var(--wbds-hero-overlay-strong)),
+    var(--wbds-hero-art) var(--wbds-hero-position) / var(--wbds-hero-size) no-repeat fixed !important;
+}
+
+html.workbuddy-dream-skin .main-content--chat {
+  background:
+    linear-gradient(105deg, var(--wbds-background-overlay-strong), var(--wbds-background-overlay) 62%, var(--wbds-background-overlay-strong)),
+    var(--wbds-background-art) var(--wbds-background-position) / var(--wbds-background-size) no-repeat fixed !important;
+}

@@ -1,0 +1,47 @@
+﻿{
+    "schemaVersion":  2,
+    "id":  "mint-bloom-studio",
+    "name":  "薄荷花房",
+    "eyebrow":  "MINT BLOOM STUDIO",
+    "tagline":  "把清风、花香与明亮思绪留在桌面。",
+    "status":  "LOCAL LINK ACTIVE",
+    "images":  {
+                   "background":  "shared-image.jpg",
+                   "hero":  "shared-image.jpg",
+                   "character":  null
+               },
+    "layout":  {
+                   "backgroundPosition":  "50% 50%",
+                   "backgroundSize":  "cover",
+                   "heroPosition":  "70% 45%",
+                   "heroSize":  "cover",
+                   "characterPosition":  "right 14px top 170px",
+                   "characterSize":  "148px auto"
+               },
+    "effects":  {
+                    "backgroundOverlay":  0.4,
+                    "heroOverlay":  0.16,
+                    "characterOpacity":  0.92,
+                    "panelOpacity":  0.89
+                },
+    "colors":  {
+                   "background":  "#EFFAF5",
+                   "panel":  "#FAFFFC",
+                   "panelAlt":  "#DDF3E9",
+                   "accent":  "#3DAE8D",
+                   "accentAlt":  "#23765F",
+                   "secondary":  "#7CC9B3",
+                   "highlight":  "#F2B85B",
+                   "text":  "#21483D",
+                   "muted":  "#56786E",
+                   "line":  "rgba(48, 151, 121, .23)"
+               },
+    "decoration":  {
+                       "mode":  "off",
+                       "style":  "mint-bloom",
+                       "source":  "none",
+                       "variant":  "none"
+                   },
+    "style":  "mint-bloom",
+    "appearance":  "light"
+}

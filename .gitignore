@@ -25,3 +25,9 @@ design-demos/feature-tour/palette.png
 # 渲染工程副本（24MB，按需从 huashu-art-motion skill 复制）
 design-demos/media/代码工程/
 design-demos/media/frames/
+
+# 壁纸原图（36MB 二进制）。skin.rs 读本地目录 wallpapers\，回落 ~/.wb-switch/wallpapers
+wallpapers/
+
+# 调试截图：docs/screenshots 只放对外发布图，调试产物单独归到 debug/
+docs/screenshots/debug/

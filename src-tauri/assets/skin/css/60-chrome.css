@@ -1,0 +1,970 @@
+/* Artifact and design workspace shell */
+html.workbuddy-dream-skin :is(.sidebar-next, .sidebar-next-body, .detail-panel, .detail-layout, .detail-layout__top, .detail-layout__content, .detail-main, .detail-main__body) {
+  color: var(--wbds-text) !important;
+  border-color: var(--wbds-line) !important;
+  background: linear-gradient(180deg, color-mix(in srgb, var(--wbds-panel-alt) 98%, transparent), color-mix(in srgb, var(--wbds-background) 98%, transparent)) !important;
+}
+
+html.workbuddy-dream-skin :is(.sidebar-next-main-header, [class*="_mediaPreviewHeader_"]) {
+  color: var(--wbds-text) !important;
+  border-color: var(--wbds-line) !important;
+  background: color-mix(in srgb, var(--wbds-panel) 96%, transparent) !important;
+  box-shadow: 0 1px color-mix(in srgb, var(--wbds-accent) 16%, transparent) !important;
+}
+
+html.workbuddy-dream-skin :is(.sidebar-next-top-button, .sidebar-next-collapse-toggle, .artifact-tab__close, [class*="_mediaPreviewActionsButton_"]) {
+  color: var(--wbds-muted) !important;
+  border: 1px solid transparent !important;
+  background: transparent !important;
+}
+
+html.workbuddy-dream-skin :is(.sidebar-next-top-button, .sidebar-next-collapse-toggle, .artifact-tab__close, [class*="_mediaPreviewActionsButton_"]):is(:hover, :focus-visible, :active) {
+  color: var(--wbds-interactive-text) !important;
+  border-color: color-mix(in srgb, var(--wbds-accent) 24%, transparent) !important;
+  background: color-mix(in srgb, var(--wbds-accent) 13%, var(--wbds-panel)) !important;
+}
+
+/* v5.3.3 sidebar task-search bar + filter button + section labels.
+   Real class names confirmed via `injector.mjs --probe`:
+     .my-files-search           — 240×32 div wrapping the input, pure white bg
+     .my-files-filter-btn       — 116×32 filter button, pure white bg
+     .conversation-section-label / .conversation-section-label-pinned — "任务 (21)" row, #F2F2F2 bg
+*/
+html.workbuddy-dream-skin :is(.my-files-search, .my-files-filter-btn) {
+  color: var(--wbds-text) !important;
+  border: 1px solid color-mix(in srgb, var(--wbds-line) 78%, transparent) !important;
+  background: color-mix(in srgb, var(--wbds-panel-alt) 88%, transparent) !important;
+  box-shadow: inset 0 1px color-mix(in srgb, var(--wbds-line) 26%, transparent) !important;
+}
+
+html.workbuddy-dream-skin :is(.my-files-search, .my-files-filter-btn) * {
+  color: inherit !important;
+  background-color: transparent !important;
+}
+
+html.workbuddy-dream-skin :is(.my-files-search, .my-files-filter-btn):is(:hover, :focus, :focus-within, :focus-visible) {
+  border-color: color-mix(in srgb, var(--wbds-accent) 44%, transparent) !important;
+  background: color-mix(in srgb, var(--wbds-panel) 96%, transparent) !important;
+}
+
+html.workbuddy-dream-skin .my-files-search input {
+  color: var(--wbds-text) !important;
+  caret-color: var(--wbds-accent-alt) !important;
+  background: transparent !important;
+  border: 0 !important;
+}
+
+html.workbuddy-dream-skin .my-files-search input::placeholder {
+  color: var(--wbds-muted) !important;
+  opacity: .78;
+}
+
+html.workbuddy-dream-skin :is(.conversation-section-label, .conversation-section-label-pinned) {
+  color: var(--wbds-muted) !important;
+  background: transparent !important;
+  border-color: color-mix(in srgb, var(--wbds-line) 40%, transparent) !important;
+}
+
+html.workbuddy-dream-skin :is(.conversation-section-label, .conversation-section-label-pinned) * {
+  color: inherit !important;
+  background-color: transparent !important;
+}
+
+html.workbuddy-dream-skin :is(.artifact-tab, [class*="_mediaPreviewTitle_"]) {
+  color: var(--wbds-text) !important;
+}
+
+html.workbuddy-dream-skin .artifact-tab--active {
+  color: var(--wbds-interactive-text) !important;
+  border-color: color-mix(in srgb, var(--wbds-accent) 34%, transparent) !important;
+  background: color-mix(in srgb, var(--wbds-accent) 14%, var(--wbds-panel)) !important;
+}
+
+html.workbuddy-dream-skin :is([class*="_mediaPreview_"], [class*="_mediaPreviewContent_"], .artifact-content, .artifact-body) {
+  color: var(--wbds-text) !important;
+  background: color-mix(in srgb, var(--wbds-background) 94%, transparent) !important;
+}
+
+html.workbuddy-dream-skin .colleague-chat-empty,
+html.workbuddy-dream-skin .claw-empty-tab-pane__content,
+html.workbuddy-dream-skin .colleagues-panel-state {
+  position: relative;
+  color: var(--wbds-text) !important;
+}
+
+html.workbuddy-dream-skin .colleague-chat-empty::before,
+html.workbuddy-dream-skin .claw-empty-tab-pane__content::before {
+  content: "";
+  position: absolute;
+  width: min(62vw, 760px);
+  aspect-ratio: 1.8;
+  left: 50%;
+  top: 44%;
+  z-index: -1;
+  transform: translate(-50%, -50%);
+  border: 1px solid color-mix(in srgb, var(--wbds-accent) 20%, transparent);
+  border-radius: 32px;
+  background:
+    radial-gradient(circle at 76% 43%, color-mix(in srgb, var(--wbds-accent) 28%, transparent), transparent 24%),
+    linear-gradient(90deg, var(--wbds-hero-overlay-strong), var(--wbds-hero-overlay)),
+    var(--wbds-hero-art) var(--wbds-hero-position) / var(--wbds-hero-size);
+  box-shadow: 0 36px 90px rgba(0, 0, 0, .32), inset 0 1px rgba(255,255,255,.06);
+  opacity: .75;
+}
+
+#workbuddy-dream-skin-chrome {
+  --wbds-shell-left: 0px;
+  --wbds-shell-top: 0px;
+  --wbds-shell-width: 100vw;
+  --wbds-shell-height: 100vh;
+  position: fixed;
+  left: var(--wbds-shell-left);
+  top: var(--wbds-shell-top);
+  z-index: 2147483000;
+  width: var(--wbds-shell-width);
+  height: var(--wbds-shell-height);
+  overflow: hidden;
+  pointer-events: none;
+  color: var(--wbds-text);
+}
+
+#workbuddy-dream-skin-chrome .wbds-grain {
+  position: absolute;
+  inset: 0;
+  opacity: .18;
+  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 180 180' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.9' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)' opacity='.08'/%3E%3C/svg%3E");
+  mix-blend-mode: soft-light;
+}
+
+#workbuddy-dream-skin-chrome .wbds-character {
+  --wbds-decoration-tilt: 0deg;
+  position: absolute;
+  right: var(--wbds-decoration-right);
+  top: var(--wbds-decoration-top);
+  width: var(--wbds-decoration-width);
+  max-height: 238px;
+  opacity: var(--wbds-character-opacity);
+  transform-origin: 52% 12%;
+  animation: wbds-decoration-float 6.8s cubic-bezier(.45, 0, .35, 1) infinite;
+}
+
+#workbuddy-dream-skin-chrome .wbds-character-card {
+  position: relative;
+  padding: 7px;
+  overflow: visible;
+  border: 1px solid color-mix(in srgb, var(--wbds-accent-alt) 46%, transparent);
+  border-radius: 18px;
+  background: color-mix(in srgb, var(--wbds-panel) 90%, transparent);
+  box-shadow: 0 22px 42px rgba(0, 0, 0, .34), inset 0 1px rgba(255, 255, 255, .12);
+  backdrop-filter: blur(12px) saturate(1.08);
+  transform: rotate(var(--wbds-decoration-tilt));
+  transform-origin: 52% 8%;
+  animation: wbds-decoration-sway 5.6s ease-in-out infinite;
+}
+
+#workbuddy-dream-skin-chrome .wbds-charm-orbit,
+#workbuddy-dream-skin-chrome .wbds-sparkles {
+  position: absolute;
+  inset: -20px;
+  z-index: 3;
+  pointer-events: none;
+}
+
+#workbuddy-dream-skin-chrome .wbds-charm-orbit {
+  z-index: -1;
+  border: 1px dashed color-mix(in srgb, var(--wbds-accent) 28%, transparent);
+  border-radius: 46% 54% 52% 48%;
+  opacity: .76;
+  animation: wbds-orbit-turn 18s linear infinite;
+}
+
+#workbuddy-dream-skin-chrome .wbds-charm-orbit i,
+#workbuddy-dream-skin-chrome .wbds-sparkles i {
+  position: absolute;
+  display: block;
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--wbds-highlight);
+  box-shadow: 0 0 14px color-mix(in srgb, var(--wbds-highlight) 70%, transparent);
+}
+
+#workbuddy-dream-skin-chrome .wbds-charm-orbit i:nth-child(1) { left: 4%; top: 25%; }
+#workbuddy-dream-skin-chrome .wbds-charm-orbit i:nth-child(2) { right: 7%; top: 10%; width: 5px; height: 5px; background: var(--wbds-accent); }
+#workbuddy-dream-skin-chrome .wbds-charm-orbit i:nth-child(3) { right: 1%; bottom: 23%; width: 11px; height: 11px; background: var(--wbds-accent-alt); }
+
+#workbuddy-dream-skin-chrome .wbds-sparkles i {
+  width: 7px;
+  height: 7px;
+  border-radius: 2px;
+  background: var(--wbds-accent-alt);
+  clip-path: polygon(50% 0, 62% 38%, 100% 50%, 62% 62%, 50% 100%, 38% 62%, 0 50%, 38% 38%);
+  animation: wbds-sparkle 3.2s ease-in-out infinite;
+}
+
+#workbuddy-dream-skin-chrome .wbds-sparkles i:nth-child(1) { left: -2px; top: 9%; animation-delay: -.4s; }
+#workbuddy-dream-skin-chrome .wbds-sparkles i:nth-child(2) { right: -7px; top: 34%; width: 12px; height: 12px; animation-delay: -1.9s; }
+#workbuddy-dream-skin-chrome .wbds-sparkles i:nth-child(3) { left: 5%; bottom: -4px; width: 10px; height: 10px; animation-delay: -2.6s; }
+#workbuddy-dream-skin-chrome .wbds-sparkles i:nth-child(4) { right: 16%; bottom: -10px; width: 5px; height: 5px; animation-delay: -1.1s; }
+
+#workbuddy-dream-skin-chrome .wbds-character-card img {
+  display: block;
+  width: 100%;
+  max-height: 220px;
+  object-fit: contain;
+  border-radius: 12px;
+}
+
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="pink-dream"] #workbuddy-dream-skin-chrome .wbds-character {
+  --wbds-decoration-tilt: 5deg;
+  animation-duration: 5.4s;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="pink-dream"] #workbuddy-dream-skin-chrome .wbds-charm-orbit i {
+  border-radius: 70% 30% 65% 35%;
+  background: var(--wbds-secondary);
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="pink-dream"] #workbuddy-dream-skin-chrome .wbds-character-card {
+  padding: 8px 8px 12px;
+  border: 2px solid color-mix(in srgb, var(--wbds-accent-alt) 72%, transparent);
+  border-radius: 20px 11px 22px 14px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--wbds-accent-alt) 28%, var(--wbds-panel)), color-mix(in srgb, var(--wbds-panel) 94%, transparent));
+  box-shadow: 0 24px 46px rgba(32, 8, 20, .4), 0 0 0 4px color-mix(in srgb, var(--wbds-accent) 14%, transparent), inset 0 1px rgba(255, 255, 255, .2);
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="pink-dream"] #workbuddy-dream-skin-chrome .wbds-character-card::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  left: 12px;
+  top: -11px;
+  width: 52px;
+  height: 19px;
+  border: 1px solid rgba(255, 255, 255, .32);
+  background: repeating-linear-gradient(90deg, rgba(255,255,255,.1) 0 7px, transparent 7px 11px), color-mix(in srgb, var(--wbds-accent) 70%, transparent);
+  box-shadow: 0 4px 12px rgba(42, 12, 26, .24);
+  transform: rotate(-11deg);
+  clip-path: polygon(4% 8%, 98% 0, 94% 92%, 0 100%);
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="pink-dream"] #workbuddy-dream-skin-chrome .wbds-character-card::after {
+  content: "✦";
+  position: absolute;
+  z-index: 2;
+  right: -13px;
+  bottom: 13px;
+  width: 29px;
+  height: 29px;
+  border: 1px solid color-mix(in srgb, var(--wbds-accent-alt) 60%, transparent);
+  border-radius: 68% 32% 70% 30%;
+  background: color-mix(in srgb, var(--wbds-accent) 76%, var(--wbds-panel));
+  box-shadow: -12px 16px 0 -7px color-mix(in srgb, var(--wbds-accent-alt) 78%, transparent), 0 8px 18px rgba(42, 12, 26, .3);
+  color: var(--wbds-accent-alt);
+  font-size: 13px;
+  line-height: 29px;
+  text-align: center;
+  transform: rotate(23deg);
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="mint-bloom"] #workbuddy-dream-skin-chrome .wbds-character {
+  --wbds-decoration-tilt: -4deg;
+  animation-duration: 7.6s;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="mint-bloom"] #workbuddy-dream-skin-chrome .wbds-charm-orbit {
+  border-style: dotted;
+  border-radius: 58% 42% 64% 36%;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="mint-bloom"] #workbuddy-dream-skin-chrome .wbds-character-card {
+  border: 2px solid color-mix(in srgb, var(--wbds-accent-alt) 58%, transparent);
+  border-radius: 26px 12px 28px 14px;
+  background: linear-gradient(155deg, color-mix(in srgb, var(--wbds-accent) 22%, var(--wbds-panel)), color-mix(in srgb, var(--wbds-panel) 92%, transparent));
+  box-shadow: 0 24px 44px rgba(3, 28, 24, .38), 0 0 0 3px color-mix(in srgb, var(--wbds-accent) 12%, transparent);
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="mint-bloom"] #workbuddy-dream-skin-chrome .wbds-character-card::before,
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="mint-bloom"] #workbuddy-dream-skin-chrome .wbds-character-card::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  width: 23px;
+  height: 11px;
+  border-radius: 100% 0 100% 0;
+  background: linear-gradient(135deg, var(--wbds-accent-alt), var(--wbds-accent));
+  box-shadow: 0 5px 12px rgba(7, 44, 37, .28);
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="mint-bloom"] #workbuddy-dream-skin-chrome .wbds-character-card::before {
+  left: -8px;
+  top: 23px;
+  transform: rotate(-38deg);
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="mint-bloom"] #workbuddy-dream-skin-chrome .wbds-character-card::after {
+  right: -7px;
+  bottom: 25px;
+  transform: rotate(142deg) scale(.82);
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="sunlit-campus"] #workbuddy-dream-skin-chrome .wbds-character-card {
+  padding: 8px 8px 22px;
+  border-radius: 5px;
+  border-color: rgba(255, 255, 255, .72);
+  background: color-mix(in srgb, #fff 88%, var(--wbds-highlight));
+  box-shadow: 0 24px 38px rgba(21, 28, 10, .34), 0 0 0 1px rgba(255, 255, 255, .28);
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="sunlit-campus"] #workbuddy-dream-skin-chrome .wbds-character {
+  --wbds-decoration-tilt: 3deg;
+  animation-duration: 6.1s;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="sunlit-campus"] #workbuddy-dream-skin-chrome .wbds-charm-orbit {
+  border-radius: 4px;
+  transform: rotate(-4deg);
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="sunlit-campus"] #workbuddy-dream-skin-chrome .wbds-character-card::after {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  right: 13px;
+  top: -9px;
+  width: 44px;
+  height: 16px;
+  background: color-mix(in srgb, var(--wbds-highlight) 68%, rgba(255,255,255,.52));
+  box-shadow: 0 3px 9px rgba(44, 42, 18, .2);
+  transform: rotate(9deg);
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="gilded-night"] #workbuddy-dream-skin-chrome .wbds-character-card {
+  border: 2px solid color-mix(in srgb, var(--wbds-accent) 78%, transparent);
+  border-radius: 14px 5px 14px 5px;
+  background: linear-gradient(145deg, color-mix(in srgb, var(--wbds-highlight) 13%, var(--wbds-panel)), var(--wbds-panel));
+  box-shadow: 0 25px 46px rgba(12, 6, 2, .52), 0 0 0 4px color-mix(in srgb, var(--wbds-accent) 13%, transparent), inset 0 0 0 1px color-mix(in srgb, var(--wbds-highlight) 34%, transparent);
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="gilded-night"] #workbuddy-dream-skin-chrome .wbds-character {
+  --wbds-decoration-tilt: -3deg;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="gilded-night"] #workbuddy-dream-skin-chrome .wbds-character-card::before,
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="gilded-night"] #workbuddy-dream-skin-chrome .wbds-character-card::after {
+  content: "◆";
+  position: absolute;
+  z-index: 2;
+  color: var(--wbds-highlight);
+  font-size: 12px;
+  text-shadow: 0 2px 8px rgba(0, 0, 0, .7);
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="gilded-night"] #workbuddy-dream-skin-chrome .wbds-character-card::before {
+  left: -7px;
+  top: -9px;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="gilded-night"] #workbuddy-dream-skin-chrome .wbds-character-card::after {
+  right: -7px;
+  bottom: -9px;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="deep-sea"] #workbuddy-dream-skin-chrome .wbds-character-card {
+  border: 1px solid color-mix(in srgb, var(--wbds-accent) 68%, transparent);
+  border-radius: 7px 26px 7px 20px;
+  background: linear-gradient(155deg, color-mix(in srgb, var(--wbds-secondary) 18%, var(--wbds-panel)), var(--wbds-panel));
+  box-shadow: 0 24px 46px rgba(0, 8, 12, .5), 0 0 18px color-mix(in srgb, var(--wbds-accent) 16%, transparent), inset 0 0 0 1px rgba(255,255,255,.05);
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="deep-sea"] #workbuddy-dream-skin-chrome .wbds-character {
+  --wbds-decoration-tilt: 2deg;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="deep-sea"] #workbuddy-dream-skin-chrome .wbds-character-card::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  right: 13px;
+  top: -5px;
+  width: 34px;
+  height: 3px;
+  border-radius: 3px;
+  background: var(--wbds-accent);
+  box-shadow: 0 0 12px color-mix(in srgb, var(--wbds-accent) 76%, transparent), -102px 222px 0 -1px var(--wbds-highlight);
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-mode="off"] #workbuddy-dream-skin-chrome .wbds-character {
+  display: none !important;
+}
+
+html.workbuddy-dream-skin:not(.wbds-has-character) #workbuddy-dream-skin-chrome .wbds-character {
+  display: none !important;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-style="deep-sea"] #workbuddy-dream-skin-chrome .wbds-character {
+  opacity: min(var(--wbds-character-opacity), .94);
+}
+
+html.workbuddy-dream-skin:not([data-workbuddy-dream-skin-style="deep-sea"]) #workbuddy-dream-skin-chrome .wbds-sonar,
+html.workbuddy-dream-skin:not([data-workbuddy-dream-skin-style="deep-sea"]) #workbuddy-dream-skin-chrome .wbds-coordinate {
+  display: none;
+}
+
+@keyframes wbds-decoration-float {
+  0%, 100% { transform: translate3d(0, 0, 0) rotate(-.45deg); }
+  34% { transform: translate3d(-2px, -7px, 0) rotate(.35deg); }
+  68% { transform: translate3d(2px, -3px, 0) rotate(-.15deg); }
+}
+
+@keyframes wbds-decoration-sway {
+  0%, 100% { transform: rotate(calc(var(--wbds-decoration-tilt) - .65deg)); }
+  50% { transform: rotate(calc(var(--wbds-decoration-tilt) + .65deg)); }
+}
+
+@keyframes wbds-orbit-turn {
+  to { transform: rotate(360deg); }
+}
+
+@keyframes wbds-sparkle {
+  0%, 100% { opacity: .18; transform: scale(.55) rotate(0); }
+  45% { opacity: 1; transform: scale(1.12) rotate(90deg); }
+  70% { opacity: .42; transform: scale(.78) rotate(135deg); }
+}
+
+@media (max-width: 1080px), (max-height: 680px) {
+  html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-mode="auto"] #workbuddy-dream-skin-chrome .wbds-character {
+    display: none !important;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  #workbuddy-dream-skin-chrome .wbds-character {
+    animation: none;
+  }
+  #workbuddy-dream-skin-chrome :is(.wbds-character-card, .wbds-charm-orbit, .wbds-sparkles i) {
+    animation: none;
+  }
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-appearance="light"],
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-appearance="light"] body,
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-appearance="light"] #root {
+  background:
+    radial-gradient(circle at 84% 4%, color-mix(in srgb, var(--wbds-highlight) 24%, transparent), transparent 32%),
+    linear-gradient(145deg, color-mix(in srgb, var(--wbds-background) 92%, white), var(--wbds-background) 62%, color-mix(in srgb, var(--wbds-background) 90%, var(--wbds-secondary))) !important;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-appearance="light"] .conversation-list {
+  background: linear-gradient(180deg, color-mix(in srgb, var(--wbds-panel) 96%, transparent), color-mix(in srgb, var(--wbds-background) 96%, white)) !important;
+  box-shadow: inset -1px 0 var(--wbds-line), 8px 0 28px rgba(67, 78, 45, .06) !important;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-appearance="light"] :is(
+  [class*="_mainArea_"],
+  .wb-home-composer__input-slot,
+  .conversation-search-modal,
+  .workspace-preparing__content
+) {
+  box-shadow: 0 18px 48px color-mix(in srgb, var(--wbds-muted) 16%, transparent), inset 0 1px rgba(255, 255, 255, .72) !important;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-appearance="light"] :is(.ec-card-summon-btn, .ec-card-summon-btn *) {
+  color: #fff !important;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-appearance="light"] #workbuddy-dream-skin-chrome .wbds-grain {
+  opacity: .09;
+  mix-blend-mode: multiply;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-appearance="light"] .wbds-brand,
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-appearance="light"] .wbds-status {
+  text-shadow: 0 1px 8px rgba(255, 255, 255, .72);
+}
+
+/* ============================================================
+   Decoration shapes — must come AFTER per-style .wbds-character-card
+   rules so shape choice wins on equal specificity.
+   ============================================================ */
+
+/* Shape: stamp — circular校徽 badge, no human. Two rings, center label,
+   top washi tape strip, slight tilt. Draws entirely from tokens; safe on
+   any style / appearance. */
+/* Hide shape SVG faces by default; each shape opts in */
+#workbuddy-dream-skin-chrome .wbds-stamp-face,
+#workbuddy-dream-skin-chrome .wbds-sticker-face,
+#workbuddy-dream-skin-chrome .wbds-leaf-face,
+#workbuddy-dream-skin-chrome .wbds-heart-face,
+#workbuddy-dream-skin-chrome .wbds-porthole-face { display: none; }
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="stamp"] #workbuddy-dream-skin-chrome .wbds-character-card {
+  --wbds-stamp-face-fill: color-mix(in srgb, var(--wbds-panel) 55%, white 45%);
+  --wbds-stamp-ring-ink: color-mix(in srgb, var(--wbds-accent-alt) 65%, black 35%);
+  --wbds-stamp-arc-ink: color-mix(in srgb, var(--wbds-text) 78%, var(--wbds-accent-alt) 22%);
+  --wbds-stamp-emblem-ink: color-mix(in srgb, var(--wbds-accent-alt) 75%, black 25%);
+  aspect-ratio: 1 / 1;
+  width: 170px;
+  height: 170px;
+  padding: 0;
+  border-radius: 50%;
+  border: none;
+  background: var(--wbds-stamp-face-fill);
+  box-shadow:
+    0 22px 42px rgba(0, 0, 0, .34),
+    0 6px 14px rgba(0, 0, 0, .22),
+    0 0 0 4px color-mix(in srgb, var(--wbds-panel) 82%, white 18%);
+  transform: rotate(-6deg);
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="stamp"] #workbuddy-dream-skin-chrome .wbds-character-card img {
+  display: none;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="stamp"] #workbuddy-dream-skin-chrome .wbds-stamp-face {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="stamp"] #workbuddy-dream-skin-chrome .wbds-stamp-face .wbds-stamp-ring-outer {
+  fill: none;
+  stroke: var(--wbds-stamp-ring-ink);
+  stroke-width: 3;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="stamp"] #workbuddy-dream-skin-chrome .wbds-stamp-face .wbds-stamp-ring-inner {
+  fill: none;
+  stroke: var(--wbds-stamp-ring-ink);
+  stroke-width: 1;
+  stroke-dasharray: 2 3;
+  opacity: .55;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="stamp"] #workbuddy-dream-skin-chrome .wbds-stamp-face .wbds-stamp-emblem path {
+  fill: var(--wbds-stamp-emblem-ink);
+  stroke: var(--wbds-stamp-emblem-ink);
+  stroke-width: 0;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="stamp"] #workbuddy-dream-skin-chrome .wbds-stamp-face .wbds-stamp-emblem path:last-child {
+  fill: none;
+  stroke-width: 2.5;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="stamp"] #workbuddy-dream-skin-chrome .wbds-stamp-face .wbds-stamp-arc-top,
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="stamp"] #workbuddy-dream-skin-chrome .wbds-stamp-face .wbds-stamp-arc-bottom {
+  fill: var(--wbds-stamp-arc-ink);
+  font-family: "WBDS Assistant", "Segoe UI Variable", "Segoe UI", sans-serif;
+  font-weight: 900;
+  letter-spacing: 3px;
+  paint-order: stroke;
+  stroke: white;
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="stamp"] #workbuddy-dream-skin-chrome .wbds-stamp-face .wbds-stamp-arc-top {
+  font-size: 18px;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="stamp"] #workbuddy-dream-skin-chrome .wbds-stamp-face .wbds-stamp-arc-bottom {
+  font-size: 12px;
+  letter-spacing: 2.5px;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="stamp"] #workbuddy-dream-skin-chrome .wbds-character-card::after {
+  content: "";
+  display: none;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="stamp"] #workbuddy-dream-skin-chrome .wbds-character-card::before {
+  content: "";
+  position: absolute;
+  z-index: 2;
+  left: 50%;
+  top: -14px;
+  transform: translateX(-50%) rotate(-4deg);
+  width: 68px;
+  height: 22px;
+  background:
+    repeating-linear-gradient(90deg,
+      color-mix(in srgb, var(--wbds-accent) 55%, transparent) 0 6px,
+      color-mix(in srgb, var(--wbds-highlight) 65%, transparent) 6px 12px);
+  border: 1px solid color-mix(in srgb, var(--wbds-panel) 60%, transparent);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, .18);
+  clip-path: polygon(2% 8%, 98% 0, 96% 92%, 0 100%);
+}
+
+
+/* Shape: sticker — die-cut scrapbook sticker, rounded rectangle with a
+   dashed cut-line, center rose bouquet, hand-written label, +5° tilt.
+   Distinct from stamp (rect vs circle, dashed vs solid, rose vs leaf,
+   opposite tilt). */
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="sticker"] #workbuddy-dream-skin-chrome .wbds-character-card {
+  --wbds-sticker-face-fill: color-mix(in srgb, var(--wbds-panel) 55%, white 45%);
+  --wbds-sticker-cut-ink: color-mix(in srgb, var(--wbds-accent-alt) 60%, black 25%);
+  --wbds-sticker-rose-outer: color-mix(in srgb, var(--wbds-accent) 78%, white 22%);
+  --wbds-sticker-rose-inner: color-mix(in srgb, var(--wbds-accent) 45%, white 55%);
+  --wbds-sticker-rose-side: color-mix(in srgb, var(--wbds-accent-alt) 70%, white 30%);
+  --wbds-sticker-rose-core: color-mix(in srgb, var(--wbds-accent-alt) 75%, black 15%);
+  --wbds-sticker-leaf-ink: color-mix(in srgb, var(--wbds-secondary) 80%, black 10%);
+  --wbds-sticker-label-ink: color-mix(in srgb, var(--wbds-text) 85%, var(--wbds-accent-alt) 15%);
+  aspect-ratio: 5 / 4;
+  width: 185px;
+  height: 148px;
+  padding: 0;
+  border: none;
+  border-radius: 24px 12px 26px 14px;
+  background: var(--wbds-sticker-face-fill);
+  box-shadow:
+    inset 0 0 0 2px color-mix(in srgb, var(--wbds-accent) 24%, transparent),
+    0 22px 40px rgba(0, 0, 0, .30),
+    0 6px 14px rgba(0, 0, 0, .18),
+    0 0 0 4px color-mix(in srgb, var(--wbds-panel) 78%, white 22%);
+  transform: rotate(5deg);
+}
+
+/* Inner dashed cut-line — draws the die-cut sticker feel */
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="sticker"] #workbuddy-dream-skin-chrome .wbds-character-card::after {
+  content: "";
+  position: absolute;
+  inset: 6px;
+  border: 1.5px dashed var(--wbds-sticker-cut-ink);
+  border-radius: 20px 8px 22px 10px;
+  pointer-events: none;
+  right: auto;
+  top: auto;
+  width: auto;
+  height: auto;
+  background: transparent;
+  box-shadow: none;
+  transform: none;
+  display: block;
+}
+
+/* No washi tape for sticker — it's stuck flat */
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="sticker"] #workbuddy-dream-skin-chrome .wbds-character-card::before {
+  display: none;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="sticker"] #workbuddy-dream-skin-chrome .wbds-character-card img {
+  display: none;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="sticker"] #workbuddy-dream-skin-chrome .wbds-sticker-face {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="sticker"] #workbuddy-dream-skin-chrome .wbds-sticker-face .wbds-sticker-leaf {
+  fill: var(--wbds-sticker-leaf-ink);
+  opacity: .88;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="sticker"] #workbuddy-dream-skin-chrome .wbds-sticker-face .wbds-sticker-petal-side {
+  fill: var(--wbds-sticker-rose-side);
+  stroke: color-mix(in srgb, var(--wbds-sticker-rose-core) 60%, transparent);
+  stroke-width: .8;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="sticker"] #workbuddy-dream-skin-chrome .wbds-sticker-face .wbds-sticker-petal {
+  fill: var(--wbds-sticker-rose-outer);
+  stroke: color-mix(in srgb, var(--wbds-sticker-rose-core) 45%, transparent);
+  stroke-width: 1;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="sticker"] #workbuddy-dream-skin-chrome .wbds-sticker-face .wbds-sticker-petal-core {
+  fill: var(--wbds-sticker-rose-inner);
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="sticker"] #workbuddy-dream-skin-chrome .wbds-sticker-face .wbds-sticker-petal-highlight {
+  fill: white;
+  opacity: .55;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="sticker"] #workbuddy-dream-skin-chrome .wbds-sticker-face .wbds-sticker-label {
+  fill: var(--wbds-sticker-label-ink);
+  font-family: "Segoe Script", "Bradley Hand", "Comic Sans MS", "WBDS Assistant", cursive;
+  font-weight: 700;
+  font-size: 20px;
+  font-style: italic;
+  paint-order: stroke;
+  stroke: white;
+  stroke-width: 3;
+  stroke-linejoin: round;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="sticker"] #workbuddy-dream-skin-chrome .wbds-sticker-face .wbds-sticker-sub {
+  fill: color-mix(in srgb, var(--wbds-sticker-label-ink) 70%, transparent);
+  font-family: "WBDS Assistant", "Segoe UI Variable", "Segoe UI", sans-serif;
+  font-weight: 600;
+  font-size: 11px;
+  letter-spacing: 2px;
+  paint-order: stroke;
+  stroke: white;
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="sticker"] #workbuddy-dream-skin-chrome .wbds-sticker-face .wbds-sticker-corner circle {
+  fill: color-mix(in srgb, var(--wbds-accent) 55%, transparent);
+}
+
+/* Decoration anchor — semantic slot for which corner the decoration sits in.
+   Default (unset or top-right) keeps the base .wbds-character rules that use
+   `right + top`. Other anchors flip axes so the decoration lands away from
+   whichever hero subject dominates. */
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-anchor="bottom-right"] #workbuddy-dream-skin-chrome .wbds-character {
+  right: var(--wbds-decoration-right);
+  bottom: 96px;
+  top: auto;
+  transform-origin: 52% 88%;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-anchor="top-left"] #workbuddy-dream-skin-chrome .wbds-character {
+  left: var(--wbds-decoration-right);
+  top: var(--wbds-decoration-top);
+  right: auto;
+  transform-origin: 48% 12%;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-anchor="bottom-left"] #workbuddy-dream-skin-chrome .wbds-character {
+  left: var(--wbds-decoration-right);
+  bottom: 96px;
+  right: auto;
+  top: auto;
+  transform-origin: 48% 88%;
+}
+
+/* Shape: pressed-leaf — botanical herbarium specimen. Portrait vellum
+   card, no tilt, no border, subtle 1px hairline; center fern silhouette
+   drawn with an elliptical leaflet ladder; Latin cursive label + catalog
+   number below. Corner has a small ink stamp (year). Deliberately still
+   and formal vs sticker's playful bounce. */
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="pressed-leaf"] #workbuddy-dream-skin-chrome .wbds-character-card {
+  --wbds-leaf-face-fill: color-mix(in srgb, var(--wbds-panel) 62%, white 38%);
+  --wbds-leaf-hairline: color-mix(in srgb, var(--wbds-accent-alt) 42%, transparent);
+  --wbds-leaf-fern-ink: color-mix(in srgb, var(--wbds-accent-alt) 78%, black 22%);
+  --wbds-leaf-latin-ink: color-mix(in srgb, var(--wbds-text) 82%, var(--wbds-accent-alt) 18%);
+  --wbds-leaf-catalog-ink: color-mix(in srgb, var(--wbds-muted) 82%, black 12%);
+  aspect-ratio: 4 / 5;
+  width: 152px;
+  height: 190px;
+  padding: 0;
+  border: 1px solid var(--wbds-leaf-hairline);
+  border-radius: 3px;
+  background:
+    radial-gradient(circle at 20% 25%, color-mix(in srgb, var(--wbds-panel-alt) 40%, transparent) 0 1px, transparent 2px),
+    radial-gradient(circle at 78% 62%, color-mix(in srgb, var(--wbds-panel-alt) 40%, transparent) 0 1px, transparent 2px),
+    var(--wbds-leaf-face-fill);
+  background-size: 32px 32px, 42px 42px, auto;
+  box-shadow:
+    0 18px 34px rgba(0, 0, 0, .22),
+    0 4px 10px rgba(0, 0, 0, .16),
+    inset 0 0 0 4px color-mix(in srgb, var(--wbds-panel) 95%, transparent);
+  transform: rotate(-1deg);
+}
+
+/* Kill washi tape + dashed cut line — pressed leaf is a bare specimen */
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="pressed-leaf"] #workbuddy-dream-skin-chrome .wbds-character-card::before,
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="pressed-leaf"] #workbuddy-dream-skin-chrome .wbds-character-card::after {
+  display: none;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="pressed-leaf"] #workbuddy-dream-skin-chrome .wbds-character-card img {
+  display: none;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="pressed-leaf"] #workbuddy-dream-skin-chrome .wbds-leaf-face {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="pressed-leaf"] #workbuddy-dream-skin-chrome .wbds-leaf-face .wbds-leaf-fern ellipse {
+  fill: var(--wbds-leaf-fern-ink);
+  opacity: .82;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="pressed-leaf"] #workbuddy-dream-skin-chrome .wbds-leaf-face .wbds-leaf-stem {
+  fill: none;
+  stroke: var(--wbds-leaf-fern-ink);
+  stroke-width: 1.5;
+  stroke-linecap: round;
+  opacity: .78;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="pressed-leaf"] #workbuddy-dream-skin-chrome .wbds-leaf-face .wbds-leaf-latin {
+  fill: var(--wbds-leaf-latin-ink);
+  font-family: "Segoe Script", "Bradley Hand", "Comic Sans MS", "WBDS Assistant", cursive;
+  font-weight: 600;
+  font-size: 15px;
+  font-style: italic;
+  paint-order: stroke;
+  stroke: color-mix(in srgb, var(--wbds-leaf-face-fill) 80%, white);
+  stroke-width: 2.5;
+  stroke-linejoin: round;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="pressed-leaf"] #workbuddy-dream-skin-chrome .wbds-leaf-face .wbds-leaf-catalog {
+  fill: var(--wbds-leaf-catalog-ink);
+  font-family: "WBDS Assistant", "Segoe UI Variable", "Segoe UI", sans-serif;
+  font-weight: 500;
+  font-size: 9px;
+  letter-spacing: 2.5px;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="pressed-leaf"] #workbuddy-dream-skin-chrome .wbds-leaf-face .wbds-leaf-corner circle {
+  fill: none;
+  stroke: var(--wbds-leaf-hairline);
+  stroke-width: 1;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="pressed-leaf"] #workbuddy-dream-skin-chrome .wbds-leaf-face .wbds-leaf-corner text {
+  fill: color-mix(in srgb, var(--wbds-leaf-catalog-ink) 85%, transparent);
+  font-family: "WBDS Assistant", "Segoe UI Variable", "Segoe UI", sans-serif;
+  font-weight: 700;
+  font-size: 7.5px;
+  letter-spacing: 1px;
+}
+
+/* ============================================================
+   Frame shapes — clip the character <img> into a distinctive
+   silhouette, then overlay a themed SVG for border / ornaments.
+   Unlike stamp / sticker / pressed-leaf, these KEEP the img
+   visible and drive uniqueness through frame shape not content.
+   ============================================================ */
+
+/* Shape: heart — pink-dream romantic scrapbook frame */
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="heart"] #workbuddy-dream-skin-chrome .wbds-character-card {
+  --wbds-heart-outline-ink: color-mix(in srgb, var(--wbds-accent-alt) 78%, black 12%);
+  --wbds-heart-ribbon-fill: color-mix(in srgb, var(--wbds-highlight) 75%, white 25%);
+  aspect-ratio: 10 / 9;
+  width: 180px;
+  height: 162px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  box-shadow: none;
+  overflow: visible;
+  transform: rotate(4deg);
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="heart"] #workbuddy-dream-skin-chrome .wbds-character-card::before,
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="heart"] #workbuddy-dream-skin-chrome .wbds-character-card::after {
+  display: none;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="heart"] #workbuddy-dream-skin-chrome .wbds-character-card img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  border-radius: 0;
+  object-fit: cover;
+  object-position: 50% 30%;
+  clip-path: path("M 100,158 C 100,158 28,110 28,58 C 28,25 60,12 100,52 C 140,12 172,25 172,58 C 172,110 100,158 100,158 Z");
+  filter:
+    drop-shadow(0 6px 12px rgba(0,0,0,.32))
+    drop-shadow(0 2px 4px rgba(0,0,0,.24));
+}
+
+/* Heart SVG has viewBox 200x180 for the outline + ribbon */
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="heart"] #workbuddy-dream-skin-chrome .wbds-heart-face {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  overflow: visible;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="heart"] #workbuddy-dream-skin-chrome .wbds-heart-face .wbds-heart-outline {
+  fill: none;
+  stroke: var(--wbds-heart-outline-ink);
+  stroke-width: 4;
+  stroke-linejoin: round;
+  filter: drop-shadow(0 0 4px color-mix(in srgb, var(--wbds-accent-alt) 60%, transparent));
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="heart"] #workbuddy-dream-skin-chrome .wbds-heart-face .wbds-heart-ribbon path {
+  fill: var(--wbds-heart-ribbon-fill);
+  stroke: color-mix(in srgb, var(--wbds-highlight) 60%, black 30%);
+  stroke-width: 1;
+}
+
+/* Shape: porthole — deep-sea brass submarine window */
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="porthole"] #workbuddy-dream-skin-chrome .wbds-character-card {
+  --wbds-porthole-ring-outer: color-mix(in srgb, var(--wbds-highlight) 70%, black 20%);
+  --wbds-porthole-ring-inner: color-mix(in srgb, var(--wbds-highlight) 45%, black 40%);
+  --wbds-porthole-rivet-ink: color-mix(in srgb, var(--wbds-highlight) 50%, black 45%);
+  --wbds-porthole-glare-ink: color-mix(in srgb, var(--wbds-accent-alt) 60%, white 40%);
+  aspect-ratio: 1 / 1;
+  width: 160px;
+  height: 160px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: color-mix(in srgb, var(--wbds-panel) 90%, black 10%);
+  box-shadow:
+    inset 0 0 0 4px var(--wbds-porthole-ring-outer),
+    inset 0 0 0 7px color-mix(in srgb, var(--wbds-panel-alt) 60%, black 40%),
+    inset 0 0 0 10px var(--wbds-porthole-ring-inner),
+    inset 0 2px 6px rgba(255,255,255,.14),
+    0 22px 40px rgba(0, 0, 0, .48),
+    0 6px 14px rgba(0, 0, 0, .3),
+    0 0 0 3px color-mix(in srgb, var(--wbds-panel) 82%, black 18%);
+  transform: rotate(-2deg);
+  overflow: hidden;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="porthole"] #workbuddy-dream-skin-chrome .wbds-character-card::before,
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="porthole"] #workbuddy-dream-skin-chrome .wbds-character-card::after {
+  display: none;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="porthole"] #workbuddy-dream-skin-chrome .wbds-character-card img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  max-height: none;
+  border-radius: 50%;
+  object-fit: cover;
+  object-position: 50% 35%;
+  clip-path: circle(45% at 50% 50%);
+  filter: brightness(.9) contrast(1.05) saturate(.85);
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="porthole"] #workbuddy-dream-skin-chrome .wbds-porthole-face {
+  display: block;
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="porthole"] #workbuddy-dream-skin-chrome .wbds-porthole-face .wbds-porthole-rivets circle {
+  fill: var(--wbds-porthole-rivet-ink);
+  stroke: color-mix(in srgb, var(--wbds-highlight) 30%, black 55%);
+  stroke-width: .8;
+}
+
+html.workbuddy-dream-skin[data-workbuddy-dream-skin-decoration-shape="porthole"] #workbuddy-dream-skin-chrome .wbds-porthole-face .wbds-porthole-glare {
+  fill: var(--wbds-porthole-glare-ink);
+  opacity: .28;
+  mix-blend-mode: screen;
+}

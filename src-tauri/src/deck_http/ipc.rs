@@ -165,7 +165,9 @@ pub(super) async fn dispatch(app: &AppHandle, cmd: &str, args: &Value) -> Result
         "app_ready" => {
             // 面板里只做与窗口无关的幂等活：存量账号字段补齐（外部工具导入的记录
             // 可能只有 expires_at 秒级时间）。**绝不 show 窗口**——见文件头注释。
-            let _ = std::panic::catch_unwind(wb_switch_core::modules::export_import::repair_store_fields);
+            let _ = std::panic::catch_unwind(
+                wb_switch_core::modules::export_import::repair_store_fields,
+            );
             Ok(json!({ "ok": true, "embedded": true, "windowShown": false }))
         }
         other => Err(format!("未支持的内嵌命令: {other}")),
