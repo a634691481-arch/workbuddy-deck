@@ -17,29 +17,8 @@ use chrono::Local;
 use rusqlite::{Connection, OpenFlags};
 use serde_json::{json, Value};
 
-use wb_switch_core::modules::{auth_file, config, process};
+use wb_switch_core::modules::{config, process};
 use wb_switch_core::modules::variant::WbVariant;
-
-/// 当前正在运行的 WorkBuddy 变体（可能同时装了 CN 与 INTL）。
-fn running_variants() -> Vec<WbVariant> {
-    WbVariant::ALL
-        .iter()
-        .copied()
-        .filter(|variant| process::is_workbuddy_running(*variant))
-        .collect()
-}
-
-/// 清理后拉起哪个变体：优先「刚关掉的那个」，否则「有认证文件的那个」，兜底 CN。
-fn relaunch_target(closed: &[WbVariant]) -> WbVariant {
-    if let Some(variant) = closed.first() {
-        return *variant;
-    }
-    WbVariant::ALL
-        .iter()
-        .copied()
-        .find(|variant| auth_file::read_auth_file(*variant).is_some())
-        .unwrap_or(WbVariant::Cn)
-}
 
 /// WorkBuddy 主数据目录（当前用户主目录下）。
 fn wb_data_dir() -> PathBuf {
@@ -214,12 +193,8 @@ pub fn list() -> Value {
 
 /// 执行清理：备份 → 删正文 → 删库行。任一步失败即停，不半途吞错。
 pub fn purge() -> Value {
-    if process::is_workbuddy_running(WbVariant::Cn)
-        || process::is_workbuddy_running(WbVariant::Ai)
-    {
-        return json!({ "ok": false, "blocked": true, "error": "workbuddy running" });
-    }
-
+    // 2026-11-20 用户要求：清理归档不再关闭 WorkBuddy，直接在运行中清理。
+    // SQLite WAL 允许并发写；只有 VACUUM 需要独占，库被占用时跳过（见下）。
     let Some(ids) = read_archived_ids() else {
         return json!({
             "ok": false,
@@ -271,15 +246,17 @@ pub fn purge() -> Value {
         }
     }
 
-    // 删库行 + 回收空间。DB 行删不掉不影响已删的正文（少腾一点库空间而已）。
+    // 删库行。VACUUM 需要独占库：WorkBuddy 在运行时大概率拿不到，跳过即可
+    // （空间晚点回收，不影响删除语义），不算清理失败。
     let mut db_error = None;
+    let mut vacuum_error = None;
     match Connection::open(&db) {
         Ok(conn) => {
             let _ = conn.busy_timeout(std::time::Duration::from_secs(3));
             if let Err(error) = conn.execute("DELETE FROM sessions WHERE status = 'archived'", []) {
                 db_error = Some(error.to_string());
             } else if let Err(error) = conn.execute_batch("VACUUM;") {
-                db_error = Some(error.to_string());
+                vacuum_error = Some(error.to_string());
             }
         }
         Err(error) => db_error = Some(error.to_string()),
@@ -287,6 +264,7 @@ pub fn purge() -> Value {
 
     json!({
         "ok": db_error.is_none(),
+        "vacuumError": vacuum_error,
         "deleted": removed,
         "freedBytes": freed,
         "human": human_bytes(freed),
@@ -296,65 +274,16 @@ pub fn purge() -> Value {
     })
 }
 
-/// 一键流程：自动关 WorkBuddy → 清理归档 → 自动拉起 WorkBuddy。
+/// 清理归档：WorkBuddy 保持运行，直接清理（备份 → 删正文 → 删库行）。
 ///
-/// 与「切换账号」同一套路：`progress` 逐阶段上报，失败一律带 `stage`，
-/// 前端弹框能说清「停在哪一步」而不是甩一句「清理失败」。
-/// 拉起失败不算清理失败（数据已清干净），单独回 `launchError`。
-pub fn purge_auto(relaunch: bool, progress: &dyn Fn(&str)) -> Value {
-    let running = running_variants();
-
-    // ① 关：运行中就替用户关掉，不再要求手动退出（关不掉才拦）。
-    if !running.is_empty() {
-        progress("正在关闭 WorkBuddy…");
-        for variant in &running {
-            if let Err(error) = process::close_workbuddy(*variant, 25) {
-                return json!({ "ok": false, "blocked": true, "stage": "close", "error": error });
-            }
-        }
-        if !running_variants().is_empty() {
-            return json!({
-                "ok": false,
-                "blocked": true,
-                "stage": "close",
-                "error": "WorkBuddy 进程仍在运行，请手动结束后重试",
-            });
-        }
-    }
-
-    // ② 清理：复用上面的删除实现（备份 → 删正文 → 删库行 → VACUUM）。
+/// 2026-11-20 用户改口径：不再关/拉 WorkBuddy。`progress` 逐阶段上报，
+/// 失败一律带 `stage`，前端弹框能说清「停在哪一步」而不是甩一句「清理失败」。
+pub fn purge_auto(progress: &dyn Fn(&str)) -> Value {
     progress("正在清理归档会话…");
     let mut payload = purge();
-    if !payload.get("ok").and_then(Value::as_bool).unwrap_or(false) {
-        if let Some(map) = payload.as_object_mut() {
-            map.insert("stage".to_string(), json!("purge"));
-            map.insert("relaunched".to_string(), json!(false));
-        }
-        return payload;
-    }
+    let ok = payload.get("ok").and_then(Value::as_bool).unwrap_or(false);
     if let Some(map) = payload.as_object_mut() {
-        map.insert("closed".to_string(), json!(!running.is_empty()));
-    }
-
-    // ③ 拉起。
-    if relaunch {
-        let target = relaunch_target(&running);
-        progress("正在启动 WorkBuddy…");
-        let outcome = process::launch_workbuddy(target, Some(progress));
-        if let Some(map) = payload.as_object_mut() {
-            match outcome {
-                Ok(()) => {
-                    map.insert("relaunched".to_string(), json!(true));
-                }
-                Err(error) => {
-                    map.insert("relaunched".to_string(), json!(false));
-                    map.insert("launchError".to_string(), json!(error));
-                }
-            }
-        }
-    }
-    if let Some(map) = payload.as_object_mut() {
-        map.insert("stage".to_string(), json!("done"));
+        map.insert("stage".to_string(), json!(if ok { "done" } else { "purge" }));
     }
     payload
 }

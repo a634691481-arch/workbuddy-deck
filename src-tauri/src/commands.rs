@@ -384,6 +384,7 @@ fn assets_error(message: impl Into<String>) -> Value {
         "ok": false,
         "badges": [],
         "quota": Value::Null,
+        "buddyInfo": Value::Null,
         "error": message.into(),
     })
 }
@@ -405,9 +406,10 @@ pub async fn growth_assets(account_id: Option<String>) -> Value {
         return assets_error("账号不存在");
     };
     let acc = fresh(acc).await;
-    let (badges, quota) = tokio::join!(
+    let (badges, quota, buddy) = tokio::join!(
         growth_center::badges(&acc),
-        growth_center::buddy_quota(&acc)
+        growth_center::buddy_quota(&acc),
+        growth_center::buddy_info(&acc)
     );
     let errors: Vec<String> = [badges.as_ref().err(), quota.as_ref().err()]
         .into_iter()
@@ -421,6 +423,7 @@ pub async fn growth_assets(account_id: Option<String>) -> Value {
             .map(|assets| assets["badges"].clone())
             .unwrap_or_else(|| json!([])),
         "quota": quota.ok().unwrap_or(Value::Null),
+        "buddyInfo": buddy.ok().unwrap_or(Value::Null),
         "error": if errors.is_empty() {
             Value::Null
         } else {
@@ -448,6 +451,45 @@ pub fn auto_daily_set(enabled: bool, time: String) -> Value {
         Ok(()) => json!({ "ok": true, "config": cfg }),
         Err(error) => json!({ "ok": false, "error": error.to_string() }),
     }
+}
+
+/// CDP 连接状态（设置页展示）：enabled / connected / port / url / title。
+#[tauri::command]
+pub async fn cdp_status() -> Value {
+    wb_switch_core::modules::cdp::status().await
+}
+
+/// 带 `--remote-debugging-port` 重启客户端：关旧进程 → 带参拉起 → 等端口就绪。
+/// 客户端没在跑也直接带参启动。失败返回 `{ok:false,error}`，不抛异常。
+#[tauri::command]
+pub async fn cdp_restart_client() -> Value {
+    let variant = wb_switch_core::modules::variant::WbVariant::Cn;
+    let cfg = wb_switch_core::modules::config::load_cdp_config();
+    let port = cfg
+        .get("ports")
+        .and_then(|v| v.as_array())
+        .and_then(|rows| rows.first())
+        .and_then(|v| v.as_u64())
+        .unwrap_or(9222) as u16;
+    let result = tauri::async_runtime::spawn_blocking(move || {
+        wb_switch_core::modules::process::restart_workbuddy_with_cdp(variant, port, 15)
+    })
+    .await
+    .map_err(|e| format!("任务失败: {e}"))
+    .and_then(|inner| inner);
+    if result.is_err() {
+        return json!({ "ok": false, "error": result.err().unwrap_or_default() });
+    }
+    // 最多等 30s 让调试端口起来（Electron 冷启动较慢）。
+    for _ in 0..30 {
+        tokio::time::sleep(std::time::Duration::from_secs(1)).await;
+        if wb_switch_core::modules::cdp::probe_port(port).await {
+            // 立刻建立连接，让设置页状态马上变绿。
+            let _ = wb_switch_core::modules::cdp::workbuddy_page(true).await.is_some();
+            return json!({ "ok": true, "port": port });
+        }
+    }
+    json!({ "ok": false, "error": "客户端已带参启动，但调试端口未就绪（可能被安全策略拦截）" })
 }
 
 /// 拉起主程序去添加账号：本工具不自己实现登录（AGENTS.md §5 白名单）。
@@ -795,6 +837,10 @@ pub async fn workbuddy_status() -> Value {
 /// **不抛 Err**：失败也返回 `{ ok:false, ... }`，把「停在哪一步 / 是否已回滚」变成
 /// 结构化字段。原先靠 catch 中文文案判断，前端无法区分「没写认证」和「已回滚」，
 /// 只能一律报「切换失败」——这正是两次事故里用户看不懂现场的原因。
+// 切换是否由 core 负责重启 WorkBuddy（`switch_account_detailed(..., restart=true)`）。
+// 改回热切换时，这里与两处调用点一起改，否则成功后会朝已关闭的页面发 reload。
+const SWITCH_RESTARTS_WORKBUDDY: bool = true;
+
 #[tauri::command(rename_all = "camelCase")]
 pub async fn switch_workbuddy_account(app: tauri::AppHandle, account_id: String) -> Value {
     if account_id.trim().is_empty() {
@@ -814,8 +860,10 @@ pub async fn switch_workbuddy_account(app: tauri::AppHandle, account_id: String)
     });
     let app_for_finish = app.clone();
     let outcome = tauri::async_runtime::spawn_blocking(move || {
-        // restart=true + replace_sessions=true：即原项目的「完全同步」切换。
-        switch::switch_account_detailed(Some(&progress), &account_id, true, false, &[], &[], true)
+        // 切换只换认证，**不碰会话**：每个账号的会话/空间以它自己的数据为准。
+        // restart=true 让 WorkBuddy 真正以新身份重启一次——热 reload 会留着旧身份的
+        // 内存缓存，侧栏看起来「上下文全没了」，实际是没按新 uid 重新查库。
+        switch::switch_account_detailed(Some(&progress), &account_id, true, false, &[], &[], false)
     })
     .await;
 
@@ -841,6 +889,25 @@ pub async fn switch_workbuddy_account(app: tauri::AppHandle, account_id: String)
             "result": payload.get("result").cloned().unwrap_or(Value::Null),
         }),
     );
+
+    // 成功后的收尾：切换走 restart=true，WorkBuddy 由 core 重新拉起，
+    // 这里再发 CDP reload 只会打在已经关掉的页面上，还会误报「请手动刷新」。
+    // 保留热切换分支：将来若改回 restart=false，reload 才有意义。
+    if payload.get("ok").and_then(Value::as_bool).unwrap_or(false) {
+        if SWITCH_RESTARTS_WORKBUDDY {
+            let _ = app.emit(
+                "switch-progress",
+                json!({ "message": "已切换，WorkBuddy 正在重启…" }),
+            );
+        } else {
+            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+            let reloaded = wb_switch_core::modules::cdp::reload_workbuddy_page().await;
+            if !reloaded {
+                let _ = app
+                    .emit("switch-progress", json!({ "message": "已写入认证，请手动刷新客户端" }));
+            }
+        }
+    }
     payload
 }
 
@@ -1661,6 +1728,7 @@ async fn auto_switch_run(app: tauri::AppHandle, ask: bool) -> Value {
                 let progress: switch::ProgressFn = Box::new(move |message| {
                     let _ = app_for_progress.emit("switch-progress", json!({ "message": message }));
                 });
+                // 自动切换也不替换会话：删目标账号会话是不可逆操作，且会让用户丢上下文。
                 let (result, diagnostics) = switch::switch_account_detailed(
                     Some(&progress),
                     target,
@@ -1668,7 +1736,7 @@ async fn auto_switch_run(app: tauri::AppHandle, ask: bool) -> Value {
                     false,
                     &[],
                     &[],
-                    true,
+                    false,
                 );
                 match result {
                     Ok(_) => Ok(()),
@@ -1936,6 +2004,42 @@ pub fn update_download(app: tauri::AppHandle) -> Value {
 }
 
 /// 安装已暂存的更新包并重启。
+/// 换肤：当前配置 + 可选模式。
+#[tauri::command]
+pub fn skin_state() -> Value {
+    crate::skin::state()
+}
+
+/// 换肤：应用配置（模式 / 壁纸 / 模糊度），CDP 注入立即生效。
+#[tauri::command]
+pub async fn skin_apply(config: crate::skin::SkinConfig) -> Result<Value, String> {
+    crate::skin::apply(config).await
+}
+
+/// 换肤：wallhaven 壁纸列表（按页）。
+#[tauri::command]
+pub async fn skin_wallpapers(page: Option<u32>) -> Result<Value, String> {
+    crate::skin::wallpapers(page.unwrap_or(1)).await
+}
+
+/// 换肤：下载选中壁纸原图并转 data URL（绕过渲染进程 CSP）。
+#[tauri::command]
+pub async fn skin_wallpaper_data(url: String) -> Result<Value, String> {
+    crate::skin::wallpaper_data(&url).await
+}
+
+/// 换肤：本地上传壁纸（对话框选图 → data URL）。
+#[tauri::command]
+pub async fn skin_wallpaper_upload(app: tauri::AppHandle) -> Result<Value, String> {
+    crate::skin::wallpaper_upload(app).await
+}
+
+/// 换肤：恢复官方外观。
+#[tauri::command]
+pub async fn skin_remove() -> Result<Value, String> {
+    crate::skin::remove().await
+}
+
 #[tauri::command]
 pub fn update_restart(app: tauri::AppHandle) -> Value {
     crate::update::restart(app)
@@ -1988,19 +2092,15 @@ pub async fn archived_tasks_list() -> Value {
         .unwrap_or_else(|_| json!({ "ok": false, "error": "spawn failed" }))
 }
 
-/// 执行归档任务清理：自动关 WorkBuddy → 清理 → 自动拉起（默认）。
+/// 执行归档任务清理：WorkBuddy 保持运行，直接清理（2026-11-20 用户改口径）。
 ///
-/// `relaunch=false` 只清理不拉起。逐阶段进度走事件 `purge-progress`，
-/// 前端弹框照「切换账号」那套显示，失败时带 `stage` 说清停在哪一步。
+/// 逐阶段进度走事件 `purge-progress`，前端弹框失败时带 `stage` 说清停在哪一步。
 #[tauri::command]
-pub async fn purge_archived_tasks(app: tauri::AppHandle, relaunch: Option<bool>) -> Value {
-    let relaunch = relaunch.unwrap_or(true);
+pub async fn purge_archived_tasks(app: tauri::AppHandle) -> Value {
     let progress: Box<dyn Fn(&str) + Send + Sync> = Box::new(move |message: &str| {
         let _ = app.emit("purge-progress", json!({ "message": message }));
     });
-    tauri::async_runtime::spawn_blocking(move || {
-        crate::purge::purge_auto(relaunch, progress.as_ref())
-    })
+    tauri::async_runtime::spawn_blocking(move || crate::purge::purge_auto(progress.as_ref()))
     .await
     .unwrap_or_else(|error| {
         json!({ "ok": false, "blocked": true, "stage": "purge", "error": format!("清理任务异常: {error}") })

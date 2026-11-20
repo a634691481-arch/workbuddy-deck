@@ -72,10 +72,18 @@ export interface BuddyQuota {
   maxOpenCount: number;
 }
 
+/** Buddy 信息（`/activity/growth/buddy/info`）：昵称 / 稀有度 / 性格。 */
+export interface BuddyInfo {
+  name: string;
+  rarity: string;
+  personality: string;
+}
+
 export interface GrowthAssets {
   ok: boolean;
   badges: GrowthBadge[];
   quota: BuddyQuota | null;
+  buddyInfo: BuddyInfo | null;
   error?: string;
 }
 
@@ -868,6 +876,71 @@ export interface SystemInfo {
 
 export const systemInfo = () => invoke<SystemInfo>("system_info");
 
+/** CDP 连接状态（设置页展示）。 */
+export interface CdpStatus {
+  enabled: boolean;
+  connected: boolean;
+  port?: number | null;
+  url?: string | null;
+  title?: string | null;
+}
+
+export const cdpStatus = () => invoke<CdpStatus>("cdp_status");
+
+/** 带调试端口重启客户端；失败给 error。 */
+export const cdpRestartClient = () =>
+  invoke<{ ok: boolean; port?: number; error?: string }>("cdp_restart_client");
+
+// ── 换肤（CDP 注入，对应 src-tauri/src/skin.rs）─────────────────────────
+
+export interface SkinConfig {
+  mode: string;
+  wallpaper: string;
+  blur: number;
+  /** 壁纸压暗蒙版 0–1 */
+  mask: number;
+}
+
+export interface SkinMode {
+  id: string;
+  label: string;
+  accent: string;
+  blur: number;
+}
+
+export const skinState = () =>
+  invoke<{ ok: boolean; config: SkinConfig; modes: SkinMode[] }>("skin_state");
+
+export const skinApply = (config: SkinConfig) =>
+  invoke<{ ok: boolean; mode?: string; label?: string; hasWallpaper?: boolean }>(
+    "skin_apply",
+    { config },
+  );
+
+export const skinRemove = () => invoke<{ ok: boolean }>("skin_remove");
+
+export interface SkinWallpaper {
+  id: string;
+  url: string;
+  thumb: string;
+  resolution: string;
+}
+
+/** wallhaven 壁纸列表（SFW / 横向 / 1080p+，按最近一个月热门排序）。缩略图已转 data URL。 */
+export const skinWallpapers = (page = 1) =>
+  invoke<{ ok: boolean; page: number; lastPage?: number; items: SkinWallpaper[] }>(
+    "skin_wallpapers",
+    { page },
+  );
+
+/** 选中壁纸：下载原图落盘，返回本地路径（配置只存路径，注入时后端临时读图）。 */
+export const skinWallpaperData = (url: string) =>
+  invoke<{ ok: boolean; path: string; dataUrl: string }>("skin_wallpaper_data", { url });
+
+/** 本地上传壁纸：选图拷进壁纸目录，返回本地路径。 */
+export const skinWallpaperUpload = () =>
+  invoke<{ ok: boolean; path: string; dataUrl: string }>("skin_wallpaper_upload");
+
 export const openStoreDir = () =>
   invoke<{ ok: boolean; path: string; error?: string }>("open_store_dir");
 
@@ -1010,13 +1083,10 @@ export interface PurgeResult {
   total?: number;
   backupDir?: string;
   blocked?: boolean;
-  /** 停在哪个阶段：close / purge / done */
+  /** 停在哪个阶段：purge / done */
   stage?: string;
-  /** 是否替用户关掉了正在运行的 WorkBuddy */
-  closed?: boolean;
-  relaunched?: boolean;
-  /** 清理成功但拉起失败时的原因（数据已清干净，不算清理失败） */
-  launchError?: string;
+  /** WorkBuddy 运行中拿不到独占锁，VACUUM 跳过（不影响删除语义） */
+  vacuumError?: string | null;
   error?: string;
 }
 
@@ -1051,8 +1121,7 @@ export const archivedTasksList = () => invoke<ArchivedList>("archived_tasks_list
 export const setWindowBackdrop = (kind: "off" | "acrylic") =>
   invoke<{ ok: boolean; error?: string }>("set_backdrop", { kind });
 
-export const purgeArchivedTasks = (relaunch = true) =>
-  invoke<PurgeResult>("purge_archived_tasks", { relaunch });
+export const purgeArchivedTasks = () => invoke<PurgeResult>("purge_archived_tasks");
 
 // ───────────────────────── 自动更新 ─────────────────────────
 

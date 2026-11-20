@@ -40,8 +40,7 @@ const readout = computed(() => {
 });
 
 // ───────────────────────── 清理（唯一入口） ─────────────────────────
-// 与「切换账号」同一套交互：点按钮 → 弹框 → 自动关 WorkBuddy → 清理 → 自动拉起 → 弹框自关。
-// 不再挂「请先退出 WorkBuddy」的提示条：进程由后端自己关，关不掉才在弹框里报阶段。
+// 点按钮 → 弹框 → 直接清理（WorkBuddy 保持运行，2026-11-20 口径）→ 成功后弹框自关。
 const purgeOpen = ref(false);
 const purging = ref(false);
 const progress = ref("");
@@ -51,14 +50,13 @@ const purgeDone = ref<{
   deleted: number;
   human: string;
   backupDir: string;
-  launchError: string;
+  vacuumError?: string | null;
 } | null>(null);
 
 const purgeBlocked = computed(() => !data.value || !data.value.ok || data.value.total === 0);
 const purgeBullets = computed(() => t("pz.bullets").split("\n"));
 
 const STAGE_KEYS: Record<string, I18nKey> = {
-  close: "pz.stageClose",
   purge: "pz.stagePurge",
   done: "pz.stageDone",
 };
@@ -90,7 +88,7 @@ async function doPurge() {
       progress.value = event.payload.message;
     });
     // 后端不抛错：失败也返回 ok:false，附带 stage。
-    const result = await purgeArchivedTasks(true);
+    const result = await purgeArchivedTasks();
     if (!result.ok) {
       purgeStage.value = result.stage ?? "";
       purgeError.value = result.error || t("st.fail");
@@ -100,7 +98,7 @@ async function doPurge() {
       deleted: result.deleted ?? 0,
       human: result.human ?? "0B",
       backupDir: result.backupDir ?? "",
-      launchError: result.launchError ?? "",
+      vacuumError: result.vacuumError ?? null,
     };
     notice.value = `${t("pz.done")} · ${result.deleted ?? 0} · ${result.human ?? ""}`;
     // 成功即自动收尾（与切换账号一致），不逼用户再点一次关闭。
@@ -122,20 +120,20 @@ async function doPurge() {
   <div class="flex min-h-0 flex-1 flex-col">
     <header class="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-panel px-4 py-2 wb-flat">
       <div class="min-w-0">
-        <h1 class="text-[13px] tracking-[0.12em] text-foreground">{{ t("ar.title") }}</h1>
+        <h1 class="text-[13px] text-foreground">{{ t("ar.title") }}</h1>
         <div class="readout mt-0.5 truncate text-[9px] text-faint">
           {{ t("ar.subtitle") }}
           <span v-if="notice" class="ml-2">{{ notice }}</span>
         </div>
       </div>
       <div class="flex shrink-0 items-center gap-2">
-        <span v-if="data?.running" class="readout border border-hazard bg-hazard-soft px-1.5 py-0.5 text-[8px] uppercase text-hazard">
+        <span v-if="data?.running" class="readout border border-hazard bg-hazard-soft px-1.5 py-0.5 text-[8px] text-hazard">
           {{ t("ar.running") }}
         </span>
         <span class="readout text-[10px]" :class="data?.total ? 'text-hazard' : 'text-muted-foreground'">{{ readout }}</span>
         <button
           type="button"
-          class="flex shrink-0 items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-hazard hover:text-hazard disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border-strong disabled:hover:text-muted-foreground"
+          class="flex shrink-0 items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] text-muted-foreground transition-colors hover:border-hazard hover:text-hazard disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:border-border-strong disabled:hover:text-muted-foreground"
           :disabled="purgeBlocked"
           :title="t('ar.hint')"
           @click="openPurge()"
@@ -145,7 +143,7 @@ async function doPurge() {
         </button>
         <button
           type="button"
-          class="flex items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
+          class="flex items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
           :disabled="loading"
           @click="load()"
         >
@@ -246,13 +244,9 @@ async function doPurge() {
               <span class="w-14 shrink-0 text-faint">{{ t("pz.backup") }}</span>
               <span class="readout min-w-0 flex-1 break-all text-muted-foreground">{{ purgeDone.backupDir }}</span>
             </div>
-            <div
-              v-if="purgeDone?.launchError"
-              class="mt-2 border border-hazard bg-hazard-soft px-3 py-1.5 text-[10px] text-hazard"
-            >
-              {{ t("pz.launchFail") }} · {{ purgeDone.launchError }}
-            </div>
-
+            <p v-if="purgeDone?.vacuumError" class="mt-2 text-[9px] text-faint">
+              {{ t("pz.vacuumSkip") }}
+            </p>
             <!-- 失败现场：阶段 + 原因，留在弹框里，别跟着 toast 一起消失 -->
             <div v-if="purgeError" class="mt-3 border border-hazard">
               <div class="flex items-center gap-1.5 border-b border-hazard bg-hazard-soft px-3 py-2 text-[11px] text-hazard">
@@ -272,7 +266,7 @@ async function doPurge() {
           <footer class="flex shrink-0 items-center justify-end gap-2 border-t border-border px-3 py-2">
             <button
               type="button"
-              class="border border-border-strong px-3 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
+              class="border border-border-strong px-3 py-1 text-[10px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
               :disabled="purging"
               @click="closePurge()"
             >
@@ -280,7 +274,7 @@ async function doPurge() {
             </button>
             <button
               type="button"
-              class="flex items-center gap-1.5 bg-hazard px-3 py-1 text-[10px] uppercase tracking-[0.1em] text-white transition-opacity hover:opacity-85 disabled:opacity-40"
+              class="flex items-center gap-1.5 bg-hazard px-3 py-1 text-[10px] text-white transition-opacity hover:opacity-85 disabled:opacity-40"
               :disabled="purging"
               @click="doPurge()"
             >
