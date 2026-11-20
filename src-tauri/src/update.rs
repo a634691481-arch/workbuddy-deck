@@ -26,10 +26,10 @@ pub const APP_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 /// 成功结果缓存 6 小时（对齐上游）：轮询命中缓存不发请求，手动检查传 force 绕过。
 const CACHE_TTL_SECS: i64 = 6 * 60 * 60;
-/// 启动后延迟首查，避开首屏取数与托盘初始化的网络争用。
-const STARTUP_DELAY_SECS: u64 = 8;
-/// 后台轮询间隔。
-const POLL_SECS: u64 = 6 * 60 * 60;
+/// 启动后延迟首查（对齐 workbuddy-switch 的 15s），避开首屏取数与托盘初始化的网络争用。
+const STARTUP_DELAY_SECS: u64 = 15;
+/// 后台轮询间隔（对齐 workbuddy-switch 的 30 分钟；6 小时缓存让多数轮次不发请求）。
+const POLL_SECS: u64 = 30 * 60;
 
 const RELEASE_URL: &str = "https://github.com/a634691481-arch/workbuddy-deck/releases/latest";
 
@@ -37,6 +37,10 @@ const RELEASE_URL: &str = "https://github.com/a634691481-arch/workbuddy-deck/rel
 static CACHE: Mutex<Option<(i64, Value)>> = Mutex::new(None);
 /// 安装互斥：下载/安装只允许一个在跑。
 static INSTALLING: AtomicBool = AtomicBool::new(false);
+/// 已下载待安装的更新包（版本 + 字节）。对齐 workbuddy-switch：
+/// 下载完成只暂存，用户点「重启以完成升级」才真正安装，绝不下载即装
+/// （Windows 装完会强制退出本进程，等于替用户做重启决定）。
+static PACKAGE: Mutex<Option<(String, tauri_plugin_updater::Update, Vec<u8>)>> = Mutex::new(None);
 
 fn now_secs() -> i64 {
     SystemTime::now()
@@ -314,9 +318,10 @@ pub async fn check(force: bool) -> Value {
     result
 }
 
-/// 下载并安装；Windows 上由插件在启动安装器后结束本进程，因此前端只能依赖事件。
-/// 立即返回 `{ started: true }`，结果走 `update://done`。
-pub fn install(app: AppHandle) -> Value {
+/// 只下载不安装（对齐 workbuddy-switch 的 start_download）：
+/// 三次重试拿包，进度走 `update://progress`，完成只暂存内存并发 `update://done`，
+/// 等用户点「重启以完成升级」调 `restart()` 才装。立即返回 `{ started: true }`。
+pub fn download(app: AppHandle) -> Value {
     if INSTALLING.swap(true, Ordering::SeqCst) {
         return json!({ "ok": false, "error": "更新正在进行中" });
     }
@@ -334,20 +339,20 @@ pub fn install(app: AppHandle) -> Value {
         }
     };
 
-    trace("install requested");
+    trace("download requested");
     tauri::async_runtime::spawn(async move {
-        let finish = |ok: bool, message: Option<String>| {
+        let finish = |ok: bool, message: Option<String>, version: String| {
             INSTALLING.store(false, Ordering::SeqCst);
             let _ = app.emit(
                 "update://done",
-                json!({ "ok": ok, "error": message, "version": APP_VERSION }),
+                json!({ "ok": ok, "error": message, "version": version, "staged": ok }),
             );
         };
 
         // 重试三次：GitHub 的下载域名（objects.githubusercontent.com）在国内经常
         // 第一次就 reset，重试往往第二次就通。每次都是独立的 updater + 独立进度。
         let mut version = String::new();
-        let mut outcome: Result<(), String> = Err("未开始".into());
+        let mut outcome: Result<(tauri_plugin_updater::Update, Vec<u8>), String> = Err("未开始".into());
         for attempt in 1..=3u32 {
             if attempt > 1 {
                 // 2s / 5s 退避，给线路一点恢复时间
@@ -356,15 +361,19 @@ pub fn install(app: AppHandle) -> Value {
             }
             let builder = match app.updater_builder().endpoints(urls.clone()) {
                 Ok(builder) => builder.timeout(Duration::from_secs(180)),
-                Err(e) => return finish(false, Some(format!("更新器初始化失败：{e}"))),
+                Err(e) => {
+                    return finish(false, Some(format!("更新器初始化失败：{e}")), String::new())
+                }
             };
             let updater = match builder.build() {
                 Ok(updater) => updater,
-                Err(e) => return finish(false, Some(format!("更新器初始化失败：{e}"))),
+                Err(e) => {
+                    return finish(false, Some(format!("更新器初始化失败：{e}")), String::new())
+                }
             };
             let update = match updater.check().await {
                 Ok(Some(update)) => update,
-                Ok(None) => return finish(false, Some("已是最新版本".into())),
+                Ok(None) => return finish(false, Some("已是最新版本".into()), String::new()),
                 Err(e) => {
                     outcome = Err(format!("检查失败：{e}"));
                     continue;
@@ -374,8 +383,9 @@ pub fn install(app: AppHandle) -> Value {
             let app_for_progress = app.clone();
             let downloaded = AtomicU64::new(0);
             let _ = app.emit("update://progress", json!({ "downloaded": 0, "total": null }));
-            match update
-                .download_and_install(
+            // 只 download 不 install：包留在返回值里，安装交给 restart()
+            let dl = update
+                .download(
                     |chunk, total| {
                         let done =
                             downloaded.fetch_add(chunk as u64, Ordering::Relaxed) + chunk as u64;
@@ -386,10 +396,10 @@ pub fn install(app: AppHandle) -> Value {
                     },
                     || {},
                 )
-                .await
-            {
-                Ok(()) => {
-                    outcome = Ok(());
+                .await;
+            match dl {
+                Ok(bytes) => {
+                    outcome = Ok((update, bytes));
                     break;
                 }
                 Err(e) => {
@@ -399,17 +409,22 @@ pub fn install(app: AppHandle) -> Value {
         }
 
         match outcome {
-            Ok(()) => {
-                // 下载即校验通过（插件先 verify 再 install），这条日志是「更新成功」的凭据。
+            Ok((update, bytes)) => {
+                // 插件 download 内部已验签：能走到这里就是「校验通过的完整安装包」。
+                // Update 对象要和字节一起留：install(bytes) 是它的方法。
+                if let Ok(mut slot) = PACKAGE.lock() {
+                    *slot = Some((version.clone(), update, bytes));
+                }
                 let _ = notifications::record(
                     "success",
-                    &format!("更新 · v{version} 已下载并校验通过"),
-                    Some(&format!("从 v{APP_VERSION} 升级，正在重启安装")),
+                    &format!("更新 · v{version} 已下载完成"),
+                    Some("点「重启以完成升级」后生效"),
                 );
-                let _ = app.emit("update://done", json!({ "ok": true, "version": version }));
-                // Windows：install 内部已退出进程；其它平台需手动重启。
-                #[cfg(not(target_os = "windows"))]
-                app.restart();
+                trace(&format!("download staged v{version}"));
+                let _ = app.emit(
+                    "update://done",
+                    json!({ "ok": true, "version": version, "staged": true }),
+                );
             }
             Err(e) => {
                 let hint = if e.contains("sending request")
@@ -423,7 +438,7 @@ pub fn install(app: AppHandle) -> Value {
                 } else {
                     ""
                 };
-                finish(false, Some(format!("下载或校验失败：{e}{hint}")))
+                finish(false, Some(format!("下载或校验失败：{e}{hint}")), version)
             }
         }
         INSTALLING.store(false, Ordering::SeqCst);
@@ -432,7 +447,50 @@ pub fn install(app: AppHandle) -> Value {
     json!({ "ok": true, "started": true })
 }
 
-/// 启动后延迟首查 + 每 6 小时轮询；只在发现新版本时推事件，窗口不轮询。
+/// 安装已暂存的包并重启（对齐 workbuddy-switch 的 restart）。
+/// 只在用户点了「重启以完成升级」后调用；Windows 上安装器启动后本进程直接退出。
+pub fn restart(app: AppHandle) -> Value {
+    let package = PACKAGE.lock().ok().and_then(|mut g| g.take());
+    let Some((version, update, bytes)) = package else {
+        return json!({ "ok": false, "error": "没有可安装的更新包，请先下载更新包" });
+    };
+    if INSTALLING.swap(true, Ordering::SeqCst) {
+        return json!({ "ok": false, "error": "更新正在进行中" });
+    }
+
+    trace(&format!("restart-install v{version}"));
+    tauri::async_runtime::spawn(async move {
+        // install 可能在主线程弹授权框（macOS），放 blocking 线程别堵 async worker。
+        let installed = tauri::async_runtime::spawn_blocking(move || {
+            update.install(&bytes).map_err(|e| e.to_string())
+        })
+        .await
+        .map_err(|e| e.to_string())
+        .and_then(|r| r);
+
+        if let Err(e) = installed {
+            INSTALLING.store(false, Ordering::SeqCst);
+            trace(&format!("install failed: {e}"));
+            let _ = app.emit(
+                "update://done",
+                json!({ "ok": false, "error": format!("v{} 已下载，但安装失败：{}（包已保留，可重试）", version, e) }),
+            );
+            return;
+        }
+        // Windows：install 内部已退出进程；其它平台手动拉起新版本。
+        #[cfg(not(target_os = "windows"))]
+        app.restart();
+        #[cfg(target_os = "windows")]
+        let _ = app.emit(
+            "update://done",
+            json!({ "ok": true, "version": version, "staged": false }),
+        );
+    });
+
+    json!({ "ok": true, "started": true })
+}
+
+/// 启动 15s 首查 + 每 30 分钟轮询（对齐 workbuddy-switch）；只发现版本推事件，窗口不轮询。
 pub fn spawn_poller(app: AppHandle) {
     tauri::async_runtime::spawn(async move {
         trace("poller start");

@@ -1096,9 +1096,14 @@ export interface UpdateDone {
 /** 检查更新；`force=true` 绕过 6 小时缓存。 */
 export const updateCheck = (force = false) => invoke<UpdateStatus>("update_check", { force });
 
-/** 触发下载安装：立即返回，进度与结果走 `update://progress` / `update://done` 事件。 */
-export const updateInstall = () =>
-  invoke<{ ok: boolean; started?: boolean; error?: string }>("update_install");
+/** 只下载不安装（对齐 workbuddy-switch）：进度走 `update://progress`，
+ *  完成只暂存内存并发 `update://done`，等用户点「重启以完成升级」再装。 */
+export const updateDownload = () =>
+  invoke<{ ok: boolean; started?: boolean; error?: string }>("update_download");
+
+/** 安装已暂存的更新包并重启（用户确认后才调）。 */
+export const updateRestart = () =>
+  invoke<{ ok: boolean; started?: boolean; error?: string }>("update_restart");
 
 export const updateConfigGet = () => invoke<UpdateConfig>("update_config_get");
 

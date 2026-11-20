@@ -1,5 +1,7 @@
 /**
- * 自动更新编排：检查 / 下载安装 / 进度 / 设置。
+ * 自动更新编排（对齐 workbuddy-switch 的流程）：
+ * 检查静默 → 发现新版只提示 → 用户点「下载更新」→ 下载完暂存 →
+ * 用户点「重启以完成升级」→ 安装并重启。绝不下载即装。
  *
  * 状态放在模块级：标题栏的更新角标与设置页的更新卡读同一份结果，
  * 后台轮询（`update://available`）与手动检查写入同一处，不各存一份。
@@ -11,13 +13,13 @@ import {
   updateCheck,
   updateConfigGet,
   updateConfigSet,
-  updateInstall,
+  updateDownload,
+  updateRestart,
   type UpdateDone,
   type UpdateProgress,
   type UpdateStatus,
 } from "@/lib/api";
 import { isTauri } from "@/lib/tauri-env";
-import { useShell } from "@/composables/useShell";
 
 const status = ref<UpdateStatus | null>(null);
 const checking = ref(false);
@@ -29,23 +31,19 @@ const autoCheck = ref(true);
 const mirror = ref("");
 
 /**
- * 更新弹框的阶段：下载 → 校验/安装 → 重启。
- * 只做展示，不改变后台安装流程（下载仍由后端 spawn 的 updater 完成）。
+ * 更新弹框的阶段（对齐 workbuddy-switch 状态机）：
+ * available（发现新版，等用户点下载）→ downloading → ready（已暂存，等重启）→ restarting。
+ * available / failed / idle 允许关闭。
  */
-export type UpdatePhase = "idle" | "downloading" | "installing" | "restarting" | "failed";
+export type UpdatePhase =
+  | "idle"
+  | "available"
+  | "downloading"
+  | "ready"
+  | "restarting"
+  | "failed";
 const phase = ref<UpdatePhase>("idle");
 const dialogOpen = ref(false);
-
-/**
- * 静默更新：默认开启。检测到新版本后自己下载并安装，不弹任何提示；
- * 唯一让步是「批量任务正在跑」时等它空闲，避免把用户正在跑的批次直接掐掉。
- */
-const SILENT_KEY = "wb-ta/silentUpdate";
-const silent = ref(localStorage.getItem(SILENT_KEY) !== "off");
-/** 同一个版本只自动装一次，装失败不无限重试（避免坏包把应用卡在重启循环） */
-const autoTried = new Set<string>();
-/** 真正的安装函数由 useUpdate() 注入：事件回调在模块层，拿不到组件闭包 */
-let autoInstaller: (() => void) | null = null;
 
 let wired = false;
 let unlisten: Array<() => void> = [];
@@ -63,7 +61,9 @@ function wire() {
   };
   void bind("update://available", (payload) => {
     status.value = payload as UpdateStatus;
-    maybeAutoInstall();
+    // 发现新版只弹框提示，下载交给用户（对齐 workbuddy-switch 的 Available 态）
+    phase.value = "available";
+    dialogOpen.value = true;
   });
   void bind("update://checked", (payload) => {
     status.value = payload as UpdateStatus;
@@ -74,41 +74,24 @@ function wire() {
     const p = payload as UpdateProgress;
     downloaded.value = p.downloaded ?? 0;
     total.value = p.total ?? null;
-    // 进度条走满 = 下载结束，插件紧接着校验并启动安装器
-    if (
-      phase.value === "downloading" &&
-      typeof total.value === "number" &&
-      total.value > 0 &&
-      downloaded.value >= total.value
-    ) {
-      phase.value = "installing";
-    }
   });
   void bind("update://done", (payload) => {
-    const done = payload as UpdateDone;
+    const done = payload as UpdateDone & { staged?: boolean };
     installing.value = false;
-    if (done.ok) {
-      // Windows 上插件启动安装器后会结束本进程；弹框保持到进程退出
-      phase.value = "restarting";
+    if (!done.ok) {
+      // 下载失败回 available 可重试；重启安装失败包还在，也回 ready
+      phase.value = phase.value === "restarting" ? "ready" : "available";
+      message.value = done.error ?? "";
       return;
     }
-    phase.value = "failed";
-    message.value = done.error ?? "";
+    if (done.staged === true) {
+      // 下载完成只暂存：等用户点「重启以完成升级」
+      phase.value = "ready";
+      return;
+    }
+    // Windows 上安装器启动后会结束本进程；弹框保持到进程退出
+    phase.value = "restarting";
   });
-}
-
-/** 检测到新版本后静默安装：任务执行中就 15 秒后再看一次，空闲立刻装。 */
-function maybeAutoInstall() {
-  if (!isTauri() || !silent.value || installing.value) return;
-  const next = status.value;
-  if (next?.hasUpdate !== true || !next.latest) return;
-  if (autoTried.has(next.latest)) return;
-  if (useShell().running.value) {
-    window.setTimeout(maybeAutoInstall, 15_000);
-    return;
-  }
-  autoTried.add(next.latest);
-  autoInstaller?.();
 }
 
 let bootstrapped = false;
@@ -122,7 +105,6 @@ export function useUpdate() {
       await loadConfig();
       // force = true：页面刷新也要真的查一次，不能吃 6 小时缓存
       await check(true);
-      maybeAutoInstall();
     })();
   }
 
@@ -164,33 +146,54 @@ export function useUpdate() {
       message.value = cause instanceof Error ? cause.message : String(cause);
     } finally {
       checking.value = false;
-      maybeAutoInstall();
+      if (status.value?.hasUpdate === true && phase.value === "idle") {
+        phase.value = "available";
+        dialogOpen.value = true;
+      }
     }
   }
 
-  async function install() {
+  /** 用户点「下载更新」：只下载不装，完成后停在 ready 等重启确认。 */
+  async function download() {
     if (installing.value || !isTauri()) return;
     installing.value = true;
     downloaded.value = 0;
     total.value = null;
     message.value = "";
-    dialogOpen.value = true;
     phase.value = "downloading";
     try {
-      const result = await updateInstall();
+      const result = await updateDownload();
       if (!result.ok) {
         installing.value = false;
-        phase.value = "failed";
+        phase.value = "available";
         message.value = result.error ?? "";
       }
     } catch (cause) {
       installing.value = false;
-      phase.value = "failed";
+      phase.value = "available";
       message.value = cause instanceof Error ? cause.message : String(cause);
     }
   }
 
-  autoInstaller = install;
+  /** 用户点「重启以完成升级」：安装已暂存的包并重启。 */
+  async function restart() {
+    if (installing.value || !isTauri()) return;
+    installing.value = true;
+    message.value = "";
+    phase.value = "restarting";
+    try {
+      const result = await updateRestart();
+      if (!result.ok) {
+        installing.value = false;
+        phase.value = "ready";
+        message.value = result.error ?? "";
+      }
+    } catch (cause) {
+      installing.value = false;
+      phase.value = "ready";
+      message.value = cause instanceof Error ? cause.message : String(cause);
+    }
+  }
 
   async function saveConfig(nextAuto: boolean, nextMirror: string) {
     if (!isTauri()) return;
@@ -203,14 +206,11 @@ export function useUpdate() {
     mirror.value = result.mirror;
   }
 
-  /** 只有失败态允许关掉弹框；下载中/重启中关掉就看不到进度了。 */
+  /** available（稍后再说）与失败态允许关掉弹框；下载中/待重启关掉就看不到进度了。 */
   function dismiss() {
-    if (phase.value === "failed" || phase.value === "idle") dialogOpen.value = false;
-  }
-
-  function setSilent(on: boolean) {
-    silent.value = on;
-    localStorage.setItem(SILENT_KEY, on ? "on" : "off");
+    if (phase.value === "available" || phase.value === "failed" || phase.value === "idle") {
+      dialogOpen.value = false;
+    }
   }
 
   return {
@@ -225,7 +225,6 @@ export function useUpdate() {
     mirror,
     current,
     hasUpdate,
-    silent,
     latest,
     notes,
     phase,
@@ -233,8 +232,8 @@ export function useUpdate() {
     dismiss,
     loadConfig,
     check,
-    install,
+    download,
+    restart,
     saveConfig,
-    setSilent,
   };
 }

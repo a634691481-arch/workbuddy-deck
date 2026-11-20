@@ -30,6 +30,8 @@ const { accountCount, running, nav } = useShell();
 // 静默更新的可见层：下载/安装阶段弹框展示版本说明与进度，重启后由安装器接管
 const {
   dialogOpen: updateOpen,
+  download: downloadUpdate,
+  restart: restartUpdate,
   phase: updatePhase,
   latest: updateLatest,
   current: updateCurrent,
@@ -284,6 +286,8 @@ const booting = ref(true);
       :phase="updatePhase"
       :error="updateMessage"
       @close="dismissUpdate"
+      @download="downloadUpdate"
+      @restart="restartUpdate"
     />
 
     <CommandPalette :open="paletteOpen" @close="paletteOpen = false" @nav="nav = $event" />

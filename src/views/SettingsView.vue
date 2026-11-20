@@ -102,14 +102,16 @@ const {
   autoCheck: upAuto,
   mirror: upMirror,
   current: upCurrent,
-  silent: upSilent,
-  setSilent: setSilentUpdate,
   hasUpdate: upHasUpdate,
   loadConfig: loadUpdateConfig,
   check: checkUpdate,
-  install: installUpdate,
+  download: downloadUpdate,
+  restart: restartUpdate,
   saveConfig: saveUpdateConfig,
 } = useUpdate();
+
+/** 设置页手动按钮的语义：已暂存 = 重启安装；有新版 = 下载；其余禁用。 */
+const updateReady = computed(() => useUpdate().phase.value === "ready");
 
 const mirrorDraft = ref("");
 const mirrorSaved = ref(false);
@@ -540,11 +542,11 @@ async function doClear() {
               type="button"
               class="flex shrink-0 items-center gap-1 border px-2 py-1 text-[10px] uppercase tracking-[0.1em] transition-colors disabled:opacity-40"
               :class="upHasUpdate && !upInstalling ? 'border-hazard bg-hazard text-white hover:bg-hazard/90' : 'border-border-strong text-muted-foreground hover:border-foreground hover:text-foreground'"
-              :disabled="upInstalling || upChecking || !upHasUpdate"
-              @click="installUpdate()"
+              :disabled="upInstalling || upChecking || (!upHasUpdate && !updateReady)"
+              @click="updateReady ? restartUpdate() : downloadUpdate()"
             >
               <Download class="size-3" />
-              {{ upInstalling ? t("up.installing") : t("up.install") }}
+              {{ upInstalling ? t("up.installing") : updateReady ? t("up.dlgRestartBtn") : t("up.install") }}
             </button>
 
             <button
@@ -554,17 +556,6 @@ async function doClear() {
               @click="toggleAutoCheck()"
             >
               {{ t("up.auto") }} {{ upAuto ? t("st.on") : t("st.off") }}
-            </button>
-
-            <!-- 静默更新：开后检测到新版本直接下载安装，不再弹任何提示 -->
-            <button
-              type="button"
-              class="readout shrink-0 border px-1.5 py-1 text-[9px] uppercase transition-colors"
-              :class="upSilent ? 'border-hazard bg-hazard-soft text-hazard' : 'border-border-strong text-faint hover:text-foreground'"
-              :title="t('up.silentHint')"
-              @click="setSilentUpdate(!upSilent)"
-            >
-              {{ t("up.silent") }} {{ upSilent ? t("st.on") : t("st.off") }}
             </button>
 
             <label class="flex min-w-[200px] flex-1 items-center gap-1 text-[9px] text-faint">

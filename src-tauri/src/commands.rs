@@ -1929,9 +1929,16 @@ pub async fn update_check(force: bool) -> Value {
 
 /// 下载并安装更新：立即返回，进度与结果走 `update://progress` / `update://done` 事件。
 /// Windows 上安装器被拉起后本进程由插件结束，命令不会有机会「返回安装结果」。
+/// 只下载不安装（对齐 workbuddy-switch）：完成只暂存，等用户点「重启以完成升级」。
 #[tauri::command]
-pub fn update_install(app: tauri::AppHandle) -> Value {
-    crate::update::install(app)
+pub fn update_download(app: tauri::AppHandle) -> Value {
+    crate::update::download(app)
+}
+
+/// 安装已暂存的更新包并重启。
+#[tauri::command]
+pub fn update_restart(app: tauri::AppHandle) -> Value {
+    crate::update::restart(app)
 }
 
 /// 读取更新设置。

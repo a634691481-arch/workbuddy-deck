@@ -1,6 +1,6 @@
 <script setup lang="ts">
-// 静默更新的可见层：只在「已经开始下载安装」时出现，展示版本说明 + 进度。
-// 纯展示组件：阶段、进度、说明都由 useUpdate 传入，关闭只 emit。后台下载流程不受影响。
+// 更新可见层（对齐 workbuddy-switch 流程）：发现新版 → 用户点下载 → 进度 →
+// 已暂存 → 用户点「重启以完成升级」。纯展示组件：阶段、进度、说明都由 useUpdate 传入。
 import { computed } from "vue";
 import { Loader2, X } from "lucide-vue-next";
 
@@ -23,16 +23,20 @@ const props = withDefaults(
   { current: "", latest: "", notes: "", percent: null, downloaded: 0, total: null, error: "" },
 );
 
-const emit = defineEmits<{ close: [] }>();
+const emit = defineEmits<{ close: []; download: []; restart: [] }>();
 
 const failed = computed(() => props.phase === "failed");
+const awaitingDownload = computed(() => props.phase === "available");
+const awaitingRestart = computed(() => props.phase === "ready");
 
 const phaseLabel = computed(() => {
   switch (props.phase) {
+    case "available":
+      return t("up.dlgAvailable");
     case "downloading":
       return t("up.dlgDownloading");
-    case "installing":
-      return t("up.dlgInstalling");
+    case "ready":
+      return t("up.dlgReady");
     case "restarting":
       return t("up.dlgRestarting");
     case "failed":
@@ -56,7 +60,7 @@ function fmt(bytes: number): string {
       <div
         v-if="props.open"
         class="fixed inset-0 z-[95] flex items-center justify-center bg-black/60 p-6"
-        @click.self="failed && emit('close')"
+        @click.self="(failed || awaitingDownload) && emit('close')"
       >
         <div
           class="wb-modal-card w-[420px] border border-border-strong bg-card"
@@ -72,7 +76,7 @@ function fmt(bytes: number): string {
               {{ props.current || "—" }} → {{ props.latest || "—" }}
             </span>
             <button
-              v-if="failed"
+              v-if="failed || awaitingDownload"
               type="button"
               class="text-faint hover:text-foreground"
               :title="t('up.dlgClose')"
@@ -92,7 +96,7 @@ function fmt(bytes: number): string {
               </p>
             </div>
 
-            <div>
+            <div v-if="!awaitingDownload">
               <div class="mb-1 flex items-center gap-2">
                 <span class="lbl" :class="failed ? 'text-hazard' : 'text-muted-foreground'">
                   {{ phaseLabel }}
@@ -111,7 +115,7 @@ function fmt(bytes: number): string {
                 <div v-else class="h-full w-1/3 animate-pulse bg-hazard" />
               </div>
 
-              <p class="readout mt-1 text-[9px] text-faint">
+              <p v-if="props.phase === 'downloading'" class="readout mt-1 text-[9px] text-faint">
                 {{ fmt(props.downloaded) }}
                 <template v-if="props.total"> / {{ fmt(props.total) }}</template>
               </p>
@@ -122,11 +126,28 @@ function fmt(bytes: number): string {
             </p>
 
             <div class="flex items-center gap-2 border-t border-border pt-2">
-              <Loader2 v-if="!failed && props.phase !== 'idle'" class="size-3 animate-spin text-hazard" />
+              <Loader2
+                v-if="!failed && !awaitingDownload && !awaitingRestart && props.phase !== 'idle'"
+                class="size-3 animate-spin text-hazard"
+              />
               <span class="text-[9px] text-faint">
-                {{ failed ? "" : t("up.dlgKeepOpen") }}
+                {{ failed || awaitingDownload || awaitingRestart ? "" : t("up.dlgKeepOpen") }}
               </span>
-              <Button v-if="failed" variant="outline" size="sm" class="ml-auto" @click="emit('close')">
+
+              <template v-if="awaitingDownload">
+                <Button variant="outline" size="sm" @click="emit('close')">
+                  {{ t("up.dlgLater") }}
+                </Button>
+                <Button variant="default" size="sm" class="ml-auto" @click="emit('download')">
+                  {{ t("up.dlgDownload") }}
+                </Button>
+              </template>
+              <template v-else-if="awaitingRestart">
+                <Button variant="default" size="sm" class="ml-auto" @click="emit('restart')">
+                  {{ t("up.dlgRestartBtn") }}
+                </Button>
+              </template>
+              <Button v-else-if="failed" variant="outline" size="sm" class="ml-auto" @click="emit('close')">
                 {{ t("up.dlgClose") }}
               </Button>
             </div>
