@@ -822,3 +822,18 @@ decision(forced-on) = Skip("当前账号未被限流")
 - 本项目没有独立「到期」判据的自动切换；只有限流触发的 `auto_switch`。所谓「到期切换」若是
   core `rotate` 那套（CodeBuddy CLI 防积分过期），本应用从未接线，无需改。
 - 停用要停「调度入口」而不是删命令：`auto_switch_apply` 保留，手动排查还能用。
+
+## 2026-11-20 更新流程对齐 workbuddy-switch
+
+- [x] 后端：`install()` 拆成 `download()`（只下不装，暂存 PACKAGE = (version, Update, bytes)）+ `restart()`（用户确认后 install+重启）
+- [x] 轮询常量对齐：15s 首查 / 30min 轮询（原 8s / 6h）
+- [x] 命令：`update_install` → `update_download` + `update_restart`
+- [x] 前端：UpdatePhase = available/downloading/ready/restarting/failed；弹框三按钮态（下载更新+稍后 / 重启以完成升级 / 失败关闭）
+- [x] 删掉静默自动安装（maybeAutoInstall / silent 开关 / SILENT_KEY）
+- [x] 失败回退：下载失败回 available 可重试，重启安装失败回 ready 包保留
+- [x] 验证：clippy 0 / update 5 单测过 / vue-tsc 0 / build 通过
+
+### 回顾
+- tauri-plugin-updater 的 `install(bytes)` 在 `Update` 对象上不在 `Updater` 上：download 返回的
+  字节必须和 Update 一起暂存，否则重启时没法装
+- 「静默 ≠ 不可见」再进了一步：现在连安装都需要确认，窗口关闭期间检查仍走托盘进程
