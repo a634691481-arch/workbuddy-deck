@@ -485,9 +485,8 @@ const zh = {
   "ac.setCurrent": "设为当前",
   "ac.switchTitle": "设为 WorkBuddy 当前账号",
   "ac.switchSubtitle": "替换客户端登录态，完成后页面自动刷新。",
-  "ac.switchWarn": "只更换登录身份，不复制、不删除会话；WorkBuddy 会重启一次",
-  "ac.switchBullets":
-    "只更换登录身份，不复制、不删除任何会话与空间\n目标账号的会话与空间保持原样，切换后以它自身的数据为准\n切换完成后 WorkBuddy 会重启一次，按新身份重新加载\n两边账号的内容都不会被改动",
+  "ac.switchWarn": "上下文只有一套，切换时整体划归新账号；WorkBuddy 会重启一次",
+  "ac.switchBullets": "会话与空间永远只有一套，跟着当前账号走：切换时整体划归新账号\n不复制、不删除任何内容，只改归属\n切换完成后 WorkBuddy 会重启一次，按新身份重新加载\n不管切到哪个账号，看到的都是同一批会话",
   "ac.switchFoot": "确认后 WorkBuddy 会重启一次（约 10–30 秒），期间请勿操作。",
   "ac.switchGo": "确认切换",
   "ac.switching": "正在切换…",
@@ -1179,9 +1178,8 @@ const en: Record<I18nKey, string> = {
   "ac.setCurrent": "SET CURRENT",
   "ac.switchTitle": "SET AS WORKBUDDY CURRENT",
   "ac.switchSubtitle": "Replaces the client credentials; the page reloads after.",
-  "ac.switchWarn": "Switches login identity only; no session changes; WorkBuddy restarts once",
-  "ac.switchBullets":
-    "Switches the login identity only; no sessions or spaces are copied or deleted\nThe target keeps its own sessions and spaces, which is what you will see\nWorkBuddy restarts once after the switch to reload as the new identity\nNothing on either account is modified",
+  "ac.switchWarn": "One session pool follows the current account; WorkBuddy restarts once",
+  "ac.switchBullets": "Sessions and spaces form a single pool that follows the current account: switching reassigns them to the new account\nNothing is copied or deleted; only ownership changes\nWorkBuddy restarts once after the switch to reload as the new identity\nEvery account shows the same set of sessions",
   "ac.switchFoot": "WorkBuddy restarts once after confirming (~10–30s); leave it alone until it is back.",
   "ac.switchGo": "CONFIRM",
   "ac.switching": "SWITCHING…",

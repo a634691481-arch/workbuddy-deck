@@ -45,3 +45,24 @@
   发布说明失败绝不能让发版失败；解释器用 `actions/setup-python`，别指望 runner 自带 `python3`。
 - 另：`npm run bump 0.1.28 --tag` 的 `--tag` 会被 npm 吞掉（要 `npm run bump 0.1.28 -- --tag`），
   否则只改文件不提交/打 tag。
+
+## 2026-11-20 切换账号删会话事故（不可逆操作必须默认关）
+
+- 事故：`replace_sessions=true` 的切换把目标账号 20 条会话物理删除（正文 + DB 行），
+  用户侧表现是「切完上下文全没了」；只能靠 `~/.wb-switch/backups/switch-preflight-<ts>/`
+  的 jsonl + manifest sha256 逐条恢复，DB 行还得手工补。
+- 结论：**切换只换认证，不碰会话**。`switch_account_detailed(...,restart=true,...,replace_sessions=false)`，
+  手动与自动一律如此。要复制/合并会话必须另开显式入口，不能挂在「切换账号」按钮上。
+- 热 reload（restart=false）会保留旧身份的缓存，侧栏看起来空 → 切换必须 restart=true。
+- 恢复顺序：先 files（copy2 + sha256 校验），再补 `sessions` 行（INSERT OR IGNORE + 先备份 db），
+  最后重启 WorkBuddy 让它重读索引。
+
+## 2026-11-20 切换语义定稿：一套上下文跟着当前账号走
+
+- 根因：WorkBuddy 侧栏按 `sessions.user_id` / `spaces.user_id` 过滤，切号 = 换 uid = 查另一批行。
+  「上下文全没了」从来不是被删（replace 事故除外），而是查到了新账号（往往是空的）名下。
+- 定稿：切换 = 换认证 + 把上一账号名下会话/空间整体 `UPDATE user_id` 划归新账号。
+  时机必须卡在「WB 已关 + 认证写对 + 身份校验通过」之后、启动之前。
+- 不用「复制会话」实现共用：复制会造出两份 id 不同的同名会话，越切越多；
+  UPDATE 归属是唯一不产生垃圾副本的方式。旧 replace 事故留下的多 uid 残留行
+  永远不可见（不在当前 uid 名下），不用清理。

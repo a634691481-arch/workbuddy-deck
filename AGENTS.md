@@ -123,12 +123,20 @@ StatusBar   24px  ● READY · 最近刷新 · 账号数 · 日志数
   `refresh=true` 并发 4 路拉官方资源包；页面先出本地结果再后台补官方，失败不回滚本地。
 - **当前 WorkBuddy 账号**：`workbuddy_status` 读 auth 文件（cn/ai 两档位）与账号库按
   uid/email 匹配，返回 `currentAccountIds`；命中卡片红色描边 + 「当前账号」徽标。
-- **切换账号 = `switch_workbuddy_account`**：完全同步模式（replace_sessions=true），
-  复用 core `switch::switch_account`（备份→关 WB→替换会话→写认证→**写后身份校验**→重启）；
-  进度经 `switch-progress` 事件推送，确认弹框复刻原项目警示结构（物理删除不可恢复）。
-  **该命令不抛 Err**：失败返回 `{ ok:false, result, stage, identity, rolledBack, error }`，
-  前端必须显式判 `ok`。三态语义：`blocked`（未动认证）/ `rolled_back`（已还原认证）/ `ok`。
-  失败现场留在弹框里（阶段 + 身份校验 + 原文），不跟 toast 一起消失。
+- **切换账号 = `switch_workbuddy_account`（2026-11-20 二次改口径）**：**只换认证 + 会话池划归**——
+  `switch_account_detailed(..., restart=true, share=false, [], [], replace_sessions=false)`。
+  WorkBuddy 侧栏按 `sessions.user_id` / `spaces.user_id` 过滤，切号后 uid 变了就「看不到上下文」。
+  定稿语义：**可见上下文永远只有一套，跟着当前账号走**——切换在「WB 已关 + 身份校验通过」后把
+  上一账号名下的会话与空间整体 `UPDATE user_id` 划归目标账号（`session::reassign_session_pool`，
+  事务保证会话+空间一起改挂；不复制、不删除、不改内容）。报告在返回值 `sessionReassign`。
+  **禁止再传 `replace_sessions=true`**：那会物理删除目标账号的会话（历史上因此丢过 20 条上下文，
+  只能靠 `~/.wb-switch/backups/switch-preflight-*` 逐条恢复）。自动切换同样用 false。
+  切换必须 `restart=true`：热 reload 会保留旧身份的内存缓存，侧栏会「看起来什么都没有」。
+  进度经 `switch-progress` 推送，确认弹框「上下文只有一套、划归新账号、会重启」。
+  **该命令不抛 Err**：失败返回 `{ ok:false, result, stage, identity, rolledBack, error }`，前端必须判 `ok`。
+  三态语义：`blocked`（未动认证）/ `rolled_back`（已还原认证）/ `ok`。失败现场留在弹框里。
+  划归失败**不阻断切换**：账号已切对，最坏结果是「新账号显示它自己的旧会话」，重试即可补上。
+
 - **自动切换 = 手动切换的完全同步**（2026-11-05 改）：`auto_switch_apply` 走
   `switch_account_detailed(..., replace_sessions=true)`，任务与空间跟着账号走。
   以前用 `false`（只换认证），切过去是空会话，用户误判「任务被删」。

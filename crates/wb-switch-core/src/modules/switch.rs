@@ -381,6 +381,7 @@ pub fn switch_account_detailed(
         copy_session_ids,
         sync_selections,
         replace_sessions,
+        &before_uid,
         auth_snapshot.as_deref(),
         &mut trace,
     );
@@ -446,6 +447,7 @@ fn switch_account_inner(
     copy_session_ids: &[String],
     sync_selections: &[SyncSelection],
     replace_sessions: bool,
+    before_uid: &str,
     auth_snapshot: Option<&[u8]>,
     trace: &mut SwitchTrace,
 ) -> Result<Value, String> {
@@ -640,12 +642,23 @@ fn switch_account_inner(
         // 写入失败时文件可能已被部分写坏（写成功但校验失败会走到这里）：
         // 还原成切换前的内容，用户至少还停在原来的账号上，而不是停在半个文件上。
         trace.rolled_back = restore_auth_snapshot(variant, auth_snapshot);
+        // 已经关了 WorkBuddy：还原认证后必须尽力拉起来，否则用户面对的是「软件没开」。
+        let relaunched = if restart {
+            launch_workbuddy(variant, Some(&progress)).is_ok()
+        } else {
+            false
+        };
         return Err(format!(
-            "{error}；{}{}",
+            "{error}；{}{}{}",
             if trace.rolled_back {
-                "已还原切换前的认证文件，WorkBuddy 未启动"
+                "已还原切换前的认证文件"
             } else {
                 "还原切换前的认证文件失败，请检查 WorkBuddy 认证文件状态后重试"
+            },
+            if relaunched {
+                "，WorkBuddy 已按原账号重新启动"
+            } else {
+                "，WorkBuddy 未启动"
             },
             rollback_session_note(trace)
         ));
@@ -662,8 +675,13 @@ fn switch_account_inner(
         let actual = auth_file::auth_identity_at(&auth_file::auth_file_path(variant))
             .unwrap_or_else(|| "<读取失败>".to_string());
         trace.rolled_back = restore_auth_snapshot(variant, auth_snapshot);
+        let relaunched = if restart {
+            launch_workbuddy(variant, Some(&progress)).is_ok()
+        } else {
+            false
+        };
         return Err(format!(
-            "写后身份校验失败：期望 {}，磁盘实际 {}；{}{}，WorkBuddy 未启动",
+            "写后身份校验失败：期望 {}，磁盘实际 {}；{}{}，{}",
             if expected_uid.is_empty() {
                 "<未知>"
             } else {
@@ -675,8 +693,46 @@ fn switch_account_inner(
             } else {
                 "还原切换前的认证文件失败，请手动检查认证文件"
             },
-            rollback_session_note(trace)
+            rollback_session_note(trace),
+            if relaunched {
+                "WorkBuddy 已按原账号重新启动"
+            } else {
+                "WorkBuddy 未启动"
+            }
         ));
+    }
+
+    // 会话池划归（2026-11-20 用户定稿语义）：可见上下文永远只有一套，跟着当前账号走。
+    // 挂在这里的三个前提缺一不可：WorkBuddy 已关（无进程持有库）、认证已写对、
+    // 身份已校验通过。纯 UPDATE 归属，不删不改内容；失败不阻断——账号已切对，
+    // 最坏结果是「新账号显示它自己的旧会话」，重试一次切换即可补上。
+    let mut reassign_report: Option<Value> = None;
+    if restart
+        && !replace_sessions
+        && !before_uid.is_empty()
+        && before_uid != expected_uid
+    {
+        progress("正在把上下文划归新账号…");
+        match session::reassign_session_pool(variant, before_uid, &expected_uid) {
+            Ok((sessions, spaces)) => {
+                progress(&format!("已划归 {sessions} 条会话、{spaces} 个空间"));
+                reassign_report = Some(json!({
+                    "ok": true,
+                    "sessions": sessions,
+                    "spaces": spaces,
+                    "fromUid": before_uid,
+                    "toUid": expected_uid,
+                }));
+            }
+            Err(error) => {
+                reassign_report = Some(json!({
+                    "ok": false,
+                    "fromUid": before_uid,
+                    "toUid": expected_uid,
+                    "error": error,
+                }));
+            }
+        }
     }
 
     if restart {
@@ -702,6 +758,9 @@ fn switch_account_inner(
     }
     if let Some(s) = session_report {
         result["sessionReplace"] = s;
+    }
+    if let Some(r) = reassign_report {
+        result["sessionReassign"] = r;
     }
     if let Some(s) = sync_report {
         result["sessionSync"] = s;

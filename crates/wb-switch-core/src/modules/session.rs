@@ -897,6 +897,50 @@ fn delete_sessions_physical_at(
 /// - 先复制后删，失败时最多是「旧会话 + 部分新会话」，不会丢东西。
 ///
 /// 若一个会话都没复制成功，**不执行删除**（保底：宁可留着旧会话，也不清空账号）。
+/// 会话池划归（2026-11-20 用户定稿语义）：**可见上下文永远只有一套，跟着当前账号走**。
+///
+/// 切换账号时把 `from_uid` 名下的会话与空间整体改挂到 `to_uid` 名下——
+/// 纯 `UPDATE` 归属，不复制、不删除、不改任何内容。WorkBuddy 侧栏按
+/// `user_id` 过滤，这就是「切号后上下文还在」的唯一正确实现。
+/// 返回 (划归会话数, 划归空间数)。
+pub fn reassign_session_pool(
+    variant: WbVariant,
+    from_uid: &str,
+    to_uid: &str,
+) -> Result<(usize, usize), String> {
+    reassign_session_pool_at(&SessionPaths::for_variant(variant).workbuddy_db(), from_uid, to_uid)
+}
+
+/// 可注入路径版本：单测用临时库，不碰真实数据区。
+fn reassign_session_pool_at(db: &Path, from_uid: &str, to_uid: &str) -> Result<(usize, usize), String> {
+    if from_uid.is_empty() || to_uid.is_empty() || from_uid == to_uid {
+        return Ok((0, 0));
+    }
+    if !db.exists() {
+        return Ok((0, 0));
+    }
+    let mut conn = open_db(db, false).ok_or_else(|| "打开 workbuddy.db 失败".to_string())?;
+    // 事务保证 all-or-nothing：会话与空间必须一起划归，否则 space_id 引用会跨号悬空。
+    let tx = conn
+        .transaction()
+        .map_err(|error| format!("开启事务失败: {error}"))?;
+    let sessions = tx
+        .execute(
+            "UPDATE sessions SET user_id = ?1 WHERE user_id = ?2",
+            rusqlite::params![to_uid, from_uid],
+        )
+        .map_err(|error| format!("划归会话失败: {error}"))?;
+    let spaces = tx
+        .execute(
+            "UPDATE spaces SET user_id = ?1 WHERE user_id = ?2",
+            rusqlite::params![to_uid, from_uid],
+        )
+        .map_err(|error| format!("划归空间失败: {error}"))?;
+    tx.commit()
+        .map_err(|error| format!("提交划归失败: {error}"))?;
+    Ok((sessions, spaces))
+}
+
 pub fn replace_sessions_for_switch(
     source_acc: &Value,
     target_acc: &Value,
@@ -5315,6 +5359,62 @@ mod tests {
             "CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT, title TEXT);",
         )
         .unwrap();
+    }
+
+    fn create_pool_db(path: &Path) {
+        let conn = Connection::open(path).unwrap();
+        conn.execute_batch(
+            "CREATE TABLE sessions (id TEXT PRIMARY KEY, user_id TEXT, title TEXT, deleted_at INTEGER);
+             CREATE TABLE spaces (id TEXT PRIMARY KEY, user_id TEXT, name TEXT, deleted_at INTEGER);",
+        )
+        .unwrap();
+        conn.execute_batch(
+            "INSERT INTO sessions VALUES ('s1','uid-a','周报',NULL),('s2','uid-a','日报',1),('s3','uid-b','别人的',NULL);
+             INSERT INTO spaces VALUES ('sp1','uid-a','工作区',NULL),('sp2','uid-b','别家的',NULL);",
+        )
+        .unwrap();
+    }
+
+    #[test]
+    fn reassign_pool_moves_rows_and_keeps_others() {
+        let root = temp_root("reassign");
+        std::fs::create_dir_all(&root).unwrap();
+        let db = root.join("workbuddy.db");
+        create_pool_db(&db);
+
+        let (sessions, spaces) = reassign_session_pool_at(&db, "uid-a", "uid-b").unwrap();
+        assert_eq!((sessions, spaces), (2, 1));
+
+        let conn = Connection::open(&db).unwrap();
+        let a_left: i64 = conn
+            .query_row("SELECT COUNT(*) FROM sessions WHERE user_id = 'uid-a'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(a_left, 0, "原账号名下不应残留");
+        let b_total: i64 = conn
+            .query_row("SELECT COUNT(*) FROM sessions WHERE user_id = 'uid-b'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(b_total, 3, "划归 2 条 + 别人原有 1 条");
+        let spaces_b: i64 = conn
+            .query_row("SELECT COUNT(*) FROM spaces WHERE user_id = 'uid-b'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(spaces_b, 2);
+        // 内容原样：标题不变
+        let title: String = conn
+            .query_row("SELECT title FROM sessions WHERE id = 's1'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(title, "周报");
+    }
+
+    #[test]
+    fn reassign_pool_tolerates_missing_db_and_trivial_cases() {
+        let missing = temp_root("reassign-missing").join("no.db");
+        assert_eq!(reassign_session_pool_at(&missing, "a", "b").unwrap(), (0, 0));
+        let root = temp_root("reassign-trivial");
+        std::fs::create_dir_all(&root).unwrap();
+        let db = root.join("workbuddy.db");
+        create_pool_db(&db);
+        assert_eq!(reassign_session_pool_at(&db, "", "uid-b").unwrap(), (0, 0));
+        assert_eq!(reassign_session_pool_at(&db, "uid-a", "uid-a").unwrap(), (0, 0));
     }
 
     /// 能力探测：`projects/` 目录 + `workbuddy.db` 的 `sessions` 表同时存在才可用。
