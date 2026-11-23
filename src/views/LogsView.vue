@@ -459,7 +459,7 @@ async function doClear() {
       class="wb-zebra mx-3 mb-3 mt-3 min-h-0 flex-1 overflow-auto border border-border bg-card"
       :class="stagger.listClass()"
     >
-      <div class="wb-stagger-skip grid grid-cols-[92px_76px_72px_minmax(160px,1fr)_minmax(200px,1.4fr)] items-center gap-2 wb-cells border-b border-border bg-panel px-3 py-1">
+      <div class="wb-stagger-skip grid grid-cols-[64px_56px_56px_minmax(80px,1fr)_minmax(96px,1.4fr)] items-center gap-1.5 wb-cells border-b border-border bg-panel px-3 py-1">
         <span class="lbl">{{ t("rl.time") }}</span>
         <span class="lbl">{{ t("rl.source") }}</span>
         <span class="lbl">LEVEL</span>
@@ -479,12 +479,14 @@ async function doClear() {
       <div
         v-for="(row, index) in rows"
         :key="`${row.at}-${index}`"
-        class="grid grid-cols-[92px_76px_72px_minmax(160px,1fr)_minmax(200px,1.4fr)] items-center gap-2 wb-cells border-b border-border/60 px-3 py-1.5"
+        class="grid grid-cols-[64px_56px_56px_minmax(80px,1fr)_minmax(96px,1.4fr)] items-center gap-1.5 wb-cells border-b border-border/60 px-3 py-1.5"
       >
-        <div class="flex min-w-0 items-center gap-1.5">
+        <div class="flex min-w-0 items-center gap-1">
           <span class="h-3 w-0.5 shrink-0" :class="levelBar(row.level)" />
-          <span class="readout text-[10px] text-foreground">{{ clockOf(row.at) }}</span>
-          <span class="readout text-[9px] text-faint" :title="relative(row.at)">{{ dateOf(row.at) }}</span>
+          <div class="flex min-w-0 flex-col leading-[1.15]">
+            <span class="readout text-[10px] text-foreground">{{ clockOf(row.at) }}</span>
+            <span class="readout text-[8px] text-faint" :title="relative(row.at)">{{ dateOf(row.at) }}</span>
+          </div>
         </div>
         <span class="readout truncate text-[9px] text-muted-foreground">{{ sourceLabel(row.source) }}</span>
         <span class="readout text-[9px]" :class="levelColor(row.level)">{{ row.level }}</span>

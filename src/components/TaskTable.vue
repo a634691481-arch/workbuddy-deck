@@ -73,16 +73,15 @@ const GRID = "grid grid-cols-[minmax(0,1fr)_74px_62px_66px_30px] items-center ga
       </span>
     </div>
 
-    <!-- 任务表 -->
+    <!-- 任务表：滚动容器不挂动效 ref——骨架↔数据切换不能触发 FLIP，
+         AutoAnimate 只挂在纯数据行包装层上（也不挂表头，避免与 sticky 打架） -->
     <div
       v-show="tab === 'tasks'"
-      ref="rowsEl"
-      class="min-h-0 flex-1 overflow-y-auto wb-zebra"
-      :class="stagger.listClass()"
+      class="min-h-0 flex-1 overflow-y-auto"
     >
       <!-- 表头：粘性黑底，列间竖线 -->
       <div
-        :class="[GRID, 'wb-stagger-skip sticky top-0 z-10 border-b border-border-strong bg-background text-[10px] text-muted-foreground']"
+        :class="[GRID, 'sticky top-0 z-10 border-b border-border-strong bg-background text-[10px] text-muted-foreground']"
       >
         <span class="px-2 py-1.5">{{ t("tt.taskName") }}</span>
         <span class="border-l border-border px-2 py-1.5">{{ t("tt.status") }}</span>
@@ -120,7 +119,7 @@ const GRID = "grid grid-cols-[minmax(0,1fr)_74px_62px_66px_30px] items-center ga
       </div>
 
       <!-- 任务行：只在非加载/非错误/非空时渲染，切号加载期间不残留上个账号数据 -->
-      <template v-else>
+      <div v-else ref="rowsEl" class="wb-zebra" :class="stagger.listClass()">
         <div
           v-for="task in tasks"
           :key="task.task_code"
@@ -165,7 +164,7 @@ const GRID = "grid grid-cols-[minmax(0,1fr)_74px_62px_66px_30px] items-center ga
             <span v-else class="text-faint">·</span>
           </div>
         </div>
-      </template>
+      </div>
     </div>
 
     <!-- 原始响应：终端输出观感 -->

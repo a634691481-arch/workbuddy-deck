@@ -103,6 +103,14 @@ watch(
   (value) => setRunning(value),
   { immediate: true },
 );
+// 跑完一轮（签到/成长任务会加积分）自动重查合计积分：
+// 之前只在账号数量变化时刷新，签到完成后合计停在旧值。
+watch(
+  () => run.value.running,
+  (now, was) => {
+    if (was && !now) void loadTotal();
+  },
+);
 
 </script>
 
