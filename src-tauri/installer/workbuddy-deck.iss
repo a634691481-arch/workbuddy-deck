@@ -19,6 +19,11 @@
 #define AppPublisher "wbswitch"
 #define AppGuid "{{7E3F9A62-2C41-4B8D-9A55-8F1D26C4E9A0}"
 
+#ifndef SrcDir
+  #define SrcDir "..\target\release"
+elease"
+#endif
+
 #ifndef AppVersion
 #error 请用 /DAppVersion=x.y.z 指定版本号
 #endif
@@ -48,7 +53,7 @@ SolidCompression=yes
 Name: "chs"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 
 [Files]
-Source: "..\target\release\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "{#SrcDir}\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
 
 [Tasks]
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加任务："

@@ -11,7 +11,10 @@ import { fileURLToPath } from 'node:url';
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const conf = JSON.parse(readFileSync(path.join(root, 'src-tauri/tauri.conf.json'), 'utf8'));
 const version = conf.version;
-const exe = path.join(root, 'src-tauri/target/release/workbuddy-task-assistant.exe');
+// 允许构建到独立目录（应用正在运行时 target/release 的 exe 被锁，无法覆盖）
+const targetArg = process.argv.find((a) => a.startsWith('--target='));
+const targetDir = targetArg ? targetArg.slice('--target='.length) : 'target/release';
+const exe = path.join(root, 'src-tauri', targetDir, 'workbuddy-task-assistant.exe');
 
 if (!existsSync(exe)) {
   console.error(`[installer] 缺少 ${exe}`);
@@ -35,7 +38,9 @@ if (!iscc) {
 const iss = path.join(root, 'src-tauri/installer/workbuddy-deck.iss');
 console.log(`[installer] ISCC ${iscc}`);
 console.log(`[installer] 版本 ${version}`);
-const result = spawnSync(iscc, [`/DAppVersion=${version}`, iss], {
+const sep = String.fromCharCode(92);
+const srcDefine = `/DSrcDir=..${sep}${targetDir.split('/').join(sep)}`;
+const result = spawnSync(iscc, [`/DAppVersion=${version}`, srcDefine, iss], {
   cwd: path.dirname(iss),
   stdio: 'inherit',
   shell: false,
@@ -44,5 +49,5 @@ if (result.status !== 0) {
   console.error('[installer] 编译失败');
   process.exit(result.status ?? 1);
 }
-const out = path.join(root, `src-tauri/target/release/bundle/innosetup/WorkBuddyDeck-Setup-${version}.exe`);
+const out = path.join(root, 'src-tauri', targetDir, `bundle/innosetup/WorkBuddyDeck-Setup-${version}.exe`);
 console.log(`[installer] 完成: ${out}`);

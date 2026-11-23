@@ -916,6 +916,7 @@ pub fn spawn_widget_daemon(panel_url: String) {
         // 「明明页面早就起来了却要再等十几秒」。前 30 次 1s 快轮询（覆盖启动窗口），
         // 之后 3s，最后退到 5s 长驻——回环探测连接被拒是瞬时失败，成本可忽略。
         let mut fast_retries: u32 = 0;
+        let mut misses: u32 = 0;
         loop {
             let cfg = load_cdp_config();
             let placement = widget_placement(&cfg);
@@ -929,10 +930,18 @@ pub fn spawn_widget_daemon(panel_url: String) {
                 continue;
             }
             let Some(session) = workbuddy_page(false).await else {
-                let auto = ensure_client_with_cdp().await;
-                let (auto_label, auto_detail) = match &auto {
-                    Ok(outcome) => (outcome.label(), String::new()),
-                    Err(error) => ("failed", error.clone()),
+                misses = misses.saturating_add(1);
+                // 冷启动保护：客户端从进程起来到调试端口可连要 5–15 秒。早先每轮都调
+                // ensure_client_with_cdp，会把自己刚拉起的客户端再杀一次，应用一重启
+                // 就变成「WB 反复重启」。连续失败 8 轮（约 8 秒）后才允许插手。
+                let (auto_label, auto_detail) = if misses > 8 {
+                    let auto = ensure_client_with_cdp().await;
+                    match &auto {
+                        Ok(outcome) => (outcome.label(), String::new()),
+                        Err(error) => ("failed", error.clone()),
+                    }
+                } else {
+                    ("waiting", String::new())
                 };
                 set_daemon_state(json!({
                     "reason": "cdp-unavailable",
@@ -961,6 +970,7 @@ pub fn spawn_widget_daemon(panel_url: String) {
                 continue;
             };
             fast_retries = 0;
+            misses = 0;
             // 注册是 per-session 的：导航后浏览器自动重跑同一份脚本，会话换代时由外层循环
             // 重新注册。**同一会话内绝不重复注册**——那会让脚本栈里叠多份（幂等守卫能挡住
             // 双图标，但没必要留着这层噪音）。
