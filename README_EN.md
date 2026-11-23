@@ -30,7 +30,7 @@ For people running several WorkBuddy accounts who click through check-in and gro
 </p>
 
 <p align="center">
-  <img src="docs/screenshots/feature-tour.gif" alt="Feature tour: accounts, tasks, credits, tokens, logs and settings, one screen each" width="900">
+  <img src="docs/screenshots/feature-tour-2026-11.gif" alt="Feature tour: accounts, tasks, credits, tokens, logs and settings, one screen each" width="900">
 </p>
 
 ## The manual version, every day
