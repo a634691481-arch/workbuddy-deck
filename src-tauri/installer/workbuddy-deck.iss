@@ -53,13 +53,14 @@ Name: "chs"; MessagesFile: "compiler:Languages\ChineseSimplified.isl"
 
 [Files]
 Source: "{#SrcDir}\{#AppExe}"; DestDir: "{app}"; Flags: ignoreversion
+Source: "..\icons\icon.ico"; DestDir: "{app}\icons"; Flags: ignoreversion
 
 [Tasks]
 Name: "desktopicon"; Description: "创建桌面快捷方式"; GroupDescription: "附加任务："
 
 [Icons]
-Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"
-Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; Tasks: desktopicon
+Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"; IconFilename: "{app}\icons\icon.ico"
+Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; IconFilename: "{app}\icons\icon.ico"; Tasks: desktopicon
 
 [Run]
 Filename: "{app}\{#AppExe}"; Description: "立即打开 {#AppName}"; Flags: nowait postinstall skipifsilent runasoriginaluser
