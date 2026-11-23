@@ -1,4 +1,4 @@
-<!-- README_SYNC: source=working-tree; updated=2026-11-02 -->
+<!-- README_SYNC: source=working-tree; updated=2026-11-23 -->
 
 <p align="center">
   <a href="./README.md">简体中文</a> · English
@@ -6,8 +6,8 @@
 
 <h1 align="center">workbuddy-deck</h1>
 
-<p align="center"><b>A control deck for multiple WorkBuddy accounts: switching, check-in, daily tasks, credits, tokens and rate limits on one screen.</b><br/>
-Built for people running several WorkBuddy accounts who click through check-in and growth tasks by hand every day.</p>
+<p align="center"><b>A control deck for multiple WorkBuddy accounts — a floating panel injected into the client, covering account switching, check-in, growth tasks, credits, tokens and rate limits on one screen.</b><br/>
+For people running several WorkBuddy accounts who click through check-in and growth rewards by hand every day.</p>
 
 <p align="center">
   If it saves you those ten minutes a day, a <a href="https://github.com/a634691481-arch/workbuddy-deck/stargazers"><b>star</b></a> helps you find it again — and helps the next person with the same chore find it too.
@@ -15,10 +15,11 @@ Built for people running several WorkBuddy accounts who click through check-in a
 
 <p align="center">
   <a href="https://a634691481-arch.github.io/workbuddy-deck/"><b>Landing page</b></a> ·
-  <a href="https://github.com/a634691481-arch/workbuddy-deck/releases/latest">Download</a>
+  <a href="https://github.com/a634691481-arch/workbuddy-deck/releases/latest"><b>Download</b></a>
 </p>
 
 <p align="center">
+  <a href="https://github.com/a634691481-arch/workbuddy-deck/releases/latest"><img alt="Release" src="https://img.shields.io/github/v/release/a634691481-arch/workbuddy-deck?style=flat&label=release"></a>
   <a href="https://github.com/a634691481-arch/workbuddy-deck/stargazers"><img alt="Stars" src="https://img.shields.io/github/stars/a634691481-arch/workbuddy-deck?style=flat&label=stars"></a>
   <a href="https://github.com/a634691481-arch/workbuddy-deck/issues"><img alt="Issues" src="https://img.shields.io/github/issues/a634691481-arch/workbuddy-deck?style=flat"></a>
   <a href="https://github.com/a634691481-arch/workbuddy-deck/commits/main"><img alt="Last commit" src="https://img.shields.io/github/last-commit/a634691481-arch/workbuddy-deck?style=flat"></a>
@@ -38,45 +39,49 @@ Open the client → switch to account 1 → check in → claim growth rewards �
 
 At three accounts this is tolerable. At eight it is fifteen minutes of mechanical work — and **switching is the risky part**: if the session swap overwrites the previous account's records, what you lose is chat history, not a log line.
 
-This app puts that loop in one desktop window: accounts run in sequence, results are grouped into success / failure / skipped, balances and expiries and rate limits sit on one screen, and every run leaves an archived record you can look up later.
+This app folds that routine into one deck: check-in and daily tasks run serially across every account and come back classified as success / failed / skipped; balance, expiry and rate limits share one screen; each run leaves an archive entry you can look up later.
 
-## Six panes
+## Two shapes, one feature set
 
-| Pane | What it handles |
+| Shape | How it works |
 |---|---|
-| 01 Accounts | QR login / import-export, balance and credit packages, **days-remaining forecast**, **health dot**, per-model rate limits, one-click "make current" |
-| 02 Tasks | Pick accounts → check-in / growth / travel / full daily run, live progress and failure aggregation |
-| 03 Credits | Daily spend, per-account balance, model / client / account breakdowns; official numbers first, local snapshots as fallback |
-| 04 Tokens | Multi-source totals, top sessions, request detail, week × hour heatmap, **7-day comparison** |
-| 05 Logs | Notification archive + daily runs + error log + **switch ledger**, four sources in one timeline, clearable per source |
-| 06 Settings | Version, source link, data directory, data size, display prefs, **CSV export**, rate-limit auto-switch, per-source cleanup |
+| **Injected panel** (primary) | Launch `WorkBuddy Deck.exe` → it verifies the official client is installed → starts WorkBuddy with `--remote-debugging-port=9222` → connects over CDP and injects a floating icon bottom-right → open the panel without leaving the client |
+| **Standalone window** | The same exe also opens a desktop window; `Ctrl+K` jumps between sections — useful on a second monitor or when the panel would cover the chat area |
+
+The installer is built with Inno Setup. The wizard scans the registry for the official client path (editable), then checks whether the client is running and offers to close it. The chosen path lands in `~/.wb-switch/workbuddy_exe.json` and takes priority at runtime.
+
+## Six sections
+
+| Section | What it handles |
+|---|---|
+| 01 Accounts | QR login / import-export, balance and credit packs, remaining-days forecast, health dot, model rate-limit flags, set-as-current |
+| 02 Tasks | Pick accounts → check-in / growth tasks / travel / full daily run, live progress and failure aggregation |
+| 03 Credits | Daily spend, per-account balance, model / client / account dimensions; official usage first, local snapshot as fallback |
+| 04 Tokens | Multi-source totals, top sessions, call details, week × hour heatmap, 7-day delta |
+| 05 Logs | Notification archive + daily automation + error log + switch ledger in one timeline, clearable per source |
+| 06 Settings | Version, data directory, data size, display prefs, CSV export, auto-switch on rate limit, per-source log clearing |
 
 ## What is actually different
 
-**1. Switching has a hard gate instead of "looks successful"**
-Replace-mode sync must have *actually written* the data first: copied rows must equal source rows and failures must be zero before the target account's old sessions may be deleted. Otherwise it fails closed, keeps the old data, and says why in the result. This rule came from two real data-loss incidents and has regression tests in the session module. After writing, the auth file is **read back and the uid verified**; a mismatch triggers a rollback.
+**1. Switching accounts no longer restarts the client — and never touches session content.**
+The default is a hot switch: write the auth file, then reassign the whole session pool to the new account with a single `UPDATE user_id`. Same rows, different owner — nothing copied, nothing deleted. Right after the write the app probes the page identity over CDP; if the client did not pick up the new identity it falls back to a restart. A full database backup sits before every reassignment (`~/.wb-switch/backups/reassign-preflight-*`).
+The one path that physically deletes a target account's sessions (`replace_sessions=true`) is blocked at the command layer — it caused two real data-loss incidents.
 
-**2. The balance line also tells you how long it lasts**
-An account card no longer stops at `3,539 / 4,000`; it adds `≈21.0 days`. The estimate takes the smaller of a median and an EWMA (early warning beats optimism) and only counts **balance decreases** as usage — a check-in or reward that raises the balance is not negative consumption. With fewer than three days of snapshots it shows "sample 2/3 days" instead of inventing a number.
+**2. A balance that says how many days are left.**
+Instead of just `3,539 / 4,000`, each card shows `≈21.0 days`. The forecast takes the smaller of a median and an EWMA estimate (early warning over optimism) and only counts balance **drops** as consumption — check-in rewards are not negative usage. Below three days of samples it shows "sample 2/3 days" rather than a guess.
 
-**3. Rate limits are attributed, not just reported**
-Not "you got a 429", but which account, which model, the official reset time, and how many times it hit. It shows on the account card so you can pick an unrestricted account first — and there is an optional auto-switch (off by default, notify-only by default).
+**3. Rate limits come with a ledger.**
+Not just "429" — which account, which model, the reset time the API reported, how many times it hit. Flags sit on the account card so you can schedule around them. Auto-switch on rate limit is off by default and only advises unless enabled.
 
-**4. Twenty accounts, one glance to find the dying one**
-A health dot (green / grey / red) before each account name, from a deductive table you can read: rate-limited −35, zero balance −50, under 10% −30, fetch failure −20, forecast under 3 days −25, mostly-expiring credit −10. Hover shows the actual reasons; it is not a black-box score.
+**4. Twenty accounts, one glance to spot the dying ones.**
+A health dot (green / grey / red) precedes each account name, derived from a readable penalty table: rate limited −35, zero balance −50, under 10% −30, refresh failed −20, forecast exhaustion within 3 days −25. Hover to see the reasons; no black-box score.
 
-**5. The data leaves with you**
-Four CSVs from Settings: accounts (with health and forecast), tokens by day, tokens by model (with share), and credit snapshots (with per-row deltas). UTF-8 with BOM, so Excel opens them without mojibake.
-
-**6. It is still there when the window is closed**
-The tray tooltip shows account count, total balance, and the tightest account's remaining days. Every run writes an archived notification that survives a restart and appears in pane 05.
+**5. Data leaves with you, and the tray keeps watching.**
+Four CSVs export from settings (accounts with health and forecast, tokens by day, tokens by model, credit snapshots), UTF-8 BOM so Excel opens them cleanly. The tray icon shows accounts · total balance · the account closest to running dry.
 
 ## Quick start
 
-**Install a build**: grab the latest `*_x64-setup.exe` (Windows), `*.dmg` (macOS), or
-`*.AppImage` / `*.deb` (Linux) from
-[Releases](https://github.com/a634691481-arch/workbuddy-deck/releases). The in-app
-"System → Updates" card picks up later versions automatically.
+**Install a release**: grab the latest `*_x64-setup.exe` (Windows), `*_aarch64.dmg` (macOS, Apple Silicon) or `*.AppImage` / `*.deb` (Linux) from [Releases](https://github.com/a634691481-arch/workbuddy-deck/releases). The in-app updater picks up later versions.
 
 **Build from source**:
 
@@ -84,102 +89,101 @@ The tray tooltip shows account count, total balance, and the tightest account's 
 git clone https://github.com/a634691481-arch/workbuddy-deck.git
 cd workbuddy-deck
 npm install
-npm run tauri build                  # NSIS installer + exe
-npm run tauri build -- --no-bundle   # exe only, skips signing (fine for local work)
+npm run tauri build
+npm run installer
 ```
 
-Windows installer: `src-tauri/target/release/bundle/nsis/`; raw exe: `src-tauri/target/release/workbuddy-task-assistant.exe`;
-macOS / Linux artifacts live under the matching `bundle/` subdirectory.
-Requirements: Node.js 18+, stable Rust. Windows 10/11 needs the WebView2 runtime; macOS and Linux use the system WebView.
+`tauri build` produces the bare exe plus an NSIS installer; `npm run installer` is optional and rebuilds the Inno Setup wizard (requires Inno Setup 6).
+Artifacts: bare exe at `src-tauri/target/release/workbuddy-task-assistant.exe`, NSIS under `bundle/nsis/`, Inno under `bundle/innosetup/`.
+Requirements: Node.js 18+, stable Rust; WebView2 on Windows 10/11.
 
-The domain crate (accounts, check-in, growth tasks, travel, tokens, switching) is vendored at
-`crates/wb-switch-core/`, so a fresh clone builds with no external path.
+**Develop** (HMR for the frontend, no desktop window — just the local bridge and injection):
 
-To work on the UI only (no data):
+```bash
+npm run deck
+```
+
+That is `tauri dev -- --headless`. Don't run two terminals; the port preflight stops the earlier instance.
+
+**UI only** (no backend data):
 
 ```bash
 npx vite --port 1421
 ```
 
-Open `http://localhost:1421/`; hashes jump straight to a pane: `#accounts` / `#tasks` / `#credits` / `#tokens` / `#logs` / `#settings`.
+Open `http://localhost:1421/`; hash routes jump straight to a section: `#accounts` / `#tasks` / `#credits` / `#tokens` / `#logs` / `#settings`.
+
+## How injection works
+
+```text
+Launcher verifies the official client (registry / default dirs)
+   → not running: start it with --remote-debugging-port=9222
+   → already running: ask to close it, then relaunch with the flag
+Local bridge on 127.0.0.1:17653 (panel frontend + IPC)
+CDP connects to the WorkBuddy page → registers auto-inject on new documents → injects once
+Floating icon appears bottom-right; a 5s liveness probe re-injects after navigation
+Clicking the icon opens an iframe panel pointed at 17653
+```
+
+No debug port, no injection — which is why "launcher" and "injector" are two jobs of the same exe.
 
 ## Auto-update
 
-Tag to running client is one closed loop with no manual upload step:
-
-```
-bump version  →  push tag  →  CI builds + signs  →  Release  →  client check  →  verify  →  install  →  restart
+```text
+bump version  →  tag  →  CI build + sign  →  Release  →  client checks  →  verify  →  install  →  restart
 ```
 
-| Stage | How |
+| Step | Detail |
 | --- | --- |
-| Version | `npm run bump 0.1.1` writes `package.json` / `Cargo.toml` / `tauri.conf.json` at once; it refuses to run when the three already disagree |
-| Release | `npm run bump 0.1.1 --tag`, or `git tag v0.1.1 && git push --tags` |
-| Build | `.github/workflows/release.yml`: windows-latest / ubuntu-22.04 / macos-latest in parallel → `tauri build` → sign `.sig` + `latest.json` |
-| Check | 8s after launch, then every 6h; manual check in Settings. Reads the release asset `latest.json`, **never the GitHub API** (60 req/h/IP) |
-| Verify | A minisign mismatch aborts the install |
-| Install | NSIS in `passive` mode overwrites in place and relaunches; the installer closes the old process |
-| Trail | Result lands in the notification archive — visible in Logs as `更新 · v0.1.1 已下载并校验通过` |
-
-**Mirror**: the Settings card accepts a prefix such as `https://ghproxy.net/`; both check and download go through it. Empty means direct GitHub.
-
-**Where multiple versions come from**: one tag = one release = one set of installers. Publish `v0.1.1`
-and it sits on top while `v0.1.0` stays downloadable; `releases/latest` always resolves to the newest
-stable release, which is all the client looks at. Ship the next one with `npm run bump 0.1.1 --tag` —
-never upload an exe by hand.
-
-**One-time maintainer setup** (repo Settings → Secrets and variables → Actions):
-
-| Secret | Value |
-| --- | --- |
-| `TAURI_SIGNING_PRIVATE_KEY` | the private key from `tauri signer generate` (**never commit it**) |
-| `TAURI_SIGNING_PRIVATE_KEY_PASSWORD` | its passphrase |
-
-Lose the key or passphrase and already-shipped clients can no longer auto-upgrade — they trust that one public key.
+| Version | `npm run bump 0.1.28` syncs `package.json` / `Cargo.toml` / `tauri.conf.json`, failing on mismatch |
+| Build | `.github/workflows/release.yml`: three platforms in parallel, signed `.sig` + `latest.json` |
+| Check | First check on startup, then on a timer; reads the `latest.json` release asset, not the GitHub API |
+| Verify | minisign mismatch aborts the install |
+| Mirror | Optional mirror prefix in settings (`https://ghproxy.net/` and similar); empty means direct |
 
 ## Architecture
 
 ```text
-frontend  src/components/ui/*      presentational atoms
-          src/components/*         business components (props / emit only)
-          src/composables/*        state and side effects (the only layer calling lib/api)
-          src/views/*              six panes, each fetching and acting on its own
-          src/lib/api.ts           the whole IPC contract (types + invoke wrappers)
-backend   src-tauri/src/commands.rs thin command layer: validate then delegate
-          src-tauri/src/executor.rs batch runner: mutex, progress snapshots, cancel, grouping
-          src-tauri/src/scheduler.rs daily schedule: fire, receipt, run-on-miss
-          src-tauri/src/export.rs  four CSV writers (BOM, escaping, write straight to disk)
-          src-tauri/src/tray.rs    tray readout
-          domain crate             accounts / check-in / growth / travel / tokens / switching / forecast / health
+frontend  src/components/ui/*     presentational atoms
+          src/components/*        feature components (props / emit only)
+          src/composables/*       state and side effects (only layer allowed to call lib/api)
+          src/views/*             six sections, each fetches its own data
+          src/lib/api.ts          the full IPC contract
+backend   src-tauri/src/commands.rs thin command layer: validate + delegate
+          src-tauri/src/launcher.rs preflight launcher checks (Windows only)
+          src-tauri/src/deck_http/* local bridge: static assets + IPC + panel token
+          src-tauri/src/executor.rs batch executor: mutex, progress snapshot, cancel
+          src-tauri/src/scheduler.rs daily schedule with catch-up
+          src-tauri/src/export.rs four CSV generators
+          wb-switch-core crate    accounts / check-in / growth / travel / tokens / switching / forecast / health / CDP
 ```
 
-Design choices worth knowing:
+Trade-offs:
 
-- **One account at a time**, never parallel API calls; cancellation only lands on account boundaries so a single account's actions are never torn in half.
-- **Mutex before queue**: one run at a time; a second trigger returns `busy` immediately.
-- **Tokens never leave the backend**: returned account structures carry label / variant / note only; phone numbers and emails are masked in the UI and logs.
-- **Forecasts read local snapshots only**: rate-limit and consumption decisions make no network calls, so a limited account does not have to wait for another round trip.
-- **One accent colour** (aviation red); state is carried by 1px rules and monospaced numbers rather than gradients or rounded corners — telemetry styling that stays readable over long sessions.
+- **Serial per-account execution**, never concurrent API calls; cancel only takes effect between accounts.
+- **Mutex over queue**: one run at a time, duplicates get `busy`.
+- **Tokens never leave the backend**: phone numbers and emails are masked in UI and logs.
+- **Forecasting reads local snapshots only** — no requests spent on rate-limit and usage estimates.
 
 ## Data and privacy
 
-- Everything stays in `~/.wb-switch/` on your machine (accounts, check-in config, notification archive, auto-run config, auto-switch config and logs, error log). Nothing is uploaded.
-- The app reads and writes those local files and calls the official endpoints for check-in, tasks and token renewal. It does not proxy traffic, run a gateway, or export your conversations.
-- The one outward-facing action is "make current": it closes WorkBuddy, replaces session files, writes the auth file and restarts. That is **destructive**, so it sits behind a confirmation with visible progress.
-- Rate-limit auto-switch ships **off** and **notify-only**: actually switching closes and restarts WorkBuddy, which can lose unsaved work, so the app does not press that button for you by default.
+- Everything lives in `~/.wb-switch/` on your machine (accounts, automation config, notification archive, switch history, backups). Nothing is uploaded.
+- The app reads and writes those local files and calls official endpoints for check-in / tasks / token refresh. No proxy, no gateway, no session export.
+- The only outward-facing action is "set as current account": rewrite auth and reassign the session pool — destructive, confirmed twice, with a full backup first.
 
-## Known limitations
+## Known limits
 
-- Ships for Windows, macOS and Linux. Windows needs the WebView2 runtime. The macOS build is **ad-hoc signed** (not notarized), so the first launch is blocked once: allow it in System Settings → Privacy & Security, or right-click the app → Open. If macOS reports the app is damaged, run `sudo xattr -cr "/Applications/WorkBuddy Deck.app"` and open it again.
-- Auto-update rides on GitHub Releases: direct access can be slow in some regions, so the Settings card takes a mirror prefix.
-- No automated test pipeline beyond unit tests; type checking and clippy run locally via `npm run verify`, CI only builds releases.
-- UI copy is Chinese-first. i18n with an English switch is built in, but English strings are still being filled in.
-- The usage forecast needs at least three days of snapshots per account; on a fresh install it only shows sample progress.
+- Injection depends on the client's debug port. If an official update changes launch flags or page structure, injection breaks until patched.
+- Releases cover three platforms, but macOS ships Apple Silicon only and is ad-hoc signed (not notarized). First launch needs "Open Anyway"; if macOS says the app is damaged, run `sudo xattr -cr "/Applications/WorkBuddy Deck.app"`.
+- Auto-update uses GitHub Releases, which can be slow from mainland China; set a mirror prefix.
+- 879 unit tests in the core crate and 46 in the command layer; `npm run verify` runs type-check and clippy. CI only builds releases.
+- UI copy is Chinese-first; i18n covers Chinese and English, English strings are still being filled in.
+- Forecast needs at least three days of snapshots per account; a fresh install shows sample progress only.
 
 ## License
 
-There is **no LICENSE file** in this repository, so no licence is granted here. Until one is added, assume "all rights reserved": reading and learning are fine, but ask in an issue before commercial use or redistribution. When a licence is chosen it will be added here and to the repository's About section together.
+There is **no LICENSE file** in this repository yet, so no license is granted. Until one is added, treat it as all rights reserved: reading and learning are fine; commercial use or redistribution should start with an Issue to the author.
 
 ## Finally
 
-If it saves you those minutes, a **star** is welcome. If a run fails, a check-in breaks, or a number looks wrong, open an [issue](https://github.com/a634691481-arch/workbuddy-deck/issues) with your account count, the action you ran, and the raw error — that is far more useful than "doesn't work".
+If this saves you those ten minutes a day, a **star** is welcome. For broken runs, failed check-ins or numbers that look wrong, open an [Issue](https://github.com/a634691481-arch/workbuddy-deck/issues) with account count, the action, and the raw error — far more useful than "doesn't work".
