@@ -25,4 +25,9 @@ declare module "vue" {
   }
 }
 
+declare global {
+  /** 构建时由 vite.config.ts 的 define 注入（值 = package.json 的 version）。 */
+  const __APP_VERSION__: string;
+}
+
 export {};

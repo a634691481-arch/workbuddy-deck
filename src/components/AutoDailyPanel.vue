@@ -69,7 +69,7 @@ onBeforeUnmount(() => unlisten?.());
 
 <template>
   <div class="shrink-0 border border-border bg-panel">
-    <div class="flex h-9 items-center gap-2 whitespace-nowrap px-2 text-[10px] uppercase tracking-[0.1em]">
+    <div class="flex h-9 items-center gap-2 whitespace-nowrap px-2 text-[10px]">
       <CalendarClock class="size-3 shrink-0 text-faint" />
       <span class="shrink-0 text-faint">{{ t("ad.title") }}</span>
 
@@ -86,16 +86,16 @@ onBeforeUnmount(() => unlisten?.());
           :src="playIcon"
           :size="12"
           trigger="loop"
-          primary="#0a0a0a"
-          secondary="#454540"
+          primary="#0e1017"
+          secondary="#4a4655"
         />
         <AnimatedIcon
           v-else
           :src="pauseIcon"
           :size="12"
           trigger="hover"
-          primary="#8a8a85"
-          secondary="#565651"
+          primary="#8f8b9e"
+          secondary="#5a5668"
         />
         {{ enabled ? t("ad.on") : t("ad.off") }}
       </button>

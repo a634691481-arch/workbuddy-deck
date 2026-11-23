@@ -54,7 +54,10 @@ export function useAssistant() {
   const detailLoading = ref(false);
   const detailError = ref("");
   const logs = ref<LogLine[]>([]);
-  const scope = ref<"all" | "selected">("all");
+  /** 作用域自动判定（2026-11-20 去掉「全部/所选」分段按钮）：有勾选只跑勾选，没勾选默认跑全部。 */
+  const scope = computed<"all" | "selected">(() =>
+    selected.value.size > 0 ? "selected" : "all",
+  );
   const lastRefresh = ref("—");
   const tab = ref<"tasks" | "checkin" | "raw">("tasks");
   const sidebarWidth = ref(clampWidth(Number(localStorage.getItem(SIDEBAR_KEY)) || 300));
@@ -193,8 +196,7 @@ export function useAssistant() {
 
   async function runAction(action: ActionKey, onlyIds?: string[]) {
     if (busy.value) return;
-    // 失败重试带明确 id，不受当前作用域影响
-    if (!onlyIds && scope.value === "selected" && selected.value.size === 0) return;
+    // 失败重试带明确 id，不受当前作用域影响；没有勾选时 targetIds 为空 = 全部
 
     const label = actionLabel(action);
     busyAction.value = action;
@@ -354,7 +356,6 @@ export function useAssistant() {
     detailLoading,
     detailError,
     logs,
-    scope,
     lastRefresh,
     tab,
     sidebarWidth,

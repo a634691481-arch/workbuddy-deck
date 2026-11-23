@@ -65,13 +65,9 @@ const claimHint = computed(() => {
 
 <template>
   <section class="border border-border bg-panel">
-    <header class="flex items-center gap-1.5 border-b border-border px-2 py-1.5">
-      <span class="lbl text-hazard">[</span>
-      <span class="lbl lbl-ink">{{ t("gr.tasks") }}</span>
-      <span class="lbl text-hazard">]</span>
-      <span class="readout ml-auto text-[10px] text-faint">
-        {{ props.tasks.length }}
-      </span>
+    <header class="flex items-center gap-2 border-b border-border px-3 py-2">
+      <span class="text-[12px] font-medium text-foreground">{{ t("gr.tasks") }}</span>
+      <span class="text-[11px] text-faint">{{ props.tasks.length }}</span>
     </header>
 
     <p v-if="groups.length === 0" class="px-2 py-3 text-[10px] text-faint">
@@ -83,7 +79,7 @@ const claimHint = computed(() => {
     </p>
 
     <div v-for="group in groups" :key="group.key" class="border-b border-border last:border-b-0">
-      <div class="flex items-center gap-1.5 bg-muted/40 px-2 py-1">
+      <div class="flex items-center gap-2 bg-muted/40 px-3 py-1">
         <span
           class="lbl"
           :class="group.key === 'claimable' ? 'text-hazard' : 'text-muted-foreground'"
@@ -111,18 +107,28 @@ const claimHint = computed(() => {
         <li
           v-for="task in group.items"
           :key="task.task_code"
-          class="flex items-center gap-2 border-t border-border/60 px-2 py-1.5"
-          :class="task.locked === true ? 'opacity-50' : ''"
+          class="flex items-center gap-2.5 border-t border-border/60 px-3 py-2"
+          :class="task.locked === true ? 'opacity-45' : ''"
         >
+          <span
+            class="size-1.5 shrink-0 rounded-full"
+            :class="
+              group.key === 'claimed'
+                ? 'bg-success'
+                : group.key === 'claimable'
+                  ? 'bg-hazard'
+                  : 'bg-border-strong'
+            "
+          />
           <div class="min-w-0 flex-1">
             <div
-              class="truncate text-[11px]"
+              class="truncate text-[11.5px]"
               :class="group.key === 'claimed' ? 'text-muted-foreground' : 'text-foreground'"
               :title="task.task_desc || task.title"
             >
               {{ task.title || task.task_code }}
             </div>
-            <div class="readout text-[9px] text-faint">{{ progressOf(task) }}</div>
+            <div class="mt-0.5 truncate text-[10px] text-faint">{{ progressOf(task) }}</div>
           </div>
           <span
             v-if="task.locked === true"
@@ -131,8 +137,8 @@ const claimHint = computed(() => {
             {{ t("gr.lockedTask") }}
           </span>
           <span
-            class="readout shrink-0 text-[10px]"
-            :class="group.key === 'claimed' ? 'text-faint' : 'text-muted-foreground'"
+            class="readout shrink-0 text-[11px] tabular-nums"
+            :class="group.key === 'claimed' ? 'text-faint' : 'text-warning'"
           >
             +{{ task.reward_credit ?? 0 }}
           </span>

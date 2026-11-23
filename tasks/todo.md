@@ -837,3 +837,72 @@ decision(forced-on) = Skip("当前账号未被限流")
 - tauri-plugin-updater 的 `install(bytes)` 在 `Update` 对象上不在 `Updater` 上：download 返回的
   字节必须和 Update 一起暂存，否则重启时没法装
 - 「静默 ≠ 不可见」再进了一步：现在连安装都需要确认，窗口关闭期间检查仍走托盘进程
+
+## 2026-11-20 修 Library_read + 补礼包补偿 / Buddy 信息（对齐 WorkBuddy-Daily）
+
+- [x] 排查「任务做不了」：日志里 `Library_read` 与 `wb_wechat_oa_subscribe_task` 恒为 manual_required；
+  公众号关注无解，`Library_read` 根因是埋点信封错误
+- [x] `growth_tasks.rs`：新增 `web_event` + `report_web`（web 域指纹：machineId 用 `webmachine` 盐、
+  普通 Mozilla UA、无 ide*/ext* 字段、裸数组）；修 `t_library` 字段名 snake_case → camelCase
+  （`pageURL/elementId/elementName`），pageURL 改为具体文档页；`Library_read` 移出 MANUAL_TASKS
+- [x] `growth_center.rs`：新增 `step_benefits` 礼包补偿（codebuddy 域 `/billing/meter/*`：
+  补偿 compensation-status→claim-compensation，新手礼包 check-gift-claimed→claim-gift；
+  状态 POST 按 Read 重试、领取按 Write 不重试；`benefits_state.json` 按 `kind|uid|end_time` 本地防重；
+  企业版 code 10001 识别为 skipped）；接入 run_account 与 action 分发
+- [x] Buddy 信息：`buddy_info`（GET `/buddy/info`，`data.buddy` 优先）进 `growth_assets`，
+  成长抽屉盲盒卡头部显示 `名字（稀有度 · 性格）`
+- [x] 配置默认 `features.benefits: true`（deep-merge，老配置自动获得）
+- [x] 验证：core 866 单测全过（新增 web_event 形状 / parse_benefit / parse_buddy_info 三测）、
+  clippy 无新增警告、vue-tsc 0、build 通过
+
+### 回顾
+- `code:0` 但进度不涨 ≠ 元素名失效：先比对字段名与指纹形态再下「需手动」结论；
+  snake_case vs camelCase 这种差异服务端不会报错，只会静默丢弃
+- 互动玩法八项盘点：抽奖/盲盒/旅行/连签兑换/补签卡/徽章早已覆盖且比参考实现完整
+  （旅行有跨日缓存与 reconcile），本次只缺礼包补偿与 Buddy 信息两项，均已补上
+## 2026-11-20 CDP 调试通道全量接入（对齐 WorkDaddy 机制）
+
+- [x] 新增 `cdp.rs`：回环端口探测（9222-9232/9333）→ `/json` 枚举 → 目标强信号归属判定
+  （workbuddy.cn 域 / app.asar 路径，防注错端）→ WS `Runtime.evaluate(awaitPromise)` 复用会话
+  （探活 1+1 失效自动重建）；`page_fetch` 在页面内同源 fetch（真实 origin/cookie/UA）
+- [x] `process.rs`：`launch_workbuddy_args` + `restart_workbuddy_with_cdp`（关旧进程→带
+  `--remote-debugging-port` 拉起）
+- [x] 任务执行切换（CDP 优先 + HTTP 自动回退，功能永不因 CDP 缺席断链）：
+  `report_web`（Library_read 等埋点）与 `webchat`（chat_5/GLM/expert 的 SSE 对话）都改为
+  先试页面内同源请求
+- [x] `config.rs`：`cdp_config.json`（enabled 默认 true + 端口候选段）
+- [x] 命令：`cdp_status` / `cdp_restart_client`（重启后轮询端口 30s 就绪并立即建连）
+- [x] 设置页新卡片：连接状态 / 端口 / 目标页 / 执行通道（CDP 页面内 vs HTTP 直连）+ 一键重启；
+  i18n 中英双份
+- [x] 验证：core 869 单测全过（新增 classify_target / escape_js / page_fetch_js 三测）、
+  双 crate clippy 无新增警告、vue-tsc 0、build 通过
+
+### 回顾
+- WorkDaddy 的「真实会话」是 16k 行注入 JS + DOM 自动化（acSendPhrase/compat 层），完整移植
+  不现实；我们是独立 GUI，不需要注入 UI。闭环的正确落法是「任务在页面上下文里发同源请求 +
+  HTTP 自动回退」——风控一致性拿到，复杂度可控
+- CDP 传输层用 tokio-tungstenite 裸协议（Runtime.evaluate + id 分发），无事件订阅；导航重注入
+  对我们 unnecessary（每次任务都新 evaluate，不驻留组件）
+- 未验证项：真实客户端连调（需要用户环境跑一次）；macOS CDP 启动未接（launch_workbuddy_args
+  在 macOS 仍走原逻辑，注释标明）
+
+## 2026-11-20 页面内嵌面板（WorkDaddy 同款形态）
+
+- [x] 新增 `src-tauri/src/deck_http.rs`：回环 HTTP 桥（稳定端口 17653-17656 + 随机 token）
+  - `GET /` 走 `asset_resolver` 读**同一份内嵌前端**，index.html 注入 shim
+  - `POST /__ipc` → 54 个命令的 camelCase 分发（含 AppHandle 依赖的 6 个）
+  - `GET /__events` SSE：13 个 Tauri 事件转发（Tauri 2 无通配订阅，必须显式列表）
+- [x] `cdp.rs`：图标点击从「唤起独立窗口」改为「页面内 iframe 浮层」；
+  `VER` 版本标记 + URL 热更新（应用重启换 token 时已开面板自动重载）；
+  自动重启客户端**进程内只做一次**（`AUTO_RESTART_TRIED`），不再循环杀进程
+- [x] 前端：`isEmbedded()/hasHostWindow()`；面板里隐藏窗口按钮、跳过启动动画；
+  启动动画版本号改 `__APP_VERSION__`（原来硬编码 rev 0.1.1，看着像老版本）
+- [x] 验证：面板内 `list_accounts` 返回真实账号；截图确认侧栏 7 项 + CDP 卡片
+
+### 坑（重要）
+- **Tauri 增量编译不会重新嵌入前端**：dist 比上次 cargo 编译新时，exe 里仍是旧
+  `index-*.js`。症状就是「面板显示老页面」。修法：`touch src-tauri/src/lib.rs` 强制重编，
+  然后用 `grep -c "$(grep -oE 'assets/index-[^\"]+\.js' dist/index.html)" exe` 验证命中
+- `escape_js` 自带引号：模板里写 `const X = __URL__;`，写成 `"__URL__"` 会语法错误
+- 注入脚本必须可热升级：早期用 `if (window.__wbDeckIcon) return true` 会让已注入页面
+  永远用旧 handler，改为「版本号 + 重建旧 DOM」

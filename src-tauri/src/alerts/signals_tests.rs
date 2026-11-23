@@ -91,13 +91,23 @@ fn notice(level: &str, title: &str, description: Option<&str>, at: i64) -> Notif
 fn runfail_needs_three_failures_within_24h() {
     let now = 10 * DAY_MS;
     let two = vec![
-        notice("warning", "签到 · 部分失败", Some("成功 1 · 失败 2"), now - 1_000),
+        notice(
+            "warning",
+            "签到 · 部分失败",
+            Some("成功 1 · 失败 2"),
+            now - 1_000,
+        ),
         notice("error", "拉取失败", None, now - 2_000),
     ];
     assert!(runfail_alert(&two, now).is_none(), "2 条不到阈值");
 
     let three = vec![
-        notice("warning", "签到 · 部分失败", Some("成功 1 · 失败 2"), now - 1_000),
+        notice(
+            "warning",
+            "签到 · 部分失败",
+            Some("成功 1 · 失败 2"),
+            now - 1_000,
+        ),
         notice("error", "拉取失败", None, now - 2_000),
         notice("warning", "成长任务 · 部分失败", None, now - 3_000),
     ];
@@ -112,7 +122,12 @@ fn runfail_ignores_non_failures_and_stale_entries() {
     let noise = vec![
         notice("success", "签到 · 完成", None, now - 1_000),
         notice("info", "已按限流自动切换账号", None, now - 2_000),
-        notice("warning", "异常提醒", Some("新增 3 条异常提醒"), now - 3_000),
+        notice(
+            "warning",
+            "异常提醒",
+            Some("新增 3 条异常提醒"),
+            now - 3_000,
+        ),
         notice("warning", "签到 · 已取消", None, now - 4_000),
     ];
     assert!(

@@ -83,7 +83,10 @@ mod tests {
             "health": { "score": 20, "grade": "critical", "reasons": ["empty"] },
         })];
         let mut forecasts = HashMap::new();
-        forecasts.insert("a1".to_string(), json!({ "daysLeft": 1.5, "confidence": "ok" }));
+        forecasts.insert(
+            "a1".to_string(),
+            json!({ "daysLeft": 1.5, "confidence": "ok" }),
+        );
         cache_overview_at(dir.path(), &rows, &forecasts, 123);
 
         let loaded = load_at(dir.path());
@@ -100,11 +103,7 @@ mod tests {
             "ts": 1,
             "accounts": [{ "accountId": "a1", "health": { "score": 10 } }],
         });
-        std::fs::write(
-            dir.path().join(OVERVIEW_CACHE_FILE),
-            payload.to_string(),
-        )
-        .unwrap();
+        std::fs::write(dir.path().join(OVERVIEW_CACHE_FILE), payload.to_string()).unwrap();
 
         let loaded = load_at(dir.path());
         assert_eq!(loaded.len(), 1);

@@ -10,11 +10,15 @@ import { listen, type UnlistenFn } from "@tauri-apps/api/event";
 import { formatStamp } from "@/lib/utils";
 import { t, type I18nKey } from "@/lib/i18n";
 import { useListAnim } from "@/composables/useListAnim";
+import { useStaggerList } from "@/composables/useStagger";
 
 const data = ref<ArchivedList | null>(null);
 const loading = ref(false);
 const error = ref("");
 const rowsEl = useListAnim();
+
+/** 归档行交错入场：数据到位/刷新时按行依次进入。 */
+const stagger = useStaggerList(() => data.value?.rows);
 const notice = ref("");
 
 async function load() {
@@ -161,8 +165,12 @@ async function doPurge() {
 
     <!-- 台账表：粘性表头 + 行滚动，排序与口径都由后端定（归档时刻倒序） -->
     <div class="min-h-0 flex-1 overflow-y-auto p-3">
-      <div ref="rowsEl" class="wb-zebra overflow-hidden border border-border bg-card">
-      <div class="sticky top-0 z-10 grid grid-cols-[36px_minmax(0,1fr)_150px_72px] items-center gap-2 wb-cells border-b border-border bg-card px-3 py-1.5">
+      <div
+        ref="rowsEl"
+        class="wb-zebra overflow-hidden border border-border bg-card"
+        :class="stagger.listClass()"
+      >
+      <div class="wb-stagger-skip sticky top-0 z-10 grid grid-cols-[36px_minmax(0,1fr)_150px_72px] items-center gap-2 wb-cells border-b border-border bg-card px-3 py-1.5">
         <span class="lbl">#</span>
         <span class="lbl">{{ t("ar.colTask") }}</span>
         <span class="lbl text-right">{{ t("ar.colDate") }}</span>

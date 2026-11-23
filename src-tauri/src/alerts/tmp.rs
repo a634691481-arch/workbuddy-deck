@@ -11,10 +11,8 @@ impl TempDir {
             .duration_since(UNIX_EPOCH)
             .map(|gap| gap.as_nanos())
             .unwrap_or(0);
-        let dir = std::env::temp_dir().join(format!(
-            "wb_alerts_{}_{name}_{nanos}",
-            std::process::id()
-        ));
+        let dir =
+            std::env::temp_dir().join(format!("wb_alerts_{}_{name}_{nanos}", std::process::id()));
         std::fs::create_dir_all(&dir).expect("创建临时目录");
         Self(dir)
     }

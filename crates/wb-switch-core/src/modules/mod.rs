@@ -3,6 +3,7 @@ pub mod account_groups;
 pub mod auth_file;
 pub mod auto_switch;
 pub mod checkin;
+pub mod cdp;
 pub mod codebuddy_cli;
 pub mod codebuddy_cn_ide;
 pub mod codebuddy_ide;

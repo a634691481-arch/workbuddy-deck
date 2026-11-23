@@ -74,7 +74,9 @@ mod tests {
             ..Inputs::default()
         };
         let mut state = AlertsState::default();
-        state.dismissed.insert("balance:a1".to_string(), now - 1_000);
+        state
+            .dismissed
+            .insert("balance:a1".to_string(), now - 1_000);
         assert!(
             evaluate(&inputs, &state, now).is_empty(),
             "忽略后 7 天内静默"

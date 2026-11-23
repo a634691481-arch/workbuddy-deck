@@ -902,13 +902,29 @@ fn delete_sessions_physical_at(
 /// 切换账号时把 `from_uid` 名下的会话与空间整体改挂到 `to_uid` 名下——
 /// 纯 `UPDATE` 归属，不复制、不删除、不改任何内容。WorkBuddy 侧栏按
 /// `user_id` 过滤，这就是「切号后上下文还在」的唯一正确实现。
-/// 返回 (划归会话数, 划归空间数)。
+/// 返回 (划归会话数, 划归空间数, 划归前 DB 备份路径)。
 pub fn reassign_session_pool(
     variant: WbVariant,
     from_uid: &str,
     to_uid: &str,
-) -> Result<(usize, usize), String> {
-    reassign_session_pool_at(&SessionPaths::for_variant(variant).workbuddy_db(), from_uid, to_uid)
+) -> Result<(usize, usize, PathBuf), String> {
+    let paths = SessionPaths::for_variant(variant);
+    let db = paths.workbuddy_db();
+    if from_uid.is_empty() || to_uid.is_empty() || from_uid == to_uid {
+        return Ok((0, 0, PathBuf::new()));
+    }
+    if !db.exists() {
+        return Ok((0, 0, PathBuf::new()));
+    }
+    // 划归前整库备份（db + wal + shm，带大小校验）：UPDATE 虽然可逆，但
+    // 留一份现场快照，任何意外都能整库回放。备份失败即中止划归——
+    // 不做无备份的批量改写（design §1：备份不可信时写入必须先停下）。
+    // 此时 WorkBuddy 已确认关闭，文件复制不会撕裂。
+    let backup_root =
+        crate::modules::config::backup_dir().join(format!("reassign-preflight-{}", crate::modules::config::utc_iso()));
+    backup_workbuddy_db(&paths, &backup_root)?;
+    let (sessions, spaces) = reassign_session_pool_at(&db, from_uid, to_uid)?;
+    Ok((sessions, spaces, backup_root))
 }
 
 /// 可注入路径版本：单测用临时库，不碰真实数据区。

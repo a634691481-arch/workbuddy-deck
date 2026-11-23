@@ -17,7 +17,7 @@ const props = withDefaults(
     secondary?: string;
     stroke?: string;
   }>(),
-  { size: 14, trigger: "hover", primary: "#eaeaea", secondary: "#8a8a85", stroke: "2" },
+  { size: 14, trigger: "hover", primary: "#e8e6e1", secondary: "#8f8b9e", stroke: "2" },
 );
 
 const colors = computed(() => `primary:${props.primary};secondary:${props.secondary}`);

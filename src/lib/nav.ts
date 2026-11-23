@@ -1,5 +1,14 @@
 /** 左侧导航分区（与 AppSidebar 的 items 一一对应）。 */
-export type NavKey = "tasks" | "credits" | "tokens" | "accounts" | "logs" | "archived" | "settings";
+export type NavKey =
+  | "tasks"
+  | "credits"
+  | "tokens"
+  | "accounts"
+  | "logs"
+  | "archived"
+  | "appearance"
+  | "skin"
+  | "settings";
 
 // ── 导航图标（morphicons：idle ↔ active 之间做形变过渡）──────────────────
 // 数据取自 lucide（IconNode，非组件），morphicons 直接吃这种结构。
@@ -11,6 +20,10 @@ import {
   Coins,
   Key,
   KeyRound,
+  Palette,
+  Paintbrush,
+  Sparkles,
+  Brush,
   ListChecks,
   ListTodo,
   ScrollText,
@@ -32,5 +45,7 @@ export const NAV_ICONS: Record<NavKey, IconPair> = {
   tokens: pair(Key, KeyRound),
   logs: pair(ScrollText, SquareTerminal),
   archived: pair(Archive, Boxes),
+  appearance: pair(Palette, Paintbrush),
+  skin: pair(Sparkles, Brush),
   settings: pair(Settings, Settings2),
 };

@@ -9,6 +9,7 @@ import { computed, onMounted, ref } from "vue";
 import { Loader2, RefreshCw } from "lucide-vue-next";
 
 import { tokenStatistics, type TokenStatistics } from "@/lib/api";
+import { useStaggerList } from "@/composables/useStagger";
 import { t } from "@/lib/i18n";
 import { chartStyle, fmtNum } from "@/lib/prefs";
 
@@ -211,6 +212,9 @@ const projects = computed(() => {
   }));
 });
 
+/** 模型/项目行交错入场：统计到位时按行依次进入。 */
+const stagger = useStaggerList(() => models.value);
+
 /** 周 × 时热力：key 形如 `weekday-hour`（0=周一），7×24 = 168 格。 */
 const hourGrid = computed(() => {
   const cells = new Map<string, number>();
@@ -233,6 +237,9 @@ const hourGrid = computed(() => {
     })),
   };
 });
+
+/** 顶部指标默认只显示 4 个核心（总量/输入/输出/命中率），其余折叠。 */
+const showAllMetrics = ref(false);
 
 /** 效率指标：日均 / 峰值 / 会话 / 项目 / 每请求。 */
 const efficiency = computed(() => {
@@ -335,7 +342,7 @@ const cellColor = (level: number) =>
   <div class="flex min-h-0 flex-1 flex-col">
     <header class="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-panel px-4 py-2 wb-flat">
       <div class="min-w-0">
-        <h1 class="text-[13px] tracking-[0.12em] text-foreground">{{ t("tk.title") }}</h1>
+        <h1 class="text-[13px] text-foreground">{{ t("tk.title") }}</h1>
         <div class="readout mt-0.5 text-[9px] text-faint">
           {{ stats?.rangeDays ? `RANGE ${stats.rangeDays}D` : "RANGE ALL" }} ·
           {{ t("tk.scanned") }} {{ sources.reduce((sum, item) => sum + item.filesScanned, 0) }}
@@ -347,7 +354,7 @@ const cellColor = (level: number) =>
       </div>
       <div class="flex shrink-0 items-center gap-1.5">
         <!-- 有旧数据时不清屏：只在角落标「扫描中」，避免整页闪一下 -->
-        <span v-if="loading && stats" class="readout text-[9px] uppercase tracking-[0.14em] text-hazard">
+        <span v-if="loading && stats" class="readout text-[9px] text-hazard">
           scanning…
         </span>
         <div class="flex wb-seg">
@@ -355,7 +362,7 @@ const cellColor = (level: number) =>
             v-for="range in RANGES"
             :key="range.key"
             type="button"
-            class="px-2 py-1 text-[10px] tracking-[0.1em] transition-colors"
+            class="px-2 py-1 text-[10px] transition-colors"
             :class="
               days === range.key
                 ? 'bg-foreground text-background'
@@ -368,7 +375,7 @@ const cellColor = (level: number) =>
         </div>
         <button
           type="button"
-          class="flex items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
+          class="flex items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
           :disabled="loading"
           @click="load(true)"
         >
@@ -383,9 +390,9 @@ const cellColor = (level: number) =>
       {{ error }}
     </div>
 
-    <!-- 八项总量：两行四列 -->
+    <!-- 顶部指标：默认 4 个核心，其余按需展开（窄面板不能铺 8 个） -->
     <section class="mx-3 mt-3 shrink-0">
-      <div class="grid grid-cols-4 gap-2">
+      <div class="grid grid-cols-2 gap-2 md:grid-cols-4">
         <div class="border border-border bg-card px-3 py-2">
           <div class="lbl">{{ t("tk.total") }}</div>
           <div class="readout mt-1 text-[19px] leading-none text-foreground">
@@ -401,10 +408,27 @@ const cellColor = (level: number) =>
           <div class="readout mt-1 text-[19px] leading-none text-foreground">{{ compact(totals.output) }}</div>
         </div>
         <div class="border border-border bg-card px-3 py-2">
+          <div class="flex items-baseline justify-between gap-2">
+            <span class="lbl">{{ t("tk.hitRate") }}</span>
+            <button
+              type="button"
+              class="text-[10px] text-muted-foreground hover:text-foreground"
+              @click="showAllMetrics = !showAllMetrics"
+            >
+              {{ showAllMetrics ? t("tk.less") : t("tk.more") }}
+            </button>
+          </div>
+          <div class="readout mt-1 text-[19px] leading-none text-hazard">
+            {{ cacheRate === null ? "—" : `${Math.round(cacheRate * 100)}%` }}
+          </div>
+        </div>
+      </div>
+
+      <div v-if="showAllMetrics" class="mt-2 grid grid-cols-2 gap-2 md:grid-cols-4">
+        <div class="border border-border bg-card px-3 py-2">
           <div class="lbl">{{ t("tk.records") }}</div>
           <div class="readout mt-1 text-[19px] leading-none text-foreground">{{ compact(totals.records) }}</div>
         </div>
-
         <div class="border border-border bg-card px-3 py-2">
           <div class="lbl">{{ t("tk.cache") }}</div>
           <div class="readout mt-1 text-[19px] leading-none text-foreground">{{ compact(totals.cacheRead) }}</div>
@@ -416,12 +440,6 @@ const cellColor = (level: number) =>
         <div class="border border-border bg-card px-3 py-2">
           <div class="lbl">{{ t("tk.uncached") }}</div>
           <div class="readout mt-1 text-[19px] leading-none text-foreground">{{ compact(totals.uncachedInput) }}</div>
-        </div>
-        <div class="border border-border bg-card px-3 py-2">
-          <div class="lbl">{{ t("tk.hitRate") }}</div>
-          <div class="readout mt-1 text-[19px] leading-none text-hazard">
-            {{ cacheRate === null ? "—" : `${Math.round(cacheRate * 100)}%` }}
-          </div>
         </div>
       </div>
     </section>
@@ -456,10 +474,10 @@ const cellColor = (level: number) =>
         <div v-if="sources.length === 0" class="px-3 py-8 text-center text-[11px] text-faint">
           {{ loading ? "···" : t("tk.empty") }}
         </div>
-        <div v-else class="grid grid-cols-2 gap-px bg-border">
+        <div v-else class="flex flex-col gap-px bg-border">
           <div v-for="source in sources" :key="source.source" class="bg-card px-3 py-2">
             <div class="flex items-baseline justify-between gap-2">
-              <span class="text-[11px] tracking-[0.08em] text-foreground">{{ sourceLabel(source.source) }}</span>
+              <span class="text-[11px] text-foreground">{{ sourceLabel(source.source) }}</span>
               <span class="readout text-[13px] text-foreground">{{ compact(source.summary.total) }}</span>
             </div>
             <div class="readout mt-1 flex gap-3 text-[9px] text-faint">
@@ -522,7 +540,7 @@ const cellColor = (level: number) =>
         <!-- 模型 -->
         <section class="border border-border bg-card px-3 py-2.5">
           <div class="lbl">// {{ t("tk.models") }}</div>
-          <ul v-if="models.length > 0" class="mt-2 space-y-1.5">
+          <ul v-if="models.length > 0" class="mt-2 space-y-1.5" :class="stagger.listClass()">
             <li v-for="model in models" :key="model.name" class="min-w-0">
               <div class="flex items-baseline justify-between gap-2 text-[10px]">
                 <span class="min-w-0 truncate text-muted-foreground" :title="model.name">{{ model.name }}</span>
@@ -544,7 +562,7 @@ const cellColor = (level: number) =>
         <!-- 项目分布 -->
         <section class="border border-border bg-card px-3 py-2.5">
           <div class="lbl">// {{ t("tk.projects") }}</div>
-          <ul v-if="projects.length > 0" class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5">
+          <ul v-if="projects.length > 0" class="mt-2 grid grid-cols-2 gap-x-4 gap-y-1.5" :class="stagger.listClass()">
             <li v-for="project in projects" :key="project.name" class="min-w-0">
               <div class="flex items-baseline justify-between gap-2 text-[10px]">
                 <span class="min-w-0 truncate text-muted-foreground" :title="project.name">{{ project.name }}</span>
@@ -593,28 +611,29 @@ const cellColor = (level: number) =>
         <div class="px-3 pt-2">
           <span class="lbl">// {{ t("tk.eff") }}</span>
         </div>
-        <div class="mt-1.5 grid grid-cols-5 gap-2 p-2">
-          <div class="border border-border bg-card px-3 py-2">
+        <!-- 3 + 2 两行布局：第一行 3 张（各占 2 列），第二行 2 张（各占 3 列） -->
+        <div class="mt-1.5 grid grid-cols-6 gap-2 p-2">
+          <div class="col-span-2 border border-border bg-card px-3 py-2">
             <div class="lbl">{{ t("tk.avgDay") }}</div>
             <div class="readout mt-1 text-[14px] leading-none text-foreground">{{ compact(efficiency.avgDay) }}</div>
             <div v-if="wowLabel" class="readout mt-0.5 text-[9px]" :class="wowTone" :title="t('tk.wowTitle')">
               {{ wowLabel }} <span class="text-faint">{{ t("tk.wow") }}</span>
             </div>
           </div>
-          <div class="border border-border bg-card px-3 py-2">
+          <div class="col-span-2 border border-border bg-card px-3 py-2">
             <div class="lbl">{{ t("tk.peakDay") }}</div>
             <div class="readout mt-1 text-[14px] leading-none text-foreground">{{ compact(efficiency.peakTotal) }}</div>
             <div class="readout mt-0.5 text-[9px] text-faint">{{ efficiency.peakDate }}</div>
           </div>
-          <div class="border border-border bg-card px-3 py-2">
+          <div class="col-span-2 border border-border bg-card px-3 py-2">
             <div class="lbl">{{ t("tk.perReq") }}</div>
             <div class="readout mt-1 text-[14px] leading-none text-foreground">{{ compact(efficiency.perRequest) }}</div>
           </div>
-          <div class="border border-border bg-card px-3 py-2">
+          <div class="col-span-3 border border-border bg-card px-3 py-2">
             <div class="lbl">{{ t("tk.sessionCount") }}</div>
             <div class="readout mt-1 text-[14px] leading-none text-foreground">{{ compact(efficiency.sessionCount) }}</div>
           </div>
-          <div class="border border-border bg-card px-3 py-2">
+          <div class="col-span-3 border border-border bg-card px-3 py-2">
             <div class="lbl">{{ t("tk.projCount") }}</div>
             <div class="readout mt-1 text-[14px] leading-none text-foreground">{{ compact(efficiency.projectCount) }}</div>
           </div>
@@ -630,7 +649,7 @@ const cellColor = (level: number) =>
               v-for="tab in (['sessions', 'calls'] as const)"
               :key="tab"
               type="button"
-              class="px-2.5 py-1 text-[10px] tracking-[0.1em] transition-colors"
+              class="px-2.5 py-1 text-[10px] transition-colors"
               :class="detailTab === tab ? 'bg-foreground text-background' : 'bg-card text-muted-foreground hover:text-foreground'"
               @click="detailTab = tab"
             >

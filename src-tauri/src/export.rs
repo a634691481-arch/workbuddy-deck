@@ -36,7 +36,11 @@ fn csv_cell(raw: &str) -> String {
 }
 
 fn row(cells: &[String]) -> String {
-    let mut line = cells.iter().map(|cell| csv_cell(cell)).collect::<Vec<_>>().join(",");
+    let mut line = cells
+        .iter()
+        .map(|cell| csv_cell(cell))
+        .collect::<Vec<_>>()
+        .join(",");
     line.push_str("\r\n");
     line
 }
@@ -61,7 +65,9 @@ fn number(value: Option<&Value>) -> String {
             if let Some(int) = num.as_i64() {
                 int.to_string()
             } else {
-                num.as_f64().map(|float| format!("{float}")).unwrap_or_default()
+                num.as_f64()
+                    .map(|float| format!("{float}"))
+                    .unwrap_or_default()
             }
         }
         Some(Value::String(text)) => text.clone(),
@@ -126,7 +132,10 @@ fn accounts_csv() -> String {
     // 限流台账：一次取全量，再按账号拆。
     let mut limits_by_account: std::collections::HashMap<String, Vec<Value>> =
         std::collections::HashMap::new();
-    if let Some(rows) = limits::get_rate_limits().get("accounts").and_then(Value::as_array) {
+    if let Some(rows) = limits::get_rate_limits()
+        .get("accounts")
+        .and_then(Value::as_array)
+    {
         for entry in rows {
             let Some(id) = entry.get("accountId").and_then(Value::as_str) else {
                 continue;
@@ -227,9 +236,17 @@ fn accounts_csv() -> String {
             reasons,
             number(prediction.and_then(|entry| entry.get("perDay"))),
             number(prediction.and_then(|entry| entry.get("daysLeft"))),
-            stamp(prediction.and_then(|entry| entry.get("depleteAt")).and_then(Value::as_i64)),
+            stamp(
+                prediction
+                    .and_then(|entry| entry.get("depleteAt"))
+                    .and_then(Value::as_i64),
+            ),
             limited_models,
-            stamp(snapshot.and_then(|snap| snap.get("ts")).and_then(Value::as_i64)),
+            stamp(
+                snapshot
+                    .and_then(|snap| snap.get("ts"))
+                    .and_then(Value::as_i64),
+            ),
         ]));
     }
     output
@@ -240,8 +257,18 @@ fn tokens_daily_csv() -> String {
     let stats = token_stats::get_statistics(None);
     let mut by_date: std::collections::BTreeMap<String, [f64; 6]> =
         std::collections::BTreeMap::new();
-    for source in stats.get("sources").and_then(Value::as_array).into_iter().flatten() {
-        for point in source.get("daily").and_then(Value::as_array).into_iter().flatten() {
+    for source in stats
+        .get("sources")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        for point in source
+            .get("daily")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
             let key = text(point.get("key"));
             if key.is_empty() {
                 continue;
@@ -250,8 +277,14 @@ fn tokens_daily_csv() -> String {
             entry[0] += point.get("total").and_then(Value::as_f64).unwrap_or(0.0);
             entry[1] += point.get("input").and_then(Value::as_f64).unwrap_or(0.0);
             entry[2] += point.get("output").and_then(Value::as_f64).unwrap_or(0.0);
-            entry[3] += point.get("cacheRead").and_then(Value::as_f64).unwrap_or(0.0);
-            entry[4] += point.get("cacheWrite").and_then(Value::as_f64).unwrap_or(0.0);
+            entry[3] += point
+                .get("cacheRead")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.0);
+            entry[4] += point
+                .get("cacheWrite")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.0);
             entry[5] += point.get("records").and_then(Value::as_f64).unwrap_or(0.0);
         }
     }
@@ -284,8 +317,18 @@ fn tokens_models_csv() -> String {
     let stats = token_stats::get_statistics(None);
     let mut by_model: std::collections::BTreeMap<String, [f64; 6]> =
         std::collections::BTreeMap::new();
-    for source in stats.get("sources").and_then(Value::as_array).into_iter().flatten() {
-        for group in source.get("models").and_then(Value::as_array).into_iter().flatten() {
+    for source in stats
+        .get("sources")
+        .and_then(Value::as_array)
+        .into_iter()
+        .flatten()
+    {
+        for group in source
+            .get("models")
+            .and_then(Value::as_array)
+            .into_iter()
+            .flatten()
+        {
             let key = text(group.get("key"));
             if key.is_empty() {
                 continue;
@@ -294,8 +337,14 @@ fn tokens_models_csv() -> String {
             entry[0] += group.get("total").and_then(Value::as_f64).unwrap_or(0.0);
             entry[1] += group.get("input").and_then(Value::as_f64).unwrap_or(0.0);
             entry[2] += group.get("output").and_then(Value::as_f64).unwrap_or(0.0);
-            entry[3] += group.get("cacheRead").and_then(Value::as_f64).unwrap_or(0.0);
-            entry[4] += group.get("cacheWrite").and_then(Value::as_f64).unwrap_or(0.0);
+            entry[3] += group
+                .get("cacheRead")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.0);
+            entry[4] += group
+                .get("cacheWrite")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.0);
             entry[5] += group.get("records").and_then(Value::as_f64).unwrap_or(0.0);
         }
     }
@@ -355,7 +404,10 @@ fn credits_csv() -> String {
     ]));
     for snapshot in &snapshots {
         let id = text(snapshot.get("accountId"));
-        let remaining = snapshot.get("remaining").and_then(Value::as_f64).unwrap_or(0.0);
+        let remaining = snapshot
+            .get("remaining")
+            .and_then(Value::as_f64)
+            .unwrap_or(0.0);
         let delta = previous
             .get(&id)
             .map(|before| before - remaining)
@@ -367,7 +419,11 @@ fn credits_csv() -> String {
         output.push_str(&row(&[
             stamp(ts),
             chrono::DateTime::from_timestamp_millis(ts.unwrap_or(0))
-                .map(|date| date.with_timezone(&chrono::Local).format("%Y-%m-%d").to_string())
+                .map(|date| {
+                    date.with_timezone(&chrono::Local)
+                        .format("%Y-%m-%d")
+                        .to_string()
+                })
                 .unwrap_or_default(),
             id,
             text(snapshot.get("accountName")),
@@ -505,7 +561,6 @@ mod tests {
     }
 }
 
-
 /// 导出诊断包（单个 .txt）：版本 / 平台 / 数据规模 / 脱敏后的配置 / 各日志尾部。
 ///
 /// 为什么是 txt 不是 zip：这里只排障用，纯文本能直接贴进工单，也不用引 zip 依赖。
@@ -517,7 +572,12 @@ pub fn export_diagnostics(path: &str) -> serde_json::Value {
     let _ = writeln!(out, "WorkBuddy Deck 诊断包");
     let _ = writeln!(out, "生成时间: {}", stamp(None));
     let _ = writeln!(out, "版本: {}", env!("CARGO_PKG_VERSION"));
-    let _ = writeln!(out, "平台: {} {}", std::env::consts::OS, std::env::consts::ARCH);
+    let _ = writeln!(
+        out,
+        "平台: {} {}",
+        std::env::consts::OS,
+        std::env::consts::ARCH
+    );
 
     let accounts = wb_switch_core::modules::account::load_accounts();
     let cn = wb_switch_core::modules::account::cn_accounts();

@@ -6,7 +6,7 @@
  * 这里只做总览与快捷入口，避免同一份配置在两处维护出分歧。
  */
 import { computed, onMounted, ref } from "vue";
-import { CircleAlert, Download, Eraser, ExternalLink, FolderOpen, Loader2, RefreshCw } from "lucide-vue-next";
+import { CircleAlert, Download, ExternalLink, FolderOpen, Loader2, RefreshCw } from "lucide-vue-next";
 import { open, save } from "@tauri-apps/plugin-dialog";
 import { useUpdate } from "@/composables/useUpdate";
 import { formatClock } from "@/lib/utils";
@@ -15,6 +15,8 @@ import {
   autoSwitchCheck,
   autoSwitchSet,
   autoSwitchStatus,
+  cdpRestartClient,
+  cdpStatus,
   eventsClear,
   exportAllData,
   exportDiagnostics,
@@ -26,14 +28,25 @@ import {
   type AutoSwitchCheck,
   type AutoSwitchConfig,
   type AutoSwitchStatus,
+  type CdpStatus,
   type EventSource,
   type ExportKind,
   type SystemInfo,
 } from "@/lib/api";
 import { useShell } from "@/composables/useShell";
+import { isEmbedded } from "@/lib/tauri-env";
 import { t } from "@/lib/i18n";
 
 const { go } = useShell();
+
+/**
+ * 嵌入面板里 `plugin:dialog|open` / `|save` 被桥直接 reject（没有原生文件对话框），
+ * 所以所有「要选路径」的动作在面板里禁用并给 title 提示：
+ * 导出四表 / 导出全部 / 诊断包 / 更新安装（安装会重启本进程，面板自己挂在宿主页面上）。
+ */
+const embedded = isEmbedded();
+const pickerHint = computed(() => (embedded ? t("deck.noPicker") : undefined));
+const installHint = computed(() => (embedded ? t("deck.noInstall") : undefined));
 
 /** 开源地址：只展示本应用仓库。 */
 const REPO_URL = "https://github.com/a634691481-arch/workbuddy-deck";
@@ -57,12 +70,52 @@ async function load() {
   error.value = "";
   try {
     info.value = await systemInfo();
+    void loadCdp();
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : String(cause);
   } finally {
     loading.value = false;
   }
 }
+
+// ---------------------------------------------------------------------------
+// CDP 调试通道：任务在客户端真实上下文里执行（同源 fetch），失败自动回退 HTTP
+// ---------------------------------------------------------------------------
+
+const cdp = ref<CdpStatus | null>(null);
+const cdpBusy = ref(false);
+const cdpMessage = ref("");
+
+async function loadCdp() {
+  try {
+    cdp.value = await cdpStatus();
+  } catch {
+    cdp.value = null;
+  }
+}
+
+/** 带调试端口重启客户端；成功后状态立即刷新。 */
+async function restartCdpClient() {
+  if (cdpBusy.value) return;
+  cdpBusy.value = true;
+  cdpMessage.value = "";
+  try {
+    const result = await cdpRestartClient();
+    cdpMessage.value = result.ok
+      ? `${t("cd.okPrefix")} :${result.port ?? "?"}`
+      : result.error || t("cd.fail");
+    if (result.ok) {
+      // Electron 冷启动后页面加载要几秒，延迟再读一次状态。
+      await new Promise((resolve) => setTimeout(resolve, 3000));
+      await loadCdp();
+    }
+  } catch (cause) {
+    cdpMessage.value = cause instanceof Error ? cause.message : String(cause);
+  } finally {
+    cdpBusy.value = false;
+  }
+}
+
 
 onMounted(() => {
   void load();
@@ -265,7 +318,7 @@ const exportFailed = ref(false);
 const todayTag = () => new Date().toISOString().slice(0, 10);
 
 async function runExport(kind: ExportKind, file: string) {
-  if (exporting.value) return;
+  if (exporting.value || embedded) return;
   try {
     const path = await save({
       title: t("st.export"),
@@ -291,7 +344,7 @@ async function runExport(kind: ExportKind, file: string) {
 
 /** 诊断包：版本 + 平台 + 数据规模 + 日志尾部，脱敏后落一个 txt。 */
 async function runDiagnostics() {
-  if (exporting.value) return;
+  if (exporting.value || embedded) return;
   try {
     const path = await save({
       title: t("st.diagSave"),
@@ -315,7 +368,7 @@ async function runDiagnostics() {
 
 /** 全部导出：选一个目录，写四份文件，逐份汇报成功/失败。 */
 async function runExportAll() {
-  if (exporting.value) return;
+  if (exporting.value || embedded) return;
   try {
     const dir = await open({ title: t("st.exAll"), directory: true, multiple: false });
     if (!dir || typeof dir !== "string") return;
@@ -362,13 +415,33 @@ async function doClear() {
     clearing.value = false;
   }
 }
+/**
+ * 2026-11-20：限流自动切换 / 数据导出 / 维护 三块 UI 已按用户要求移除。
+ * 逻辑先保留（回滚方便），这里显式声明「暂存」，避免 TS 未使用告警。
+ */
+void [
+  pickerHint,
+  runAutoCheck,
+  autoOn,
+  autoNotifyOnly,
+  autoAsk,
+  autoBgNotify,
+  autoCountdown,
+  onNumberChange,
+  lastDecisionText,
+  EXPORTS,
+  runExport,
+  runDiagnostics,
+  runExportAll,
+  CLEARS,
+];
 </script>
 
 <template>
   <div class="flex min-h-0 flex-1 flex-col">
     <header class="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-panel px-4 py-2 wb-flat">
       <div class="min-w-0">
-        <h1 class="text-[13px] tracking-[0.12em] text-foreground">{{ t("st.title") }}</h1>
+        <h1 class="text-[13px] text-foreground">{{ t("st.title") }}</h1>
         <div class="readout mt-0.5 truncate text-[9px] text-faint">
           {{ t("st.subtitle") }}
           <span v-if="notice" class="ml-2 text-muted-foreground">{{ notice }}</span>
@@ -376,7 +449,7 @@ async function doClear() {
       </div>
       <button
         type="button"
-        class="flex shrink-0 items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
+        class="flex shrink-0 items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
         :disabled="loading"
         @click="load()"
       >
@@ -430,7 +503,7 @@ async function doClear() {
                 <span class="text-[11px] text-muted-foreground">{{ t("st.storeDir") }}</span>
                 <button
                   type="button"
-                  class="flex shrink-0 items-center gap-1 border border-border-strong px-1.5 py-0.5 text-[9px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+                  class="flex shrink-0 items-center gap-1 border border-border-strong px-1.5 py-0.5 text-[9px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
                   @click="openDir()"
                 >
                   <FolderOpen class="size-2.5" />
@@ -487,14 +560,14 @@ async function doClear() {
               <span class="lbl">// {{ t("up.title") }}</span>
               <span
                 v-if="upHasUpdate && !upInstalling"
-                class="readout border border-hazard bg-hazard-soft px-1.5 py-0.5 text-[8px] uppercase text-hazard"
+                class="readout border border-hazard bg-hazard-soft px-1.5 py-0.5 text-[8px] text-hazard"
               >
                 {{ t("up.available") }}
               </span>
             </div>
             <button
               type="button"
-              class="flex items-center gap-1 border border-border-strong px-2 py-0.5 text-[9px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
+              class="flex items-center gap-1 border border-border-strong px-2 py-0.5 text-[9px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
               :disabled="upChecking || upInstalling"
               @click="checkUpdate(true)"
             >
@@ -540,9 +613,10 @@ async function doClear() {
           <div class="flex flex-wrap items-center gap-x-3 gap-y-2 border-t border-border px-3 py-2">
             <button
               type="button"
-              class="flex shrink-0 items-center gap-1 border px-2 py-1 text-[10px] uppercase tracking-[0.1em] transition-colors disabled:opacity-40"
+              class="flex shrink-0 items-center gap-1 border px-2 py-1 text-[10px] transition-colors disabled:opacity-40"
               :class="upHasUpdate && !upInstalling ? 'border-hazard bg-hazard text-white hover:bg-hazard/90' : 'border-border-strong text-muted-foreground hover:border-foreground hover:text-foreground'"
-              :disabled="upInstalling || upChecking || (!upHasUpdate && !updateReady)"
+              :disabled="upInstalling || upChecking || embedded || (!upHasUpdate && !updateReady)"
+              :title="installHint"
               @click="updateReady ? restartUpdate() : downloadUpdate()"
             >
               <Download class="size-3" />
@@ -551,7 +625,7 @@ async function doClear() {
 
             <button
               type="button"
-              class="readout shrink-0 border px-1.5 py-1 text-[9px] uppercase transition-colors"
+              class="readout shrink-0 border px-1.5 py-1 text-[9px] transition-colors"
               :class="upAuto ? 'border-hazard bg-hazard-soft text-hazard' : 'border-border-strong text-faint hover:text-foreground'"
               @click="toggleAutoCheck()"
             >
@@ -581,6 +655,66 @@ async function doClear() {
             <span>{{ t("up.autoHint") }}</span>
             <span class="text-border-strong">/</span>
             <span>{{ t("up.restartHint") }}</span>
+            <template v-if="embedded">
+              <span class="text-border-strong">/</span>
+              <span class="text-hazard">{{ t("deck.noInstall") }}</span>
+            </template>
+          </div>
+        </section>
+
+        <!-- CDP 调试通道：连接状态 + 带参重启客户端 -->
+        <section class="border border-border bg-card lg:col-span-2">
+          <div class="flex items-center justify-between border-b border-border px-3 py-1.5">
+            <div class="flex items-center gap-2">
+              <span class="lbl">// {{ t("cd.title") }}</span>
+              <span
+                class="readout border px-1 py-0.5 text-[8px]"
+                :class="cdp?.connected ? 'border-hazard text-hazard' : 'border-border-strong text-faint'"
+              >
+                {{ cdp?.connected ? t("cd.connected") : t("cd.disconnected") }}
+              </span>
+            </div>
+            <button
+              type="button"
+              class="flex items-center gap-1 border border-border-strong px-2 py-0.5 text-[9px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
+              :disabled="cdpBusy"
+              @click="restartCdpClient()"
+            >
+              <Loader2 v-if="cdpBusy" class="size-3 animate-spin" />
+              <RefreshCw v-else class="size-3" />
+              {{ t("cd.restart") }}
+            </button>
+          </div>
+
+          <div class="grid grid-cols-3 gap-2 px-3 py-2">
+            <div class="bg-card px-0 py-0">
+              <div class="lbl">{{ t("cd.port") }}</div>
+              <div class="readout mt-0.5 text-[13px] text-foreground">
+                {{ cdp?.connected ? `:${cdp.port ?? "—"}` : "—" }}
+              </div>
+            </div>
+            <div class="bg-card px-0 py-0">
+              <div class="lbl">{{ t("cd.page") }}</div>
+              <div class="readout mt-0.5 truncate text-[11px] text-muted-foreground" :title="cdp?.url ?? ''">
+                {{ cdp?.connected ? cdp.url || "—" : "—" }}
+              </div>
+            </div>
+            <div class="bg-card px-0 py-0">
+              <div class="lbl">{{ t("cd.mode") }}</div>
+              <div class="readout mt-0.5 text-[11px]" :class="cdp?.connected ? 'text-hazard' : 'text-muted-foreground'">
+                {{ cdp?.connected ? t("cd.modeCdp") : t("cd.modeHttp") }}
+              </div>
+            </div>
+          </div>
+
+          <div v-if="cdpMessage" class="border-t border-border px-3 py-1.5">
+            <span class="readout break-all text-[10px]" :class="cdpMessage.includes(t('cd.okPrefix')) ? 'text-foreground' : 'text-hazard'">
+              {{ cdpMessage }}
+            </span>
+          </div>
+
+          <div class="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/60 px-3 py-1.5 text-[9px] text-faint">
+            <span>{{ t("cd.hint") }}</span>
           </div>
         </section>
 
@@ -589,7 +723,7 @@ async function doClear() {
           <div class="flex items-center justify-between border-b border-border px-3 py-1.5">
             <span class="lbl">// {{ t("st.schedule") }}</span>
             <span
-              class="readout border px-1 py-0.5 text-[8px] uppercase"
+              class="readout border px-1 py-0.5 text-[8px]"
               :class="scheduleOn ? 'border-hazard text-hazard' : 'border-border-strong text-faint'"
             >
               {{ scheduleOn ? t("st.schedOn") : t("st.schedOff") }}
@@ -609,7 +743,7 @@ async function doClear() {
             <div class="px-3 py-2">
               <button
                 type="button"
-                class="w-full border border-border-strong px-2 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-hazard hover:text-hazard"
+                class="w-full border border-border-strong px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:border-hazard hover:text-hazard"
                 @click="go('tasks')"
               >
                 {{ t("st.gotoTasks") }}
@@ -618,209 +752,6 @@ async function doClear() {
           </div>
         </section>
 
-        <!-- 限流自动切换 -->
-        <section class="border border-border bg-card">
-          <div class="flex items-center justify-between border-b border-border px-3 py-1.5">
-            <span class="lbl">// {{ t("st.autoSwitch") }}</span>
-            <button
-              type="button"
-              class="readout border px-1.5 py-0.5 text-[8px] uppercase transition-colors disabled:opacity-40"
-              :class="autoOn ? 'border-hazard bg-hazard-soft text-hazard' : 'border-border-strong text-faint hover:text-foreground'"
-              :disabled="autoBusy || AUTO_SWITCH_PAUSED"
-              @click="patchAutoSwitch({ enabled: !autoOn })"
-            >
-              {{ autoOn ? t("st.autoOn") : t("st.autoOff") }}
-            </button>
-          </div>
-          <p class="border-b border-border/40 px-3 py-1.5 text-[9px] leading-4 text-faint">
-            <span class="text-hazard">{{ t("st.autoSwitchOff") }}</span>
-            · {{ t("st.autoSwitchHint") }}
-          </p>
-          <div class="flex flex-wrap items-center gap-x-3 gap-y-2 px-3 py-2">
-            <div class="flex shrink-0 overflow-hidden">
-              <button
-                type="button"
-                class="px-2 py-1 text-[10px] transition-colors disabled:opacity-40"
-                :class="autoNotifyOnly ? 'bg-foreground text-background' : 'bg-card text-muted-foreground hover:text-foreground'"
-                :disabled="autoBusy || !autoOn"
-                @click="patchAutoSwitch({ notifyOnly: true })"
-              >
-                {{ t("st.autoNotify") }}
-              </button>
-              <button
-                type="button"
-                class="px-2 py-1 text-[10px] transition-colors disabled:opacity-40"
-                :class="!autoNotifyOnly ? 'bg-hazard text-white' : 'bg-card text-muted-foreground hover:text-foreground'"
-                :disabled="autoBusy || !autoOn"
-                @click="patchAutoSwitch({ notifyOnly: false })"
-              >
-                {{ t("st.autoApply") }}
-              </button>
-            </div>
-            <button
-              type="button"
-              class="readout shrink-0 border px-1.5 py-1 text-[9px] uppercase transition-colors disabled:opacity-40"
-              :class="autoAsk ? 'border-hazard bg-hazard-soft text-hazard' : 'border-border-strong text-faint hover:text-foreground'"
-              :title="t('as.askHint')"
-              :disabled="autoBusy || !autoOn"
-              @click="patchAutoSwitch({ askBeforeSwitch: !autoAsk })"
-            >
-              {{ t("as.ask") }} {{ autoAsk ? t("st.on") : t("st.off") }}
-            </button>
-            <button
-              type="button"
-              class="readout shrink-0 border px-1.5 py-1 text-[9px] uppercase transition-colors disabled:opacity-40"
-              :class="autoBgNotify ? 'border-hazard bg-hazard-soft text-hazard' : 'border-border-strong text-faint hover:text-foreground'"
-              :title="t('as.bgNotifyHint')"
-              :disabled="autoBusy || !autoOn || !autoAsk"
-              @click="patchAutoSwitch({ notifyWhenBackground: !autoBgNotify })"
-            >
-              {{ t("as.bgNotify") }} {{ autoBgNotify ? t("st.on") : t("st.off") }}
-            </button>
-            <label class="flex shrink-0 items-center gap-1 text-[9px] text-faint">
-              {{ t("as.countdown") }}
-              <select
-                class="readout border border-border-strong bg-input px-1 py-0.5 text-[10px] text-foreground"
-                :value="autoCountdown"
-                :disabled="autoBusy || !autoOn || !autoAsk"
-                @change="onNumberChange($event, 'countdownSeconds', 3)"
-              >
-                <option :value="0">{{ t("as.waitMe") }}</option>
-                <option v-for="sec in [3, 10, 15, 30, 60]" :key="sec" :value="sec">{{ sec }}</option>
-              </select>
-            </label>
-            <label class="flex shrink-0 items-center gap-1 text-[9px] text-faint">
-              {{ t("st.autoCooldown") }}
-              <input
-                type="number"
-                min="1"
-                max="1440"
-                class="readout w-12 border border-border-strong bg-input px-1 py-0.5 text-[10px] text-foreground"
-                :value="autoSwitch?.config.cooldownMinutes ?? 30"
-                :disabled="autoBusy"
-                @change="onNumberChange($event, 'cooldownMinutes', 1)"
-              />
-            </label>
-            <label class="flex shrink-0 items-center gap-1 text-[9px] text-faint">
-              {{ t("st.autoMin") }}
-              <input
-                type="number"
-                min="0"
-                max="100000"
-                class="readout w-14 border border-border-strong bg-input px-1 py-0.5 text-[10px] text-foreground"
-                :value="autoSwitch?.config.minRemaining ?? 50"
-                :disabled="autoBusy"
-                @change="onNumberChange($event, 'minRemaining', 0)"
-              />
-            </label>
-            <button
-              type="button"
-              class="flex shrink-0 items-center gap-1 border border-border-strong px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
-              :disabled="autoBusy"
-              @click="runAutoCheck()"
-            >
-              <Loader2 v-if="autoBusy" class="size-2.5 animate-spin" />
-              <RefreshCw v-else class="size-2.5" />
-              {{ t("st.autoCheckBtn") }}
-            </button>
-          </div>
-          <p
-            v-if="autoOn && !autoNotifyOnly"
-            class="border-t border-hazard/40 bg-hazard-soft px-3 py-1.5 text-[9px] leading-4 text-hazard"
-          >
-            {{ t("st.autoWarn") }}
-          </p>
-          <!-- 实时性说明：让用户知道它是「事件驱动 1 秒」而不是 60 秒轮询 -->
-          <p class="flex flex-wrap items-center gap-x-2 border-t border-border/40 px-3 py-1 text-[9px] text-faint">
-            <span>{{ t("st.autoRealtime") }}</span>
-            <span class="text-border-strong">/</span>
-            <span>{{ t("st.autoEvents") }} {{ autoSwitch?.totalEvents ?? 0 }}</span>
-            <span v-if="autoSwitch?.lastSwitchAt" class="text-border-strong">/</span>
-            <span v-if="autoSwitch?.lastSwitchAt">
-              {{ t("st.autoLastSwitch") }} {{ new Date(autoSwitch.lastSwitchAt).toLocaleTimeString() }}
-            </span>
-          </p>
-          <p v-if="autoCheck" class="border-t border-border px-3 py-1.5 text-[9px] leading-4 text-muted-foreground">
-            {{ t("st.autoCheckResult") }} · {{ autoCheck.decision.action }} · {{ autoCheck.decision.reason }}
-          </p>
-          <p v-if="lastDecisionText" class="truncate border-t border-border px-3 py-1.5 text-[9px] text-faint" :title="lastDecisionText">
-            {{ t("st.autoLast") }} · {{ lastDecisionText }}
-          </p>
-        </section>
-
-        <!-- 数据导出 -->
-        <section class="border border-border bg-card lg:col-span-2">
-          <div class="border-b border-border px-3 py-1.5">
-            <span class="lbl">// {{ t("st.export") }}</span>
-          </div>
-          <div class="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
-            <span class="text-[9px] text-faint">{{ t("st.exportHint") }}</span>
-            <div class="flex flex-wrap items-center gap-1.5">
-              <button
-                v-for="item in EXPORTS"
-                :key="item.kind"
-                type="button"
-                class="flex items-center gap-1 border border-border-strong px-2 py-1 text-[10px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
-                :disabled="exporting !== ''"
-                @click="runExport(item.kind, item.file)"
-              >
-                <Loader2 v-if="exporting === item.kind" class="size-2.5 animate-spin" />
-                <Download v-else class="size-2.5" />
-                {{ t(item.labelKey) }}
-              </button>
-              <button
-                type="button"
-                class="flex items-center gap-1 border border-border-strong px-2 py-1 text-[10px] uppercase tracking-[0.1em] text-foreground transition-colors hover:border-hazard hover:text-hazard disabled:opacity-40"
-                :disabled="exporting !== ''"
-                @click="runExportAll()"
-              >
-                <Loader2 v-if="exporting === 'all'" class="size-2.5 animate-spin" />
-                <FolderOpen v-else class="size-2.5" />
-                {{ t("st.exAll") }}
-              </button>
-              <!-- 诊断包：出问题一键打包，报障不用来回问 -->
-              <button
-                type="button"
-                class="flex items-center gap-1 border border-border-strong px-2 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
-                :disabled="exporting !== ''"
-                @click="runDiagnostics()"
-              >
-                <Loader2 v-if="exporting === 'diag'" class="size-2.5 animate-spin" />
-                <FileText v-else class="size-2.5" />
-                {{ t("st.diag") }}
-              </button>
-            </div>
-          </div>
-          <p
-            v-if="exportNote"
-            class="readout break-all border-t border-border px-3 py-1.5 text-[9px]"
-            :class="exportFailed ? 'text-hazard' : 'text-success'"
-          >
-            {{ exportNote }}
-          </p>
-        </section>
-
-        <!-- 维护 -->
-        <section class="border border-border bg-card lg:col-span-2">
-          <div class="border-b border-border px-3 py-1.5">
-            <span class="lbl">// {{ t("st.maint") }}</span>
-          </div>
-          <div class="flex flex-wrap items-center justify-between gap-2 px-3 py-2.5">
-            <span class="text-[9px] text-faint">{{ t("st.maintHint") }}</span>
-            <div class="flex flex-wrap items-center gap-1.5">
-              <button
-                v-for="item in CLEARS"
-                :key="item.source"
-                type="button"
-                class="flex items-center gap-1 border border-border-strong px-2 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-hazard hover:text-hazard"
-                @click="clearTarget = item"
-              >
-                <Eraser class="size-2.5" />
-                {{ t(item.labelKey) }}
-              </button>
-            </div>
-          </div>
-        </section>
       </div>
     </div>
 
@@ -834,7 +765,7 @@ async function doClear() {
       >
         <div class="w-full max-w-sm border border-hazard bg-card wb-modal-card">
           <div class="flex items-center justify-between border-b border-border px-3 py-2">
-            <span class="text-[12px] tracking-[0.1em] text-hazard">{{ t(clearTarget.labelKey) }}</span>
+            <span class="text-[12px] text-hazard">{{ t(clearTarget.labelKey) }}</span>
             <button type="button" class="text-[11px] text-muted-foreground hover:text-foreground" @click="clearTarget = null">
               ✕
             </button>
@@ -845,14 +776,14 @@ async function doClear() {
           <div class="flex justify-end gap-1.5 border-t border-border px-3 py-2">
             <button
               type="button"
-              class="border border-border-strong px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground hover:text-foreground"
+              class="border border-border-strong px-2.5 py-1 text-[10px] text-muted-foreground hover:text-foreground"
               @click="clearTarget = null"
             >
               CANCEL
             </button>
             <button
               type="button"
-              class="flex items-center gap-1.5 border border-hazard bg-hazard px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-white disabled:opacity-40"
+              class="flex items-center gap-1.5 border border-hazard bg-hazard px-2.5 py-1 text-[10px] text-white disabled:opacity-40"
               :disabled="clearing"
               @click="doClear()"
             >

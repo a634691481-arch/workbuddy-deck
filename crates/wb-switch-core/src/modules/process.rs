@@ -1172,8 +1172,20 @@ fn close_workbuddy_windows(variant: WbVariant, timeout_secs: i64) -> Result<(), 
 /// progress 可选：macOS 启动与存活确认阶段推送心跳（避免界面长时间静默）；
 /// Windows/Linux 分支忽略该参数。
 pub fn launch_workbuddy(variant: WbVariant, progress: Option<&dyn Fn(&str)>) -> Result<(), String> {
+    launch_workbuddy_args(variant, &[], progress)
+}
+
+/// 带额外命令行参数启动 WorkBuddy（CDP 调试端口用）。
+pub fn launch_workbuddy_args(
+    variant: WbVariant,
+    extra_args: &[String],
+    progress: Option<&dyn Fn(&str)>,
+) -> Result<(), String> {
     #[cfg(target_os = "macos")]
     {
+        // macOS 的 open/Electron 启动逻辑暂不支持附加参数；CDP 模式在 macOS 上
+        // 需要直接执行二进制（对齐参考实现 relaunch-with-cdp.sh 的做法）。
+        let _ = extra_args;
         launch_workbuddy_macos(variant, progress)
     }
 
@@ -1199,7 +1211,11 @@ pub fn launch_workbuddy(variant: WbVariant, progress: Option<&dyn Fn(&str)>) -> 
                 ));
             }
             persist_workbuddy_exe(&exe, variant);
-            cmd_builder(&exe)
+            let mut command = cmd_builder(&exe);
+            for arg in extra_args {
+                command.arg(arg);
+            }
+            command
                 .stdout(Stdio::null())
                 .stderr(Stdio::null())
                 .spawn()
@@ -1208,13 +1224,23 @@ pub fn launch_workbuddy(variant: WbVariant, progress: Option<&dyn Fn(&str)>) -> 
         }
         #[cfg(not(any(target_os = "macos", target_os = "windows")))]
         {
-            let _ = cmd_builder(&app)
-                .stdout(Stdio::null())
-                .stderr(Stdio::null())
-                .spawn();
+            let mut command = cmd_builder(&app);
+            for arg in extra_args {
+                command.arg(arg);
+            }
+            command.stdout(Stdio::null()).stderr(Stdio::null()).spawn();
             Ok(())
         }
     }
+}
+
+/// 带 `--remote-debugging-port` 重启客户端：先关旧进程再带参拉起，
+/// 返回所选端口。关不掉 / 启不起来都报错，由调用方决定是否回退。
+pub fn restart_workbuddy_with_cdp(variant: WbVariant, port: u16, timeout_secs: i64) -> Result<(), String> {
+    if is_workbuddy_running(variant) {
+        close_workbuddy(variant, timeout_secs)?;
+    }
+    launch_workbuddy_args(variant, &[format!("--remote-debugging-port={port}")], None)
 }
 
 #[cfg(test)]

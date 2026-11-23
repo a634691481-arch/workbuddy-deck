@@ -117,7 +117,10 @@ fn pick_accounts(ids: &[String]) -> Vec<Value> {
 }
 
 fn text_of(row: &Value, key: &str) -> String {
-    row.get(key).and_then(Value::as_str).unwrap_or("").to_string()
+    row.get(key)
+        .and_then(Value::as_str)
+        .unwrap_or("")
+        .to_string()
 }
 
 fn claimed_count(row: &Value) -> usize {

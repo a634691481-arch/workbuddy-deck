@@ -1,8 +1,8 @@
 <script setup lang="ts">
 /**
- * 左侧导航栏（工业风 §0.1）：
- * - 编号 + 大写标签，选中项靠「3px 航空红竖条 + 提亮底色」区分，不用圆角不用阴影。
- * - 底部状态区：READY 磷光绿是全应用唯一允许的绿色位。
+ * 左侧导航栏（Dusk）：
+ * - 图标 + 句首大写标签，选中项靠「2px 强调条 + 卡片底」区分。
+ * - 底部状态：运行中 / 就绪 + 账号数，各一行。
  */
 import { ref } from "vue";
 import { MorphIcon } from "morphicons/vue";
@@ -58,7 +58,10 @@ const items: { key: NavKey; idx: string; labelKey: LabelKey }[] = [
 <template>
   <nav
     class="flex shrink-0 flex-col border-r border-border bg-panel wb-flat"
-    :class="sidebar === 'compact' ? 'w-[56px]' : 'w-[148px]'"
+    :class="[
+      sidebar === 'compact' ? 'w-[56px]' : 'w-[148px]',
+      'max-[560px]:!w-[52px] max-[560px]:items-center',
+    ]"
   >
     <div v-if="sidebar === 'full'" class="lbl px-3 pb-2 pt-3 text-faint">{{ t("nav.section") }}</div>
     <div v-else class="h-3" />
@@ -67,9 +70,9 @@ const items: { key: NavKey; idx: string; labelKey: LabelKey }[] = [
       v-for="item in items"
       :key="item.key"
       type="button"
-      class="relative flex items-center border-l-[3px] py-2.5 text-left text-[11px] tracking-[0.08em] transition-colors"
+      class="relative flex items-center border-l-2 py-2.5 text-left text-[12.5px] transition-colors"
       :class="[
-        sidebar === 'compact' ? 'justify-center pl-0 pr-0' : 'gap-1.5 pl-3 pr-2',
+        sidebar === 'compact' ? 'justify-center pl-0 pr-0' : 'gap-1.5 pl-3 pr-2 max-[560px]:justify-center max-[560px]:px-0',
         current === item.key
           ? 'border-l-hazard bg-card text-foreground'
           : 'border-l-transparent text-muted-foreground hover:bg-muted/60 hover:text-foreground',
@@ -78,7 +81,6 @@ const items: { key: NavKey; idx: string; labelKey: LabelKey }[] = [
       :title="sidebar === 'compact' ? t(item.labelKey) : undefined"
       @click="select(item.key)"
     >
-      <span v-if="sidebar === 'full'" class="readout text-[9px] text-faint">{{ item.idx }}</span>
       <!-- morphicons：未选中 → 选中 做弹簧形变；点击时再叠一层 pop -->
       <span
         class="block shrink-0"
@@ -94,12 +96,11 @@ const items: { key: NavKey; idx: string; labelKey: LabelKey }[] = [
           color="currentColor"
         />
       </span>
-      <span v-if="sidebar === 'full'" class="truncate">{{ t(item.labelKey) }}</span>
+      <span v-if="sidebar === 'full'" class="truncate max-[560px]:hidden">{{ t(item.labelKey) }}</span>
     </button>
 
-    <div class="mt-auto border-t border-border" :class="sidebar === 'compact' ? 'px-1 py-2 text-center' : 'px-3 py-3'">
-      <div v-if="sidebar === 'full'" class="lbl text-faint">// STATUS</div>
-      <div class="flex items-center gap-1.5" :class="sidebar === 'full' ? 'mt-1.5' : 'justify-center'">
+    <div class="mt-auto border-t border-border max-[560px]:px-1 max-[560px]:py-2 max-[560px]:text-center" :class="sidebar === 'compact' ? 'px-1 py-2 text-center' : 'px-3 py-3'">
+      <div class="flex items-center gap-1.5 max-[560px]:justify-center" :class="sidebar === 'full' ? '' : 'justify-center'">
         <!-- Lordicon：跑任务时播一次循环动画，就绪时回到静态磷光绿点 -->
         <AnimatedIcon
           v-if="running"
@@ -110,12 +111,12 @@ const items: { key: NavKey; idx: string; labelKey: LabelKey }[] = [
           :secondary="accent"
         />
         <span v-else class="size-1.5 shrink-0 bg-success" aria-hidden="true" />
-        <span v-if="sidebar === 'full'" class="readout text-[10px]" :class="running ? 'text-hazard' : 'text-success'">
-          {{ running ? "RUNNING" : "READY" }}
+        <span v-if="sidebar === 'full'" class="text-[11px] max-[560px]:hidden" :class="running ? 'text-hazard' : 'text-muted-foreground'">
+          {{ running ? "运行中" : "就绪" }}
         </span>
       </div>
-      <div v-if="sidebar === 'full'" class="readout mt-1 text-[10px] text-faint">
-        ACCTS {{ String(accountCount).padStart(2, "0") }}
+      <div v-if="sidebar === 'full'" class="mt-1 text-[11px] text-faint max-[560px]:hidden">
+        {{ accountCount }} 个账号
       </div>
     </div>
   </nav>

@@ -26,7 +26,7 @@ const btnClass =
     <!-- 左：模块标识（ASCII 括号是工业风的语法装饰） -->
     <div class="flex items-center gap-2 border-r border-border px-3">
       <span class="lbl text-hazard">[</span>
-      <span class="lbl lbl-ink tracking-[0.16em]">{{ t("tb.accountOps") }}</span>
+      <span class="lbl lbl-ink">{{ t("tb.accountOps") }}</span>
       <span class="lbl text-hazard">]</span>
     </div>
 

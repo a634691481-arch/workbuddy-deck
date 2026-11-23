@@ -16,10 +16,14 @@ const props = defineProps<{ logs: LogLine[]; errorCount: number }>();
 const emit = defineEmits<{ clear: [] }>();
 
 /** 默认展开：日志是本工具的主要观测面，不该藏起来。 */
-const collapsed = ref(false);
+// 窄面板（<=760px）默认折叠：144px 的日志区会吃掉三分之一高度，任务表只剩两三行。
+const collapsed = ref(typeof window !== "undefined" && window.innerWidth <= 760);
 const VISIBLE_ROWS = 8;
 const ROW_HEIGHT = 18;
-const listStyle = computed(() => ({ height: `${VISIBLE_ROWS * ROW_HEIGHT}px` }));
+const listStyle = computed(() => ({
+  // 窄面板只给 4 行，把高度让给任务表。
+  height: `${(typeof window !== "undefined" && window.innerWidth <= 760 ? 4 : VISIBLE_ROWS) * ROW_HEIGHT}px`,
+}));
 
 const levelMark = (level: LogLine["level"]) =>
   level === "err" ? "✕" : level === "ok" ? "✓" : "·";

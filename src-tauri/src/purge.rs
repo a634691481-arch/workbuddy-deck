@@ -6,7 +6,9 @@
 //! - 只删 `status='archived'` 的会话，active/working 等一概不碰。
 //!
 //! 两条硬护栏：
-//! ① WorkBuddy 进程运行中 → 拒绝执行（它退出时会用内存缓存回写 DB，删了也被覆盖回去）；
+//! ① **允许 WorkBuddy 运行中清理**（2026-11-20 用户口径）：WAL 支持并发写，VACUUM 拿不到锁就跳过。
+//!    代价是 WB 退出时可能用内存缓存把已删行回写回来（正文已删 → 空壳条目），
+//!    因此每轮清理后把 id 落到 `pending-archived-purge.txt`，下轮清理先复查一遍再删。
 //! ② 执行前把 DB 备份 + 待删会话清单落到本应用备份目录，物理删除留一条恢复后路。
 
 use std::collections::HashSet;
@@ -17,8 +19,8 @@ use chrono::Local;
 use rusqlite::{Connection, OpenFlags};
 use serde_json::{json, Value};
 
-use wb_switch_core::modules::{config, process};
 use wb_switch_core::modules::variant::WbVariant;
+use wb_switch_core::modules::{config, process};
 
 /// WorkBuddy 主数据目录（当前用户主目录下）。
 fn wb_data_dir() -> PathBuf {
@@ -52,7 +54,9 @@ fn human_bytes(bytes: u64) -> String {
 /// 读出库中全部 archived 会话 id。库不存在 / 打不开 → None（统计显示空态）。
 fn read_archived_ids() -> Option<Vec<String>> {
     let conn = Connection::open_with_flags(db_path(), OpenFlags::SQLITE_OPEN_READ_ONLY).ok()?;
-    let mut stmt = conn.prepare("SELECT id FROM sessions WHERE status = 'archived'").ok()?;
+    let mut stmt = conn
+        .prepare("SELECT id FROM sessions WHERE status = 'archived'")
+        .ok()?;
     let rows = stmt
         .query_map([], |row| row.get::<_, String>(0))
         .ok()?
@@ -76,7 +80,10 @@ fn transcript_sizes(ids: &[String]) -> (u64, u64) {
                 if path.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
                     continue;
                 }
-                let stem = path.file_stem().and_then(|stem| stem.to_str()).unwrap_or("");
+                let stem = path
+                    .file_stem()
+                    .and_then(|stem| stem.to_str())
+                    .unwrap_or("");
                 if wanted.contains(stem) {
                     bytes += file.metadata().map(|meta| meta.len()).unwrap_or(0);
                     files += 1;
@@ -120,7 +127,8 @@ pub fn stats() -> Value {
 pub fn list() -> Value {
     let running = process::is_workbuddy_running(WbVariant::Cn)
         || process::is_workbuddy_running(WbVariant::Ai);
-    let Some(conn) = Connection::open_with_flags(db_path(), OpenFlags::SQLITE_OPEN_READ_ONLY).ok() else {
+    let Some(conn) = Connection::open_with_flags(db_path(), OpenFlags::SQLITE_OPEN_READ_ONLY).ok()
+    else {
         return json!({
             "ok": db_path().exists(),
             "dbExists": db_path().exists(),
@@ -191,8 +199,63 @@ pub fn list() -> Value {
     })
 }
 
+/// 上一轮清理过、但可能被 WorkBuddy 退出时回写复活的会话 id 清单。
+fn pending_path() -> PathBuf {
+    config::backup_dir().join("pending-archived-purge.txt")
+}
+
+fn read_pending() -> Vec<String> {
+    fs::read_to_string(pending_path())
+        .map(|text| {
+            text.lines()
+                .map(str::trim)
+                .filter(|line| !line.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default()
+}
+
+fn write_pending(ids: &[String]) {
+    let path = pending_path();
+    if let Some(parent) = path.parent() {
+        let _ = fs::create_dir_all(parent);
+    }
+    let _ = fs::write(path, ids.join("\n"));
+}
+
+/// 复查上一轮被回写的归档行：仍在库里且仍为 archived 的再删一次。
+///
+/// 只删 `status='archived'`，绝不会碰到用户又重新打开/恢复成 active 的会话。
+/// 返回本轮额外清掉的行数；核对成功即丢掉清单（没有复活就没有下一轮）。
+fn drop_revived() -> usize {
+    let ids = read_pending();
+    if ids.is_empty() {
+        return 0;
+    }
+    let Ok(conn) = Connection::open(db_path()) else {
+        return 0;
+    };
+    let _ = conn.busy_timeout(std::time::Duration::from_secs(3));
+    let mut removed = 0usize;
+    let mut stmt = match conn.prepare("DELETE FROM sessions WHERE id = ?1 AND status = 'archived'")
+    {
+        Ok(stmt) => stmt,
+        Err(_) => return 0,
+    };
+    for id in &ids {
+        removed += stmt.execute([id]).unwrap_or(0);
+    }
+    drop(stmt);
+    drop(conn);
+    let _ = fs::remove_file(pending_path());
+    removed
+}
+
 /// 执行清理：备份 → 删正文 → 删库行。任一步失败即停，不半途吞错。
 pub fn purge() -> Value {
+    // 先收上一轮的尾：被 WB 回写回来的归档行（正文已没了，留着就是空壳）。
+    let revived = drop_revived();
     // 2026-11-20 用户要求：清理归档不再关闭 WorkBuddy，直接在运行中清理。
     // SQLite WAL 允许并发写；只有 VACUUM 需要独占，库被占用时跳过（见下）。
     let Some(ids) = read_archived_ids() else {
@@ -203,11 +266,14 @@ pub fn purge() -> Value {
         });
     };
     if ids.is_empty() {
-        return json!({ "ok": true, "deleted": 0, "freedBytes": 0, "human": human_bytes(0) });
+        return json!({ "ok": true, "deleted": 0, "freedBytes": 0, "human": human_bytes(0), "revived": revived });
     }
 
     // 备份：DB 三件套 + id 清单，落本应用自己的备份目录（不写 WorkBuddy 数据区）。
-    let backup_dir = config::backup_dir().join(format!("archived-purge-{}", Local::now().format("%Y%m%d-%H%M%S")));
+    let backup_dir = config::backup_dir().join(format!(
+        "archived-purge-{}",
+        Local::now().format("%Y%m%d-%H%M%S")
+    ));
     if let Err(error) = fs::create_dir_all(&backup_dir) {
         return json!({ "ok": false, "error": error.to_string() });
     }
@@ -233,7 +299,10 @@ pub fn purge() -> Value {
                 if path.extension().and_then(|ext| ext.to_str()) != Some("jsonl") {
                     continue;
                 }
-                let stem = path.file_stem().and_then(|stem| stem.to_str()).unwrap_or("");
+                let stem = path
+                    .file_stem()
+                    .and_then(|stem| stem.to_str())
+                    .unwrap_or("");
                 if !wanted.contains(stem) {
                     continue;
                 }
@@ -262,10 +331,17 @@ pub fn purge() -> Value {
         Err(error) => db_error = Some(error.to_string()),
     }
 
+    // 库行删成功才留清单：删不掉时行还在库里，下轮 `read_archived_ids` 自然会再删，
+    // 记 pending 反而会让清单无限增长。
+    if db_error.is_none() {
+        write_pending(&ids);
+    }
+
     json!({
         "ok": db_error.is_none(),
         "vacuumError": vacuum_error,
         "deleted": removed,
+        "revived": revived,
         "freedBytes": freed,
         "human": human_bytes(freed),
         "total": ids.len(),
@@ -283,7 +359,10 @@ pub fn purge_auto(progress: &dyn Fn(&str)) -> Value {
     let mut payload = purge();
     let ok = payload.get("ok").and_then(Value::as_bool).unwrap_or(false);
     if let Some(map) = payload.as_object_mut() {
-        map.insert("stage".to_string(), json!(if ok { "done" } else { "purge" }));
+        map.insert(
+            "stage".to_string(),
+            json!(if ok { "done" } else { "purge" }),
+        );
     }
     payload
 }

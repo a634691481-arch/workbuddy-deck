@@ -31,6 +31,7 @@ use base64::Engine as _;
 use sha2::{Digest, Sha256};
 
 use crate::modules::account::{account_display_name, load_accounts, variant_of};
+use crate::modules::cdp;
 use crate::modules::config::{
     add_growth_log, http_request, http_request_raw, load_growth_config, now_ms, RunFlagGuard,
     GROWTH_DEFAULT_INTERVAL_MINUTES, GROWTH_DEFAULT_MAX_TRIES, GROWTH_HOST,
@@ -54,13 +55,15 @@ const EXPERT_MARKET: &str = "https://acc-1258344699.cos.accelerate.myqcloud.com/
 /// 换主题任务对客户端有真实副作用，默认不做。
 const SKIP_TASKS: [&str; 1] = ["Hp_Appearance"];
 
-/// 只能去官网手动完成的任务（2026-10-31 实测判定）。
+/// 只能去官网手动完成的任务。
 ///
-/// `Library_read`：埋点上报返回 `code:0` 但进度恒为 0/1（8 个账号全部不涨），元素名已失效；
-/// `Buddy_App`：桌面信封同样全账号 0/1，无一次成功；
+/// `Buddy_App`：桌面信封全账号 0/1，无一次成功；
 /// `wb_wechat_oa_subscribe_task`：关注公众号，需人工授权，任何脚本都不该代按。
 /// 继续打点是纯浪费（每天 3 次 × N 账号），所以显式标 manual，UI 直说「需手动」。
-const MANUAL_TASKS: [&str; 3] = ["Library_read", "Buddy_App", "wb_wechat_oa_subscribe_task"];
+///
+/// （`Library_read` 曾在此列：根因是埋点用了桌面指纹信封 + snake_case 字段名，
+/// 服务端只认 web 域指纹 + camelCase；2026-11 改走 [`report_web`] 后已能自动完成。）
+const MANUAL_TASKS: [&str; 2] = ["Buddy_App", "wb_wechat_oa_subscribe_task"];
 
 fn is_skipped(code: &str) -> bool {
     SKIP_TASKS.contains(&code)
@@ -439,18 +442,33 @@ async fn webchat(
 
     let mut headers = base_headers(account, "/");
     headers.insert("Accept".into(), "text/event-stream".into());
-    let (status, _, body) = http_request_raw(
+    // CDP 优先：页面上下文里的同源 fetch（真实 origin/cookie）；SSE 整段读回与
+    // Rust 直连完全同构。失败回退 Rust 直连——对话任务不因 CDP 缺席而停摆。
+    let body = match cdp::page_fetch(
         &format!("{GROWTH_HOST}/console/chat/completions"),
         "POST",
-        Some(payload),
-        Some(&headers),
-        None,
-        true,
+        Some(&payload),
+        &headers,
     )
-    .await;
-    if status == 0 {
-        return (conv_id, String::new());
-    }
+    .await
+    {
+        Ok((status, text)) if (200..300).contains(&status) => text,
+        _ => {
+            let (status, _, body) = http_request_raw(
+                &format!("{GROWTH_HOST}/console/chat/completions"),
+                "POST",
+                Some(payload),
+                Some(&headers),
+                None,
+                true,
+            )
+            .await;
+            if status == 0 {
+                return (conv_id, String::new());
+            }
+            body
+        }
+    };
 
     let mut text = String::new();
     for line in body.lines() {
@@ -713,16 +731,73 @@ async fn sleep(secs: u64) {
     tokio::time::sleep(Duration::from_secs(secs)).await;
 }
 
-/// 资料库：点一次介绍入口。
+/// 资料库介绍页（服务端校验的就是这个具体文档地址，不是 /library 首页）。
+const LIB_DOC_URL: &str = "https://www.workbuddy.cn/space/d/o0KWYeynteVv06UnAZqIFm";
+
+/// Web 埋点事件形状（供 [`report_web`] 组装、单测校验字段名）。
+///
+/// 字段名是 **camelCase**（`pageURL` / `elementId` / `elementName`）——
+/// 此前发 snake_case 导致服务端收不到元素信息，进度恒 0/1。
+fn web_event(
+    uid: &str,
+    nick: &str,
+    event_code: &str,
+    page_url: &str,
+    element_id: &str,
+    element_name: &str,
+) -> Value {
+    json!({
+        "eventCode": event_code,
+        "timestamp": now_ms(),
+        "reportDelay": 0,
+        "pageURL": page_url,
+        "elementId": element_id,
+        "elementName": element_name,
+        "os": "Win32",
+        "arch": "",
+        "osVersion": "10.0",
+        // 纯 web 指纹：普通浏览器 UA，machineId 用 "webmachine" 盐派生，
+        // 不带任何 ide*/ext* 桌面字段（对齐参考实现 web 域上报）。
+        "userAgent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "machineId": derive_id(uid, "webmachine"),
+        "userId": uid,
+        "userNickname": nick,
+    })
+}
+
+/// Web 域指纹上报（单事件，裸数组）。`Library_read` 等网页埋点任务专用。
+///
+/// CDP 优先：客户端开着调试端口时在**页面上下文里发同源 fetch**（真实
+/// origin / cookie / UA，指纹天然可信）；失败（客户端没开 / 端口不通 /
+/// 页面异常）回退 Rust 直连 web 指纹信封——两条路发的都是 camelCase
+/// web 事件，服务端无感。
+async fn report_web(account: &Value, event: Value) -> Value {
+    let url = format!("{GROWTH_HOST}/v2/report");
+    let mut headers: HashMap<String, String> = HashMap::new();
+    headers.insert("Content-Type".into(), "application/json".into());
+    if let Some(token) = account.get("access_token").and_then(Value::as_str) {
+        headers.insert("Authorization".into(), format!("Bearer {token}"));
+    }
+    if let Ok((status, resp)) = cdp::page_fetch(&url, "POST", Some(&json!([event])), &headers).await {
+        if (200..300).contains(&status) {
+            return serde_json::from_str(&resp).unwrap_or(json!({ "code": 0 }));
+        }
+    }
+    req(account, "POST", "/v2/report", Some(json!([event]))).await
+}
+
+/// 资料库：点一次介绍入口（web 域指纹 + 回读确认）。
 async fn t_library(account: &Value) {
-    report(
+    report_web(
         account,
-        vec![json!({
-            "eventCode": "web_element_click",
-            "page_url": "https://www.workbuddy.cn/library",
-            "element_id": "library_doc_intro_click",
-            "element_name": "WorkBuddy资料库介绍",
-        })],
+        web_event(
+            &uid_of(account),
+            &nick_of(account),
+            "web_element_click",
+            LIB_DOC_URL,
+            "library_doc_intro_click",
+            "WorkBuddy资料库介绍",
+        ),
     )
     .await;
     sleep(6).await;
@@ -1983,6 +2058,30 @@ mod tests {
     fn skipped_task_is_excluded() {
         assert!(is_skipped("Hp_Appearance"));
         assert!(!is_skipped("chat_5"));
+    }
+
+    /// 回归：Library_read 曾因 snake_case 字段名 + 桌面指纹导致进度恒 0/1。
+    /// web 埋点必须是 camelCase + `webmachine` 盐指纹 + 无 ide 字段。
+    #[test]
+    fn web_event_uses_camel_case_and_webmachine_fingerprint() {
+        let event = web_event(
+            "user-1",
+            "昵称",
+            "web_element_click",
+            LIB_DOC_URL,
+            "library_doc_intro_click",
+            "WorkBuddy资料库介绍",
+        );
+        assert_eq!(event["pageURL"], LIB_DOC_URL);
+        assert_eq!(event["elementId"], "library_doc_intro_click");
+        assert_eq!(event["elementName"], "WorkBuddy资料库介绍");
+        // snake_case 旧字段绝不能再出现（服务端只认 camelCase）。
+        assert!(event.get("page_url").is_none());
+        assert!(event.get("element_id").is_none());
+        assert_eq!(event["machineId"], derive_id("user-1", "webmachine"));
+        assert!(event.get("ideName").is_none());
+        assert!(event.get("extName").is_none());
+        assert_eq!(event["userNickname"], "昵称");
     }
 
     #[test]

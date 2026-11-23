@@ -32,16 +32,16 @@ const pad = (n: number) => String(n).padStart(3, "0");
 
 <template>
   <section class="shrink-0">
-    <div class="grid min-w-0 grid-cols-6 gap-2">
+    <div class="grid min-w-0 grid-cols-6 gap-2 max-[760px]:gap-1">
       <!-- 01 账号总量 -->
-      <div class="min-w-0 border border-border bg-card px-3 py-2">
+      <div class="min-w-0 border border-border bg-card px-3 py-2 max-[760px]:px-1.5 max-[760px]:py-1.5">
         <div class="lbl">{{ t("tm.accts") }}</div>
-        <div class="readout mt-1 truncate text-[17px] leading-none text-foreground">{{ pad(props.accounts) }}</div>
-        <div class="lbl mt-1 text-faint">{{ t("tm.units") }}</div>
+        <div class="readout mt-1 truncate text-[17px] leading-none text-foreground max-[760px]:text-[13px]">{{ pad(props.accounts) }}</div>
+        <div class="lbl mt-1 text-faint max-[760px]:hidden">{{ t("tm.units") }}</div>
       </div>
 
       <!-- 02 当前账号签到 -->
-      <div class="min-w-0 border border-border bg-card px-3 py-2">
+      <div class="min-w-0 border border-border bg-card px-3 py-2 max-[760px]:px-1.5 max-[760px]:py-1.5">
         <div class="lbl">{{ t("tm.signed") }}</div>
         <div
           class="readout mt-1 text-[17px] leading-none"
@@ -49,21 +49,21 @@ const pad = (n: number) => String(n).padStart(3, "0");
         >
           {{ props.signed ? t("tm.yes") : t("tm.no") }}
         </div>
-        <div class="lbl mt-1 text-faint">{{ t("tm.today") }}</div>
+        <div class="lbl mt-1 text-faint max-[760px]:hidden">{{ t("tm.today") }}</div>
       </div>
 
       <!-- 03 任务完成度 -->
-      <div class="min-w-0 border border-border bg-card px-3 py-2">
+      <div class="min-w-0 border border-border bg-card px-3 py-2 max-[760px]:px-1.5 max-[760px]:py-1.5">
         <div class="lbl">{{ t("tm.tasks") }}</div>
         <div class="mt-1 flex items-baseline gap-1">
           <span class="readout text-[17px] leading-none text-foreground">{{ pad(props.taskDone) }}</span>
           <span class="readout text-[10px] text-faint">/ {{ pad(props.taskTotal) }}</span>
         </div>
-        <div class="lbl mt-1 text-faint">{{ t("tm.claimed") }}</div>
+        <div class="lbl mt-1 text-faint max-[760px]:hidden">{{ t("tm.claimed") }}</div>
       </div>
 
       <!-- 04 全账号积分总额（核心指标，字号最大） -->
-      <div class="min-w-0 border border-border bg-card px-3 py-2" :class="props.totalFailed > 0 && 'bg-hazard-soft'">
+      <div class="min-w-0 border border-border bg-card px-3 py-2 max-[760px]:px-1.5 max-[760px]:py-1.5" :class="props.totalFailed > 0 && 'bg-hazard-soft'">
         <div class="lbl flex items-center gap-1">
           {{ t("tm.totalCredit") }}
           <span v-if="props.totalFailed > 0" class="text-hazard">⚠{{ props.totalFailed }}</span>
@@ -71,20 +71,20 @@ const pad = (n: number) => String(n).padStart(3, "0");
         <div class="readout mt-0.5 truncate text-[22px] leading-none text-foreground">
           <AnimatedNumber :value="props.totalCredit" :placeholder="props.totalLoading ? '···' : '—'" />
         </div>
-        <div class="lbl mt-1 text-faint">{{ t("tm.allAccts") }}</div>
+        <div class="lbl mt-1 text-faint max-[760px]:hidden">{{ t("tm.allAccts") }}</div>
       </div>
 
       <!-- 05 当前账号余额 -->
-      <div class="min-w-0 border border-border bg-card px-3 py-2">
+      <div class="min-w-0 border border-border bg-card px-3 py-2 max-[760px]:px-1.5 max-[760px]:py-1.5">
         <div class="lbl">{{ t("tm.thisUnit") }}</div>
-        <div class="readout mt-1 truncate text-[17px] leading-none text-foreground">
+        <div class="readout mt-1 truncate text-[17px] leading-none text-foreground max-[760px]:text-[13px]">
           <AnimatedNumber :value="props.balance" :placeholder="props.balanceLoading ? '···' : '—'" />
         </div>
-        <div class="lbl mt-1 text-faint">{{ t("tm.credit") }}</div>
+        <div class="lbl mt-1 text-faint max-[760px]:hidden">{{ t("tm.credit") }}</div>
       </div>
 
       <!-- 06 本轮执行结果 -->
-      <div class="min-w-0 border border-border bg-card px-3 py-2" :class="props.runFail > 0 && 'bg-hazard-soft'">
+      <div class="min-w-0 border border-border bg-card px-3 py-2 max-[760px]:px-1.5 max-[760px]:py-1.5" :class="props.runFail > 0 && 'bg-hazard-soft'">
         <div class="lbl flex items-center gap-1">
           {{ t("tm.lastRun") }}
           <span v-if="props.running" class="text-hazard">///</span>
@@ -94,7 +94,7 @@ const pad = (n: number) => String(n).padStart(3, "0");
           <span class="readout text-[11px] leading-none text-hazard">✕{{ pad(props.runFail) }}</span>
           <span class="readout text-[11px] leading-none text-faint">—{{ pad(props.runSkip) }}</span>
         </div>
-        <div class="lbl mt-1 text-faint">{{ t("tm.okErrSkip") }}</div>
+        <div class="lbl mt-1 text-faint max-[760px]:hidden">{{ t("tm.okErrSkip") }}</div>
       </div>
     </div>
   </section>

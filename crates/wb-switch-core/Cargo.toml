@@ -8,6 +8,9 @@ description = "wb-switch 核心逻辑（账号/切换/会话/签到/更新），
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", default-features = false, features = ["json", "rustls-tls"] }
+# cdp：以 WebSocket 连客户端调试端口（ws://127.0.0.1，明文，无需 TLS feature）。
+tokio-tungstenite = "0.24"
+futures-util = { version = "0.3", default-features = false, features = ["sink"] }
 # process：成长中心按需以 ELECTRON_RUN_AS_NODE 拉起客户端取凭据密钥。
 tokio = { version = "1", features = ["rt", "sync", "time", "macros", "process"] }
 uuid = { version = "1", features = ["v4"] }

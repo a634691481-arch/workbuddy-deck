@@ -123,6 +123,43 @@ pub fn travel_cache_file() -> PathBuf {
     store_dir().join("travel_cache.json")
 }
 
+pub fn cdp_config_file() -> PathBuf {
+    store_dir().join("cdp_config.json")
+}
+
+/// CDP 调试端口配置：enabled 默认开（连不上自动回退 HTTP，不产生副作用），
+/// 端口默认对齐参考实现的候选段。
+pub fn load_cdp_config() -> Value {
+    let default = json!({
+        "enabled": true,
+        // 悬浮图标（客户端页面右下角小按钮，点击唤起本工具面板）。
+        "widget": true,
+        // 对齐 WorkDaddy 启动器：客户端没带调试端口时自动拉起/重启（冷却 60s）。
+        "autoStart": true,
+        "ports": [9222, 9223, 9224, 9225, 9226, 9227, 9228, 9229, 9230, 9231, 9232, 9333],
+    });
+    let input = std::fs::read_to_string(cdp_config_file())
+        .ok()
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok());
+    let mut merged = default;
+    if let Some(input) = input.and_then(|v| v.as_object().cloned()) {
+        for (key, value) in input {
+            merged[key] = value;
+        }
+    }
+    merged
+}
+
+pub fn save_cdp_config(cfg: &Value) -> std::io::Result<()> {
+    let mut merged = load_cdp_config();
+    if let Some(input) = cfg.as_object() {
+        for (key, value) in input {
+            merged[key] = value.clone();
+        }
+    }
+    atomic_write(&cdp_config_file(), &serde_json::to_string_pretty(&merged)?)
+}
+
 pub fn credit_claim_config_file() -> PathBuf {
     store_dir().join("auto_credit_claim_config.json")
 }
@@ -914,6 +951,7 @@ pub fn default_growth_center_config() -> Value {
             "redeem": true,
             "lottery": true,
             "buddy_open": true,
+            "benefits": true,
         },
         "makeup_max_per_run": GROWTH_CENTER_MAX_WRITES_PER_RUN,
         "lottery_max_per_run": GROWTH_CENTER_MAX_WRITES_PER_RUN,

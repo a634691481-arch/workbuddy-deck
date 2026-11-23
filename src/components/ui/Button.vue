@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
  * 主按钮是「白磷块 + 黑字」，不是彩色胶囊 —— 彩色只留给危险动作。
  */
 const buttonVariants = cva(
-  "inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap border font-mono uppercase tracking-[0.08em] transition-none active:translate-y-px disabled:pointer-events-none disabled:opacity-40",
+  "inline-flex select-none items-center justify-center gap-1.5 whitespace-nowrap border font-mono transition-none active:translate-y-px disabled:pointer-events-none disabled:opacity-40",
   {
     variants: {
       variant: {

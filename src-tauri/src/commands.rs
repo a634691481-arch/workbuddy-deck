@@ -3,8 +3,8 @@
 //! 约定（见 AGENTS.md）：这里不写业务分支、不拼统计、不做重试；新增动作加一个薄包装即可。
 
 use std::collections::HashMap;
-use std::sync::atomic::Ordering;
 use std::path::PathBuf;
+use std::sync::atomic::Ordering;
 
 #[cfg(target_os = "windows")]
 use std::os::windows::process::CommandExt;
@@ -20,8 +20,8 @@ use wb_switch_core::modules::growth_center;
 use wb_switch_core::modules::growth_tasks;
 use wb_switch_core::modules::variant::WbVariant;
 use wb_switch_core::modules::{
-    account, account_groups, auth_file, checkin, credits, error_log, export_import, forecast,
-    limits, auto_switch, health, notifications, oauth, process, refresh, switch, switch_history,
+    account, account_groups, auth_file, auto_switch, checkin, credits, error_log, export_import,
+    forecast, health, limits, notifications, oauth, process, refresh, switch, switch_history,
 };
 
 use crate::executor;
@@ -485,7 +485,9 @@ pub async fn cdp_restart_client() -> Value {
         tokio::time::sleep(std::time::Duration::from_secs(1)).await;
         if wb_switch_core::modules::cdp::probe_port(port).await {
             // 立刻建立连接，让设置页状态马上变绿。
-            let _ = wb_switch_core::modules::cdp::workbuddy_page(true).await.is_some();
+            let _ = wb_switch_core::modules::cdp::workbuddy_page(true)
+                .await
+                .is_some();
             return json!({ "ok": true, "port": port });
         }
     }
@@ -738,7 +740,10 @@ mod workbuddy_status_tests {
 
     #[test]
     fn cn_is_default_when_nothing_running() {
-        assert_eq!(pick_primary_account(&pairs(), None).as_deref(), Some("id-cn"));
+        assert_eq!(
+            pick_primary_account(&pairs(), None).as_deref(),
+            Some("id-cn")
+        );
     }
 
     #[test]
@@ -903,8 +908,10 @@ pub async fn switch_workbuddy_account(app: tauri::AppHandle, account_id: String)
             tokio::time::sleep(std::time::Duration::from_millis(250)).await;
             let reloaded = wb_switch_core::modules::cdp::reload_workbuddy_page().await;
             if !reloaded {
-                let _ = app
-                    .emit("switch-progress", json!({ "message": "已写入认证，请手动刷新客户端" }));
+                let _ = app.emit(
+                    "switch-progress",
+                    json!({ "message": "已写入认证，请手动刷新客户端" }),
+                );
             }
         }
     }
@@ -928,7 +935,10 @@ fn switch_payload(result: Result<Value, String>, diagnostics: &switch::SwitchDia
         object.insert("identity".to_string(), json!(diagnostics.identity_str()));
         object.insert("costMs".to_string(), json!(diagnostics.cost_ms));
         object.insert("rolledBack".to_string(), json!(diagnostics.rolled_back));
-        object.insert("sessionsDirty".to_string(), json!(diagnostics.sessions_dirty));
+        object.insert(
+            "sessionsDirty".to_string(),
+            json!(diagnostics.sessions_dirty),
+        );
         object.insert("sessions".to_string(), json!(diagnostics.sessions));
         if !object.contains_key("ok") {
             object.insert("ok".to_string(), json!(false));
@@ -962,9 +972,7 @@ fn account_health_of(
     health::account_health(&health::HealthInput {
         remaining: row.get("remaining").and_then(Value::as_f64),
         capacity: row.get("capacity").and_then(Value::as_f64),
-        expiring_soon_remaining: row
-            .get("expiringSoonRemaining")
-            .and_then(Value::as_f64),
+        expiring_soon_remaining: row.get("expiringSoonRemaining").and_then(Value::as_f64),
         rate_limited,
         error: row.get("error").and_then(Value::as_str),
         days_left,
@@ -1325,7 +1333,10 @@ pub fn events_list(limit: Option<usize>) -> Value {
     let auto_logs = scheduler::load_logs();
     let auto_count = auto_logs.len();
     for row in auto_logs {
-        let status = row.get("status").and_then(Value::as_str).unwrap_or("unknown");
+        let status = row
+            .get("status")
+            .and_then(Value::as_str)
+            .unwrap_or("unknown");
         let total = row.get("total").and_then(Value::as_i64).unwrap_or(0);
         let ok = row.get("ok").and_then(Value::as_i64).unwrap_or(0);
         let other = row.get("other").and_then(Value::as_i64).unwrap_or(0);
@@ -1353,7 +1364,10 @@ pub fn events_list(limit: Option<usize>) -> Value {
         };
         error_count += 1;
         let kind = row.get("kind").and_then(Value::as_str).unwrap_or("backend");
-        let message = row.get("message").and_then(Value::as_str).unwrap_or("（无标题）");
+        let message = row
+            .get("message")
+            .and_then(Value::as_str)
+            .unwrap_or("（无标题）");
         let detail = row.get("detail").and_then(Value::as_str).unwrap_or("");
         items.push(json!({
             "at": row.get("ts").and_then(Value::as_i64).unwrap_or(0),
@@ -1472,8 +1486,10 @@ pub fn auto_switch_set(patch: Value) -> Value {
 }
 
 /// 自动切换的 3 秒倒计时状态：期间用户可以取消（正在打字时不被强行关窗）。
-static AUTO_SWITCH_CANCEL: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
-static AUTO_SWITCH_PENDING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static AUTO_SWITCH_CANCEL: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
+static AUTO_SWITCH_PENDING: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 // ───────────────────────── 账号分组与标签 ─────────────────────────
 // 存档在 core `account_groups`（`~/.wb-switch/account_groups.json`），与账号库分离，
 // 上游工具同步账号库时不会冲掉用户的分组。
@@ -1540,7 +1556,8 @@ pub async fn switch_preflight(account_id: String) -> Value {
 }
 
 /// 自动切换的进程内互斥：1s 快路径 / 60s 兜底 / 2min 巡检三个入口共用。
-static AUTO_SWITCH_RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static AUTO_SWITCH_RUNNING: std::sync::atomic::AtomicBool =
+    std::sync::atomic::AtomicBool::new(false);
 
 /// 取消这次待执行的自动切换（前端倒计时条上的「取消」按钮）。
 #[tauri::command]
@@ -1635,12 +1652,16 @@ async fn auto_switch_run(app: tauri::AppHandle, ask: bool) -> Value {
 
     let current = auto_switch::current_account_id();
     let preview = auto_switch::preview(&cfg, current.as_deref(), now);
-    let kind = preview.get("action").and_then(Value::as_str).unwrap_or("skip");
+    let kind = preview
+        .get("action")
+        .and_then(Value::as_str)
+        .unwrap_or("skip");
 
     // 不需要动手：交给 run_once 走原来的日志/通知路径（闭包不会被调用）
     if kind != "switch" {
-        let payload =
-            auto_switch::run_once(&cfg, current.as_deref(), now, |_| Err("not-reached".to_string()));
+        let payload = auto_switch::run_once(&cfg, current.as_deref(), now, |_| {
+            Err("not-reached".to_string())
+        });
         auto_switch::end_switch(false, config::now_ms());
         AUTO_SWITCH_RUNNING.store(false, Ordering::SeqCst);
         return payload;
@@ -1672,7 +1693,11 @@ async fn auto_switch_run(app: tauri::AppHandle, ask: bool) -> Value {
 
         // 0 = 不倒数，一直等用户点（最长 10 分钟，避免永久占位挡住后续切换）
         let seconds = cfg.countdown_seconds.clamp(0, 120);
-        let budget_ms = if seconds == 0 { 10 * 60 * 1000 } else { seconds * 1000 };
+        let budget_ms = if seconds == 0 {
+            10 * 60 * 1000
+        } else {
+            seconds * 1000
+        };
         AUTO_SWITCH_CANCEL.store(false, Ordering::SeqCst);
         AUTO_SWITCH_CONFIRM.store(false, Ordering::SeqCst);
         AUTO_SWITCH_PENDING.store(true, Ordering::SeqCst);
@@ -1692,7 +1717,9 @@ async fn auto_switch_run(app: tauri::AppHandle, ask: bool) -> Value {
 
         let mut waited = 0i64;
         while waited < budget_ms {
-            if AUTO_SWITCH_CANCEL.load(Ordering::SeqCst) || AUTO_SWITCH_CONFIRM.load(Ordering::SeqCst) {
+            if AUTO_SWITCH_CANCEL.load(Ordering::SeqCst)
+                || AUTO_SWITCH_CONFIRM.load(Ordering::SeqCst)
+            {
                 break;
             }
             tokio::time::sleep(std::time::Duration::from_millis(100)).await;

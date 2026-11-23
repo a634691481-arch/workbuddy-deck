@@ -1,6 +1,8 @@
 @import "tailwindcss";
-@import "@fontsource/archivo-black";
+@import "@fontsource-variable/inter";
 @import "@fontsource-variable/jetbrains-mono";
+@import "@fontsource/noto-sans-sc/400.css";
+@import "@fontsource/noto-sans-sc/500.css";
 
 /*
  * 工业粗野主义 / 战术遥测（Tactical Telemetry & CRT）
@@ -11,48 +13,65 @@
  * 3. 不用渐变、不用柔光投影、不用半透明玻璃。层次靠 1px 实线分隔。
  * 4. 数据一律等宽 + 大写 + 正字距，模拟终端矩阵。
  */
+/* Hallmark · shape: app screen · genre: modern-minimal · theme: Dusk (deal 1/3)
+ * nav: kept (sidebar 7 destinations) · signature: the account ledger rows · states: loading/empty/error/full
+ * dusk: fog/periwinkle-apricot/glass · axes: dark/grotesk-sans/cool · posture: committed · v2.0.0 */
+/*
+ * Dusk — 账本式深灰（Slate）＋ 单一长春花信号色
+ * ---------------------------------------------------------------
+ * 纪律：
+ * 1. 深灰基底（偏蓝 268°），只有一档明度阶梯，层次靠 1px 细线。
+ * 2. 长春花=已完成/选中/聚焦；杏色=待处理/欠；红色只留给破坏性动作。
+ * 3. 无渐变、无扫描线、无颗粒；表面用极淡的顶边高光。
+ * 4. 标签用正文体、小一号、句首大写，不写全大写等宽。
+ */
 @theme {
-  /* 基底：停用的 CRT，不用纯黑 */
-  --color-background: #0a0a0a;
-  --color-card: #101010;
-  --color-panel: #0d0d0d;
-  --color-muted: #171716;
-  --color-foreground: #eaeaea;
-  --color-muted-foreground: #8a8a85;
-  --color-faint: #565651;
+  /* 基底：石板灰，不是纯黑 */
+  --color-background: oklch(17.5% 0.014 268);
+  --color-card: oklch(21% 0.016 268);
+  --color-panel: oklch(19% 0.015 268);
+  --color-muted: oklch(25% 0.017 268);
+  --color-foreground: oklch(96% 0.006 75);
+  --color-muted-foreground: oklch(70% 0.016 262);
+  --color-faint: oklch(55% 0.016 264);
 
-  /* 分隔线：靠它划分隔间，不靠留白 */
-  --color-border: #2a2a28;
-  --color-border-strong: #454540;
+  /* 分隔线：唯一的分层手段 */
+  --color-border: oklch(30% 0.016 266);
+  --color-border-strong: oklch(38% 0.017 266);
 
-  /* 唯一强调色：航空 / 危险红 */
-  --color-hazard: #e61919;
-  --color-hazard-dim: #7a1010;
-  --color-hazard-soft: #1c0808;
+  /* 唯一强调色：长春花（完成 / 选中 / 聚焦） */
+  --color-hazard: oklch(77% 0.1 274);
+  --color-hazard-dim: oklch(44% 0.13 274);
+  --color-hazard-soft: oklch(24% 0.035 274);
 
-  /* 块状主按钮 = 白磷底黑字（工业风没有"品牌蓝"） */
-  --color-primary: #eaeaea;
-  --color-primary-soft: #1b1b19;
-  --color-primary-border: #454540;
-  --color-primary-foreground: #0a0a0a;
+  /* 主按钮：亮底深字（工具里最重的那一下） */
+  --color-primary: oklch(96% 0.006 75);
+  --color-primary-soft: oklch(25% 0.017 268);
+  --color-primary-border: oklch(38% 0.017 266);
+  --color-primary-foreground: oklch(19% 0.035 274);
 
-  --color-titlebar: #050505;
+  --color-titlebar: oklch(13.5% 0.016 268);
 
-  /* 磷光绿：只允许出现在 READY 指示器上 */
-  --color-success: #4af626;
-  --color-success-soft: #0e1a08;
-  --color-success-border: #2d5c1c;
-  --color-danger: #e61919;
-  --color-danger-soft: #1c0808;
-  --color-danger-border: #6e1010;
-  --color-warning: #e61919;
-  --color-warning-soft: #1c0808;
-  --color-warning-border: #6e1010;
+  /* 状态：成功=苔绿，危险=红，警告=杏 */
+  --color-success: oklch(76% 0.13 150);
+  --color-success-soft: oklch(22% 0.04 150);
+  --color-success-border: oklch(36% 0.08 150);
+  --color-danger: oklch(66% 0.19 25);
+  --color-danger-soft: oklch(24% 0.06 25);
+  --color-danger-border: oklch(40% 0.12 25);
+  --color-warning: oklch(83% 0.095 62);
+  --color-warning-soft: oklch(26% 0.05 62);
+  --color-warning-border: oklch(45% 0.08 62);
 
-  --radius: 0px;
+  --radius: 10px;
+  --font-sans:
+    "Inter Variable", "Noto Sans SC", ui-sans-serif, system-ui, "Microsoft YaHei UI",
+    "PingFang SC", sans-serif;
   --font-mono:
-    "JetBrains Mono Variable", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-  --font-display: "Archivo Black", "Arial Black", sans-serif;
+    "JetBrains Mono Variable", "Noto Sans SC", ui-monospace, SFMono-Regular, Menlo, monospace;
+  --font-display:
+    "Inter Variable", "Noto Sans SC", ui-sans-serif, system-ui, "Microsoft YaHei UI",
+    "PingFang SC", sans-serif;
 }
 
 /*
@@ -60,17 +79,16 @@
  * hazard/danger/warning 全部派生自它（软底自动随背景明暗混合）。
  * 放在 @theme 之后，同特异性后者胜。
  */
+/*
+ * 强调色：默认长春花；标题栏「颜色」只写 <html> 内联 --accent。
+ * hazard 派生自 --accent（跟随用户选色）；
+ * danger / warning 是**独立语义色**，不跟着换——否则「删除」会变成强调色。
+ */
 :root {
-  --accent: #e61919;
+  --accent: oklch(77% 0.1 274);
   --color-hazard: var(--accent);
-  --color-hazard-dim: color-mix(in srgb, var(--accent) 55%, #000);
-  --color-hazard-soft: color-mix(in srgb, var(--accent) 10%, var(--color-background));
-  --color-danger: var(--accent);
-  --color-danger-soft: var(--color-hazard-soft);
-  --color-danger-border: color-mix(in srgb, var(--accent) 45%, var(--color-background));
-  --color-warning: var(--accent);
-  --color-warning-soft: var(--color-hazard-soft);
-  --color-warning-border: var(--color-danger-border);
+  --color-hazard-dim: color-mix(in srgb, var(--accent) 42%, var(--color-background));
+  --color-hazard-soft: color-mix(in srgb, var(--accent) 16%, var(--color-background));
 }
 
 /*
@@ -79,43 +97,51 @@
  * 强调色不在覆盖之列——它派生自 --accent，随背景自动适配明暗。
  */
 html.light {
-  --color-background: #e8e8e6;
-  --color-card: #f4f4f2;
-  --color-panel: #eeeeec;
-  --color-muted: #dededb;
-  --color-foreground: #1a1a18;
-  --color-muted-foreground: #57574f;
-  --color-faint: #9a9a92;
+  --color-background: oklch(95.5% 0.008 75);
+  --color-card: oklch(99.5% 0.003 75);
+  --color-panel: oklch(94% 0.01 75);
+  --color-muted: oklch(92% 0.01 75);
+  --color-foreground: oklch(21% 0.016 268);
+  --color-muted-foreground: oklch(47% 0.016 265);
+  --color-faint: oklch(62% 0.014 265);
 
-  --color-border: #c6c6c2;
-  --color-border-strong: #a0a09a;
+  --color-border: oklch(87.5% 0.009 75);
+  --color-border-strong: oklch(78% 0.01 75);
 
-  --color-primary: #1a1a18;
-  --color-primary-soft: #e2e2df;
-  --color-primary-border: #a0a09a;
-  --color-primary-foreground: #f4f4f2;
+  --color-primary: oklch(21% 0.016 268);
+  --color-primary-soft: oklch(92% 0.01 75);
+  --color-primary-border: oklch(78% 0.01 75);
+  --color-primary-foreground: oklch(99.5% 0.003 75);
 
-  --color-titlebar: #dcdcd8;
+  --color-titlebar: oklch(92% 0.009 75);
 
-  --color-success: #178a17;
-  --color-success-soft: #e7f3e7;
-  --color-success-border: #86c286;
+  --color-success: oklch(52% 0.12 150);
+  --color-success-soft: oklch(94% 0.03 150);
+  --color-success-border: oklch(78% 0.08 150);
+  --color-danger: oklch(55% 0.19 25);
+  --color-danger-soft: oklch(95% 0.03 25);
+  --color-danger-border: oklch(82% 0.08 25);
+  --color-warning: oklch(62% 0.13 62);
+  --color-warning-soft: oklch(95% 0.03 62);
+  --color-warning-border: oklch(84% 0.06 62);
 
-  scrollbar-color: #a0a09a #e8e8e6;
+  --color-hazard-soft: color-mix(in srgb, var(--accent) 14%, var(--color-background));
+
+  scrollbar-color: oklch(78% 0.01 75) oklch(95.5% 0.008 75);
 }
 
 html.light *::-webkit-scrollbar-track {
-  background: #e8e8e6;
-  border-left-color: #d0d0cc;
+  background: oklch(95.5% 0.008 75);
+  border-left-color: oklch(90% 0.009 75);
 }
 
 html.light *::-webkit-scrollbar-thumb {
-  background: #b4b4ae;
-  border-color: #e8e8e6;
+  background: oklch(84% 0.01 75);
+  border-color: oklch(95.5% 0.008 75);
 }
 
 html.light *::-webkit-scrollbar-thumb:hover {
-  background: #a0a09a;
+  background: oklch(74% 0.012 75);
 }
 
 html,
@@ -126,17 +152,17 @@ body,
 }
 
 body {
-  font-family: var(--font-mono);
-  font-size: 12px;
+  font-family: var(--font-sans);
+  font-size: 13px;
   font-variant-ligatures: none;
   color: var(--color-foreground);
   background: var(--color-background);
   -webkit-font-smoothing: antialiased;
 }
 
-/* 圆角默认直角；实际值由 prefs.ts 写在 <html> 内联变量上（0–16px 可调） */
+/* 圆角默认 10px；实际值由 prefs.ts 写在 <html> 内联变量上（0–16px 可调） */
 :root {
-  --app-radius: 0px;
+  --app-radius: 10px;
 }
 
 /* 全局统一圆角：任何组件随偏好整体切换 */
@@ -332,17 +358,17 @@ html[data-density="comfy"] {
 }
 
 *::-webkit-scrollbar-track {
-  background: #0a0a0a;
-  border-left: 1px solid #1c1c1a;
+  background: oklch(17.5% 0.014 268);
+  border-left: 1px solid oklch(24% 0.015 268);
 }
 
 *::-webkit-scrollbar-thumb {
-  background: #34342f;
-  border: 1px solid #0a0a0a;
+  background: oklch(34% 0.016 266);
+  border: 1px solid oklch(17.5% 0.014 268);
 }
 
 *::-webkit-scrollbar-thumb:hover {
-  background: #4d4d46;
+  background: oklch(44% 0.017 266);
 }
 
 /* 可点元素统一手型：浏览器对 <button> 默认是箭头，看起来像不可点 */
@@ -367,12 +393,12 @@ select:disabled,
   cursor: not-allowed;
 }
 
-/* 微排版：所有 metadata 一律大写 + 正字距 */
+/* 微排版：正文体、小一号、句首大写（不写 tracked caps） */
 .lbl {
-  font-size: 10px;
-  line-height: 1;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
+  font-size: 11px;
+  line-height: 1.35;
+  letter-spacing: 0;
+  text-transform: none;
   color: var(--color-muted-foreground);
 }
 
@@ -380,12 +406,13 @@ select:disabled,
   color: var(--color-foreground);
 }
 
-/* 宏排版：块状重黑体，紧字距、压缩行高 */
+/* 宏排版：中等字重的大标题，紧一点字距，保留句首大写 */
 .display {
   font-family: var(--font-display);
-  letter-spacing: -0.04em;
-  line-height: 0.9;
-  text-transform: uppercase;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+  line-height: 1.12;
+  text-transform: none;
 }
 
 /* 数据读数：等宽 + 大号 + 紧排 */
@@ -415,7 +442,7 @@ select:disabled,
     rgb(0 0 0 / 0.22) 0 1px,
     transparent 1px 3px
   );
-  opacity: var(--scan-opacity, 0.5);
+  opacity: var(--scan-opacity, 0);
 }
 
 /* 白天下扫描线再淡一档，否则亮底上像蒙灰 */
@@ -434,7 +461,7 @@ html.light .crt::before {
   inset: 0;
   z-index: 9998;
   pointer-events: none;
-  opacity: 0.035;
+  opacity: 0;
   background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='160' height='160' filter='url(%23n)'/%3E%3C/svg%3E");
 }
 
@@ -499,4 +526,124 @@ html.light .crt::before {
   .wb-view {
     animation: none;
   }
+}
+
+/* 账号卡片交错入场：按视觉顺序依次进入（列表首次加载 / 数据刷新时各播一次）。
+   两套等价 @keyframes 别名：换 animation-name 就能让动画重播，
+   不用改 DOM 结构也不用重新挂载（重新挂载会打断 AutoAnimate 的 FLIP）。
+   位移走独立的 translate 属性，不碰 transform —— 避免与 useListAnim 的 FLIP 打架。 */
+@keyframes wb-stagger-in-a {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+@keyframes wb-stagger-in-b {
+  from {
+    opacity: 0;
+    translate: 0 8px;
+  }
+  to {
+    opacity: 1;
+    translate: 0 0;
+  }
+}
+/* 行容器挂这个类：子项按视觉顺序依次入场（延迟由 nth-child 给） */
+.wb-stagger-list > * {
+  animation: wb-stagger-in-a 260ms cubic-bezier(0.22, 0.61, 0.36, 1) both;
+}
+/* 数据刷新时由 useStaggerList 切到这个类 → animation-name 变 → 动画重播 */
+.wb-stagger-list.is-replay > * {
+  animation-name: wb-stagger-in-b;
+}
+/* 表头/粘性行不参与入场动画：sticky + 位移会打架 */
+.wb-stagger-list > .wb-stagger-skip {
+  animation: none !important;
+}
+/* 步长 18ms，最多前 18 项依次延迟；再往后统一用第 18 项的延迟，避免长列表尾巴等太久 */
+.wb-stagger-list > *:nth-child(1) {
+  animation-delay: 0ms;
+}
+.wb-stagger-list > *:nth-child(2) {
+  animation-delay: 18ms;
+}
+.wb-stagger-list > *:nth-child(3) {
+  animation-delay: 36ms;
+}
+.wb-stagger-list > *:nth-child(4) {
+  animation-delay: 54ms;
+}
+.wb-stagger-list > *:nth-child(5) {
+  animation-delay: 72ms;
+}
+.wb-stagger-list > *:nth-child(6) {
+  animation-delay: 90ms;
+}
+.wb-stagger-list > *:nth-child(7) {
+  animation-delay: 108ms;
+}
+.wb-stagger-list > *:nth-child(8) {
+  animation-delay: 126ms;
+}
+.wb-stagger-list > *:nth-child(9) {
+  animation-delay: 144ms;
+}
+.wb-stagger-list > *:nth-child(10) {
+  animation-delay: 162ms;
+}
+.wb-stagger-list > *:nth-child(11) {
+  animation-delay: 180ms;
+}
+.wb-stagger-list > *:nth-child(12) {
+  animation-delay: 198ms;
+}
+.wb-stagger-list > *:nth-child(13) {
+  animation-delay: 216ms;
+}
+.wb-stagger-list > *:nth-child(14) {
+  animation-delay: 234ms;
+}
+.wb-stagger-list > *:nth-child(15) {
+  animation-delay: 252ms;
+}
+.wb-stagger-list > *:nth-child(16) {
+  animation-delay: 270ms;
+}
+.wb-stagger-list > *:nth-child(17) {
+  animation-delay: 288ms;
+}
+.wb-stagger-list > *:nth-child(n + 18) {
+  animation-delay: 306ms;
+}
+/* 动效关闭：时长归零 + 延迟归零（否则卡片会卡在起始帧等延迟） */
+html.no-motion .wb-stagger-list > *,
+html.no-motion .wb-stagger {
+  animation-delay: 0ms !important;
+}
+@media (prefers-reduced-motion: reduce) {
+  .wb-stagger-list > *,
+  .wb-stagger {
+    animation: none !important;
+  }
+}
+
+/* 顶部导航项恒直角：选中态的 2px 下划线不能被圆角偏好切成两端带弧 */
+.wb-nav > * {
+  border-radius: 0 !important;
+}
+
+/* 顶部导航：横向可滚但不显示滚动条（8 项 58px 通常还不到需要滚的程度） */
+.wb-nav {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+
+.wb-nav::-webkit-scrollbar {
+  display: none;
+  width: 0;
+  height: 0;
 }

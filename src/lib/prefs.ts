@@ -22,17 +22,16 @@ const CONTRAST_KEY = "wb-ta/contrast";
 
 export type Theme = "dark" | "light";
 
-/** 主题色候选：航空红为默认，其余为可读性过关的深色调（两套主题都压得住）。 */
+/** 主题色候选：默认长春花（Dusk），其余为深灰底与浅灰底都压得住的中明度色。 */
 export const ACCENTS = [
-  { value: "#e61919", zh: "航空红", en: "HAZARD RED" },
-  { value: "#e8590c", zh: "信号橙", en: "SIGNAL ORANGE" },
-  { value: "#b8860b", zh: "琥珀", en: "AMBER" },
-  { value: "#2f9e44", zh: "磷光绿", en: "GREEN" },
-  { value: "#0c8599", zh: "青", en: "CYAN" },
-  { value: "#1c7ed6", zh: "蓝", en: "BLUE" },
-  { value: "#7048e8", zh: "紫", en: "VIOLET" },
-  { value: "#d6336c", zh: "品红", en: "MAGENTA" },
-  { value: "#57574f", zh: "石墨", en: "GRAPHITE" },
+  { value: "#8b8fe8", zh: "长春花", en: "PERIWINKLE" },
+  { value: "#6ea8dc", zh: "天青", en: "SKY" },
+  { value: "#c9a227", zh: "沙金", en: "SAND" },
+  { value: "#3f9e6f", zh: "苔绿", en: "MOSS" },
+  { value: "#d1756a", zh: "陶土", en: "CLAY" },
+  { value: "#9b7fd4", zh: "紫", en: "VIOLET" },
+  { value: "#c96a95", zh: "玫瑰", en: "ROSE" },
+  { value: "#8a8f7a", zh: "橄榄", en: "OLIVE" },
 ] as const;
 
 export const theme = ref<Theme>(localStorage.getItem(THEME_KEY) === "light" ? "light" : "dark");
@@ -41,7 +40,7 @@ export const theme = ref<Theme>(localStorage.getItem(THEME_KEY) === "light" ? "l
 export const RADIUS_MAX = 16;
 export const radius = ref(loadRadius());
 
-/** 强调色 hex；非法值回退默认航空红。 */
+/** 强调色 hex；非法值回退默认长春花。 */
 export const DEFAULT_ACCENT = ACCENTS[0].value;
 export const accent = ref(loadAccent());
 
@@ -60,7 +59,8 @@ export const SCANS = [
   { key: 0.25, zh: "淡", en: "SOFT" },
   { key: 0.5, zh: "标准", en: "STD" },
 ] as const;
-export const scan = ref<number>(loadScan());
+/** 扫描线已废弃（2026-11-20）：恒为 0，遗留的 localStorage 值不再生效。 */
+export const scan = ref<number>(0);
 
 /** 数字格式：grouped = 35,312；compact = 35.3K。 */
 export type NumFormat = "group" | "compact";
@@ -106,13 +106,15 @@ export const contrast = ref(localStorage.getItem(CONTRAST_KEY) === "on");
 export const backdrop = ref<"off" | "on">(localStorage.getItem(BACKDROP_KEY) === "on" ? "on" : "off");
 
 function loadRadius(): number {
-  const n = Number(localStorage.getItem(RADIUS_KEY) ?? "0");
-  if (!Number.isFinite(n)) return 0;
+  const n = Number(localStorage.getItem(RADIUS_KEY) ?? "10");
+  if (!Number.isFinite(n)) return 10;
   return Math.min(RADIUS_MAX, Math.max(0, Math.round(n)));
 }
 
 function loadAccent(): string {
   const v = localStorage.getItem(ACCENT_KEY) ?? "";
+  // 旧默认（航空红）当作「没选过」：换主题后不该继续顶着红色。
+  if (v.toLowerCase() === "#e61919") return DEFAULT_ACCENT;
   return /^#[0-9a-fA-F]{6}$/.test(v) ? v : DEFAULT_ACCENT;
 }
 
@@ -126,12 +128,6 @@ function loadDensity(): Density {
   return v === "compact" || v === "comfy" ? v : "normal";
 }
 
-function loadScan(): number {
-  const raw = localStorage.getItem(SCAN_KEY);
-  if (raw === null) return 0.5;
-  const n = Number(raw);
-  return Number.isFinite(n) ? Math.min(1, Math.max(0, n)) : 0.5;
-}
 
 function apply() {
   const el = document.documentElement;

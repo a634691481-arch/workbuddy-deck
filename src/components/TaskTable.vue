@@ -5,6 +5,7 @@ import Badge from "@/components/ui/Badge.vue";
 import type { CheckinStatus, GrowthTask } from "@/lib/api";
 import { t } from "@/lib/i18n";
 import { useListAnim } from "@/composables/useListAnim";
+import { useStaggerList } from "@/composables/useStagger";
 import { isDone, progressOf, statusOf } from "@/lib/task-meta";
 
 const props = defineProps<{
@@ -23,6 +24,9 @@ const tab = defineModel<"tasks" | "checkin" | "raw">({ default: "tasks" });
 /** manual_required 任务只能去客户端点，交给上层开官方入口。 */
 const emit = defineEmits<{ jump: [url: string] }>();
 const rowsEl = useListAnim(() => !props.running);
+
+/** 任务行交错入场：任务数据到位/刷新时按行依次进入（表头不参与）。 */
+const stagger = useStaggerList(() => props.tasks);
 
 const tabs = [
   { key: "tasks", labelKey: "tt.growth" },
@@ -46,7 +50,7 @@ const GRID = "grid grid-cols-[minmax(0,1fr)_74px_62px_66px_30px] items-center ga
         :key="item.key"
         role="tab"
         :aria-selected="tab === item.key"
-        class="border-r border-border px-3 text-[10px] uppercase tracking-[0.1em]"
+        class="border-r border-border px-3 text-[10px]"
         :class="tab === item.key
           ? 'bg-card text-foreground shadow-[inset_0_-2px_0_0_var(--color-hazard)]'
           : 'text-faint hover:text-muted-foreground'"
@@ -70,10 +74,15 @@ const GRID = "grid grid-cols-[minmax(0,1fr)_74px_62px_66px_30px] items-center ga
     </div>
 
     <!-- 任务表 -->
-    <div v-show="tab === 'tasks'" ref="rowsEl" class="min-h-0 flex-1 overflow-y-auto wb-zebra">
+    <div
+      v-show="tab === 'tasks'"
+      ref="rowsEl"
+      class="min-h-0 flex-1 overflow-y-auto wb-zebra"
+      :class="stagger.listClass()"
+    >
       <!-- 表头：粘性黑底，列间竖线 -->
       <div
-        :class="[GRID, 'sticky top-0 z-10 border-b border-border-strong bg-background text-[10px] uppercase tracking-[0.1em] text-muted-foreground']"
+        :class="[GRID, 'wb-stagger-skip sticky top-0 z-10 border-b border-border-strong bg-background text-[10px] text-muted-foreground']"
       >
         <span class="px-2 py-1.5">{{ t("tt.taskName") }}</span>
         <span class="border-l border-border px-2 py-1.5">{{ t("tt.status") }}</span>
@@ -129,7 +138,7 @@ const GRID = "grid grid-cols-[minmax(0,1fr)_74px_62px_66px_30px] items-center ga
               <button
                 v-if="task.skipped === 'manual_required' && task.jumpUrl"
                 type="button"
-                class="shrink-0 border border-border-strong px-1 text-[9px] uppercase tracking-[0.08em] text-hazard transition-colors hover:border-hazard"
+                class="shrink-0 border border-border-strong px-1 text-[9px] text-hazard transition-colors hover:border-hazard"
                 :title="t('tt.goComplete')"
                 @click="emit('jump', task.jumpUrl ?? '')"
               >

@@ -24,7 +24,15 @@ const FAILURE_WINDOW_MS: i64 = DAY_MS;
 /// 失败语义关键词：只认「动作没做成」。
 /// 故意不收「异常」——提醒中心自己会写一条标题为「异常提醒」的 warning，
 /// 收进来会让一次提醒反过来抬高下一轮的失败计数（自我放大）。
-const FAILURE_KEYWORDS: [&str; 7] = ["失败", "错误", "超时", "fail", "error", "timeout", "timed out"];
+const FAILURE_KEYWORDS: [&str; 7] = [
+    "失败",
+    "错误",
+    "超时",
+    "fail",
+    "error",
+    "timeout",
+    "timed out",
+];
 
 fn account_identity(row: &Value) -> (&str, &str) {
     (
@@ -111,10 +119,7 @@ fn push_expiring(out: &mut Vec<Value>, row: &Value, now: i64) {
         return;
     };
     for item in resources {
-        let remaining = item
-            .get("remaining")
-            .and_then(Value::as_f64)
-            .unwrap_or(0.0);
+        let remaining = item.get("remaining").and_then(Value::as_f64).unwrap_or(0.0);
         if remaining <= 0.0 {
             continue;
         }
@@ -153,10 +158,7 @@ pub(super) fn switch_alerts(entries: &[Value], now: i64) -> Vec<Value> {
         if result.is_empty() || result == "ok" {
             continue;
         }
-        let account_id = entry
-            .get("accountId")
-            .and_then(Value::as_str)
-            .unwrap_or("");
+        let account_id = entry.get("accountId").and_then(Value::as_str).unwrap_or("");
         let fingerprint = format!("switch:{account_id}");
         if out.iter().any(|item| {
             item.get("fingerprint").and_then(Value::as_str) == Some(fingerprint.as_str())
@@ -211,11 +213,7 @@ fn is_failure(entry: &NotificationEntry) -> bool {
     if entry.level != "warning" {
         return false;
     }
-    has_failure_text(&entry.title)
-        || entry
-            .description
-            .as_deref()
-            .is_some_and(has_failure_text)
+    has_failure_text(&entry.title) || entry.description.as_deref().is_some_and(has_failure_text)
 }
 
 fn has_failure_text(text: &str) -> bool {

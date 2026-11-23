@@ -217,7 +217,7 @@ onBeforeUnmount(() => {
             />
             <button
               type="button"
-              class="flex items-center gap-1 border border-foreground bg-foreground px-2 py-1 text-[10px] uppercase tracking-[0.1em] text-background transition-opacity hover:opacity-85 disabled:opacity-40"
+              class="flex items-center gap-1 border border-foreground bg-foreground px-2 py-1 text-[10px] text-background transition-opacity hover:opacity-85 disabled:opacity-40"
               :disabled="busy || !newName.trim()"
               @click="submitCreate"
             >

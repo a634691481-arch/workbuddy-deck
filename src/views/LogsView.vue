@@ -23,6 +23,7 @@ import {
 } from "@/lib/api";
 import { t, type I18nKey } from "@/lib/i18n";
 import { useListAnim } from "@/composables/useListAnim";
+import { useStaggerList } from "@/composables/useStagger";
 
 type Filter = "all" | EventSource;
 
@@ -30,6 +31,9 @@ const data = ref<EventList | null>(null);
 const loading = ref(true);
 const error = ref("");
 const rowsEl = useListAnim(() => !loading.value && rows.value.length <= 120);
+
+/** 日志行交错入场：用原始 items 做源，搜索/筛选不重播。 */
+const stagger = useStaggerList(() => data.value?.items);
 const filter = ref<Filter>("all");
 const keyword = ref("");
 const clearing = ref(false);
@@ -256,7 +260,7 @@ async function doClear() {
     <!-- 页头 -->
     <header class="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-panel px-4 py-2 wb-flat">
       <div class="min-w-0">
-        <h1 class="text-[13px] tracking-[0.12em] text-foreground">{{ t("rl.title") }}</h1>
+        <h1 class="text-[13px] text-foreground">{{ t("rl.title") }}</h1>
         <div class="readout mt-0.5 text-[9px] text-faint">
           {{ t("rl.subtitle") }}
           <span v-if="data?.truncated" class="ml-2 text-muted-foreground">{{ t("rl.truncated") }}</span>
@@ -265,7 +269,7 @@ async function doClear() {
       <div class="flex shrink-0 items-center gap-1.5">
         <button
           type="button"
-          class="flex items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-hazard hover:text-hazard disabled:opacity-40"
+          class="flex items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] text-muted-foreground transition-colors hover:border-hazard hover:text-hazard disabled:opacity-40"
           :disabled="!canClear"
           :title="canClear ? t('rl.clear') : t('rl.all')"
           @click="clearTarget = filter as EventSource"
@@ -275,7 +279,7 @@ async function doClear() {
         </button>
         <button
           type="button"
-          class="flex items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
+          class="flex items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
           :disabled="loading"
           @click="load()"
         >
@@ -424,7 +428,7 @@ async function doClear() {
           v-for="item in FILTERS"
           :key="item.key"
           type="button"
-          class="border px-2 py-0.5 text-[10px] uppercase tracking-[0.1em] transition-colors"
+          class="border px-2 py-0.5 text-[10px] transition-colors"
           :class="
             filter === item.key
               ? 'border-hazard text-hazard'
@@ -450,8 +454,12 @@ async function doClear() {
     </section>
 
     <!-- 日志表 -->
-    <div ref="rowsEl" class="wb-zebra mx-3 mb-3 mt-3 min-h-0 flex-1 overflow-auto border border-border bg-card">
-      <div class="grid grid-cols-[92px_76px_72px_minmax(160px,1fr)_minmax(200px,1.4fr)] items-center gap-2 wb-cells border-b border-border bg-panel px-3 py-1">
+    <div
+      ref="rowsEl"
+      class="wb-zebra mx-3 mb-3 mt-3 min-h-0 flex-1 overflow-auto border border-border bg-card"
+      :class="stagger.listClass()"
+    >
+      <div class="wb-stagger-skip grid grid-cols-[92px_76px_72px_minmax(160px,1fr)_minmax(200px,1.4fr)] items-center gap-2 wb-cells border-b border-border bg-panel px-3 py-1">
         <span class="lbl">{{ t("rl.time") }}</span>
         <span class="lbl">{{ t("rl.source") }}</span>
         <span class="lbl">LEVEL</span>
@@ -479,7 +487,7 @@ async function doClear() {
           <span class="readout text-[9px] text-faint" :title="relative(row.at)">{{ dateOf(row.at) }}</span>
         </div>
         <span class="readout truncate text-[9px] text-muted-foreground">{{ sourceLabel(row.source) }}</span>
-        <span class="readout text-[9px] uppercase" :class="levelColor(row.level)">{{ row.level }}</span>
+        <span class="readout text-[9px]" :class="levelColor(row.level)">{{ row.level }}</span>
         <span class="min-w-0 truncate text-[11px] text-foreground" :title="row.title">{{ row.title }}</span>
         <span class="readout min-w-0 truncate text-[9px] text-faint" :title="row.detail ?? ''">
           {{ row.detail || "—" }}
@@ -498,7 +506,7 @@ async function doClear() {
       >
         <div class="w-full max-w-md border border-hazard bg-card wb-modal-card">
           <div class="flex items-center justify-between border-b border-border px-3 py-2">
-            <span class="text-[12px] tracking-[0.1em] text-hazard">{{ t("rl.clear") }}</span>
+            <span class="text-[12px] text-hazard">{{ t("rl.clear") }}</span>
             <button type="button" class="text-[11px] text-muted-foreground hover:text-foreground" @click="clearTarget = null">
               ✕
             </button>
@@ -507,14 +515,14 @@ async function doClear() {
           <div class="flex justify-end gap-1.5 border-t border-border px-3 py-2">
             <button
               type="button"
-              class="border border-border-strong px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground hover:text-foreground"
+              class="border border-border-strong px-2.5 py-1 text-[10px] text-muted-foreground hover:text-foreground"
               @click="clearTarget = null"
             >
               CANCEL
             </button>
             <button
               type="button"
-              class="flex items-center gap-1.5 border border-hazard bg-hazard px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-white disabled:opacity-40"
+              class="flex items-center gap-1.5 border border-hazard bg-hazard px-2.5 py-1 text-[10px] text-white disabled:opacity-40"
               :disabled="clearing"
               @click="doClear()"
             >

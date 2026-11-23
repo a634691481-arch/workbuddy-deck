@@ -19,7 +19,17 @@ import {
   type UpdateProgress,
   type UpdateStatus,
 } from "@/lib/api";
-import { isTauri } from "@/lib/tauri-env";
+import { isEmbedded, isTauri } from "@/lib/tauri-env";
+
+/**
+ * 嵌入面板里不自动开更新弹框：面板是 WorkBuddy 页面内的 iframe，
+ * 弹框挡住的是宿主页面的一角，用户是被点图标叫出来的，不该先看一堆版本说明。
+ * 读数照旧进 status（设置页能看），只是不抢焦点。
+ * 下载/安装也不在面板里做：它会重启本进程，面板自己是挂在宿主页面上的。
+ */
+function canPromptUpdate(): boolean {
+  return !isEmbedded();
+}
 
 const status = ref<UpdateStatus | null>(null);
 const checking = ref(false);
@@ -63,7 +73,7 @@ function wire() {
     status.value = payload as UpdateStatus;
     // 发现新版只弹框提示，下载交给用户（对齐 workbuddy-switch 的 Available 态）
     phase.value = "available";
-    dialogOpen.value = true;
+    dialogOpen.value = canPromptUpdate();
   });
   void bind("update://checked", (payload) => {
     status.value = payload as UpdateStatus;
@@ -148,14 +158,14 @@ export function useUpdate() {
       checking.value = false;
       if (status.value?.hasUpdate === true && phase.value === "idle") {
         phase.value = "available";
-        dialogOpen.value = true;
+        dialogOpen.value = canPromptUpdate();
       }
     }
   }
 
   /** 用户点「下载更新」：只下载不装，完成后停在 ready 等重启确认。 */
   async function download() {
-    if (installing.value || !isTauri()) return;
+    if (installing.value || !isTauri() || !canPromptUpdate()) return;
     installing.value = true;
     downloaded.value = 0;
     total.value = null;
@@ -177,7 +187,7 @@ export function useUpdate() {
 
   /** 用户点「重启以完成升级」：安装已暂存的包并重启。 */
   async function restart() {
-    if (installing.value || !isTauri()) return;
+    if (installing.value || !isTauri() || !canPromptUpdate()) return;
     installing.value = true;
     message.value = "";
     phase.value = "restarting";

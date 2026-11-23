@@ -43,6 +43,13 @@
      只挂在「会增删/重排」的**行容器**上（账号卡片流、任务表行、日志行、归档行），
      **不挂表头**（FLIP transform 会和 sticky 打架）、不挂指标卡/分段控件/图表（数值变化它不管）。
      三条护栏已在封装里：动效=关时禁用、调用方传 `enabled` 判定、批量执行中/超 120 行关闭。
+   - **列表交错入场用 `useStaggerList()`**（`composables/useStagger.ts`）：行容器加 `:class="stagger.listClass()"`,
+     子项按 nth-child 依次淡入上移（18ms 步长、260ms、cubic-bezier(.22,.61,.36,1)）。
+     **源要选「原始数据数组」**（rows/items/props.accounts），不要选筛选后的 computed —— 否则搜索/筛选会不停重播。
+     重播靠 class 在 `is-replay` 间切换（两个等价 @keyframes 别名）→ 换 animation-name，不重新挂载 DOM
+     （挂载会打断 AutoAnimate 的 FLIP）。位移走独立 `translate` 属性，不碰 `transform`。
+     表头/粘性行加 `wb-stagger-skip` 排除（sticky + 位移会打架）。已覆盖：账号卡片、任务行、左侧账号列表、
+     积分模型排行、TOKEN 模型/项目、日志时间轴、归档行。
 4. 数据一律「等宽 + 大写 + 正字距」，中文模式用短词保持同样节奏。
 5. 分隔线优先用 `grid gap-px` + 父子异色（skill §8），不逐条写 border。
 
@@ -65,7 +72,7 @@ AppToolbar  40px  [账号操作] + 运行状态 / 进度条 + 刷新（账号增
 │   ├ TelemetryBar   约 56px  6 格读数：账号 / 签到 / 任务 / **积分总额** / 当前号 / 上轮
 │   ├ 失败聚合条      仅失败时出现（红色 + 危险条纹）
 │   ├ TaskTable      flex-1（页签 32px + 粘性表头 + 行 34px）
-│   └ ActionBar      40px  作用域 + 4 动作 + 中断
+│   └ ActionBar      40px  3 动作 + 中断（2026-11-20 去掉「全部/所选」分段按钮：有勾选只跑勾选，没勾选默认跑全部，作用域自动判定）
 LogPanel    24px 折叠头 / 展开 144px（默认展开）
 StatusBar   24px  ● READY · 最近刷新 · 账号数 · 日志数
 03 CreditsView   积分统计：4 指标 → 每日柱+账号余额 → 分类维度（模型/客户端/账号 三态切换）

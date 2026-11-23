@@ -1,5 +1,6 @@
 <script setup lang="ts">
-// 命令区：作用域 + 三个批量动作（签到 / 旅行 / 成长任务）+ 中断。
+// 命令区：三个批量动作（签到 / 旅行 / 成长任务）+ 中断。
+// 作用域自动判定（2026-11-20 去掉「全部/所选」分段按钮）：有勾选只跑勾选，没勾选跑全部。
 // 二次确认内联在这里（不引入弹窗）：目标 > 1 时首次点击变红框确认态，8 秒回退。
 import { computed, onBeforeUnmount, ref, watch } from "vue";
 
@@ -20,15 +21,13 @@ const emit = defineEmits<{
   cancel: [];
 }>();
 
-const scope = defineModel<"all" | "selected">({ default: "all" });
-
 const CONFIRM_TTL_MS = 8000;
 type MaybeAction = ActionKey | "";
 const pending = ref<MaybeAction>("");
 let timer: number | undefined;
 
 const targetCount = computed(() =>
-  scope.value === "all" ? props.total : props.selectedCount,
+  props.selectedCount > 0 ? props.selectedCount : props.total,
 );
 const needsConfirm = computed(() => targetCount.value > 1);
 
@@ -56,32 +55,14 @@ function onRun(action: ActionKey) {
   timer = window.setTimeout(clearPending, CONFIRM_TTL_MS);
 }
 
-watch([scope, () => props.running], clearPending);
+watch([() => props.selectedCount, () => props.running], clearPending);
 onBeforeUnmount(clearPending);
 </script>
 
 <template>
   <div class="flex h-10 shrink-0 items-stretch border border-border bg-panel">
-    <!-- 作用域：分段按钮，选中项反白 -->
-    <div class="flex items-center gap-1 border-r border-border px-2">
-      <button
-        class="px-2 py-1 text-[10px] uppercase tracking-[0.1em]"
-        :class="scope === 'all' ? 'bg-foreground text-background' : 'text-faint hover:text-foreground'"
-        @click="scope = 'all'"
-      >
-        {{ t("ab.all") }} {{ props.total }}
-      </button>
-      <button
-        class="px-2 py-1 text-[10px] uppercase tracking-[0.1em]"
-        :class="scope === 'selected' ? 'bg-foreground text-background' : 'text-faint hover:text-foreground'"
-        @click="scope = 'selected'"
-      >
-        {{ t("ab.sel") }} {{ props.selectedCount }}
-      </button>
-    </div>
-
     <!-- 批量动作 -->
-    <div class="flex items-center gap-1.5 px-2">
+    <div class="flex min-w-0 items-center gap-1 overflow-x-auto px-1.5">
       <Button
         v-for="action in ACTIONS"
         :key="action.key"
@@ -90,8 +71,7 @@ onBeforeUnmount(clearPending);
         :title="'hintKey' in action ? t(action.hintKey) : undefined"
         :disabled="
           props.busyAction !== '' ||
-          (pending !== '' && pending !== action.key) ||
-          (scope === 'selected' && props.selectedCount === 0)
+          (pending !== '' && pending !== action.key)
         "
         @click="onRun(action.key)"
       >
@@ -103,8 +83,8 @@ onBeforeUnmount(clearPending);
 
     <!-- 中断 -->
     <div class="ml-auto flex items-center gap-2 border-l border-border px-2">
-      <span class="lbl min-w-[132px] shrink-0 whitespace-nowrap text-right text-hazard">
-        {{ pending !== "" ? t("ab.confirmHint") : "" }}
+      <span v-if="pending !== ''" class="lbl shrink-0 whitespace-nowrap text-hazard">
+        {{ t("ab.confirmHint") }}
       </span>
       <Button
         size="sm"

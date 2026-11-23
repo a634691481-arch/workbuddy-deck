@@ -709,17 +709,26 @@ fn switch_account_inner(
     let mut reassign_report: Option<Value> = None;
     if restart
         && !replace_sessions
+        && before_uid.is_empty()
+    {
+        // 读不到切换前身份（首次使用 / auth 文件缺失）时无从判断该把哪批会话划归过来。
+        // 不静默跳过：让进度条说明白，用户才知道为什么切完看不到旧上下文。
+        progress("未识别到切换前的账号，本次不划归上下文");
+    }
+    if restart
+        && !replace_sessions
         && !before_uid.is_empty()
         && before_uid != expected_uid
     {
         progress("正在把上下文划归新账号…");
         match session::reassign_session_pool(variant, before_uid, &expected_uid) {
-            Ok((sessions, spaces)) => {
+            Ok((sessions, spaces, backup)) => {
                 progress(&format!("已划归 {sessions} 条会话、{spaces} 个空间"));
                 reassign_report = Some(json!({
                     "ok": true,
                     "sessions": sessions,
                     "spaces": spaces,
+                    "backup": backup.to_string_lossy(),
                     "fromUid": before_uid,
                     "toUid": expected_uid,
                 }));

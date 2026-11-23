@@ -16,6 +16,11 @@
 //! | 能量余额 | GET `/energy` → `balance` |
 //! | 徽章资产 | GET `/badges` → `badges[]` |
 //!
+//! 礼包补偿走 **codebuddy 域**（`{WORKBUDDY_API_ENDPOINT}/billing/meter/*`）：
+//! 补偿 `compensation-status` → `claim-compensation`；新手礼包
+//! `check-gift-claimed` → `claim-gift`。同一账号同一活动期（`end_time`）本地防重，
+//! 领取回执以 `data.credit` 为准。
+//!
 //! 安全边界：
 //! - **写操作不重试**（[`RetryClass::Write`]），每轮每类最多 1 次；
 //! - `client_token` 每次新生成 `u-<uuid4>`（缺了 `/lottery/draw` 会 400）；
@@ -36,9 +41,10 @@ use serde_json::{json, Value};
 
 use crate::modules::account::{account_display_name, load_accounts, variant_of};
 use crate::modules::config::{
-    add_growth_center_log, load_growth_center_config, now_ms, RunFlagGuard,
-    GROWTH_CENTER_API_PREFIX, GROWTH_CENTER_DEFAULT_BUDGET_SECONDS,
+    add_growth_center_log, atomic_write, load_growth_center_config, now_ms, store_dir,
+    RunFlagGuard, GROWTH_CENTER_API_PREFIX, GROWTH_CENTER_DEFAULT_BUDGET_SECONDS,
     GROWTH_CENTER_DEFAULT_INTERVAL_MINUTES, GROWTH_CENTER_MAX_WRITES_PER_RUN,
+    WORKBUDDY_API_ENDPOINT,
 };
 use crate::modules::growth_center_crypto::{decrypt_envelope, parse_envelope, TokenError};
 use crate::modules::growth_tasks::uid_of;
@@ -410,6 +416,26 @@ pub async fn buddy_quota(account: &Value) -> Result<Value, String> {
     Ok(parse_buddy_quota(payload(&reply)))
 }
 
+/// `/buddy/info` 的 `data` → `{name, rarity, personality}`（`data.buddy` 优先）。
+pub fn parse_buddy_info(data: &Value) -> Value {
+    let buddy = data.get("buddy").unwrap_or(data);
+    json!({
+        "name": text_of(buddy.get("name")),
+        "rarity": text_of(buddy.get("rarity")),
+        "personality": text_of(buddy.get("personality")),
+    })
+}
+
+/// Buddy 信息资产：`GET /buddy/info`（互动玩法展示用）。
+pub async fn buddy_info(account: &Value) -> Result<Value, String> {
+    let call = asset_call(account).await?;
+    let reply = call.get("/buddy/info").await;
+    if !reply.ok() {
+        return Err(reply.message());
+    }
+    Ok(parse_buddy_info(payload(&reply)))
+}
+
 // ---------------------------------------------------------------------------
 // 四类动作
 // ---------------------------------------------------------------------------
@@ -680,6 +706,200 @@ async fn step_buddy_open(account: &Value, call: &Call, cfg: &Value) -> Value {
             "needsAttention": reply.is_hard_failure() })
 }
 
+// ---------------------------------------------------------------------------
+// 礼包补偿（codebuddy 域 /billing/meter/*）
+// ---------------------------------------------------------------------------
+
+/// 补偿 / 礼包本地防重文件：`{kind}|{uid}|{活动期 end_time}` → 处理记录。
+fn benefits_state_file() -> std::path::PathBuf {
+    store_dir().join("benefits_state.json")
+}
+
+static BENEFITS_LOCK: Mutex<()> = Mutex::new(());
+
+fn load_benefits_state() -> Value {
+    std::fs::read_to_string(benefits_state_file())
+        .ok()
+        .and_then(|text| serde_json::from_str::<Value>(&text).ok())
+        .unwrap_or_else(|| json!({}))
+}
+
+fn benefit_guard_get(key: &str) -> Option<Value> {
+    let _guard = BENEFITS_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    load_benefits_state().get(key).cloned()
+}
+
+fn benefit_guard_mark(key: &str, status: &str, credit: Value) {
+    let _guard = BENEFITS_LOCK.lock().unwrap_or_else(|p| p.into_inner());
+    let mut state = load_benefits_state();
+    state[key] = json!({ "status": status, "credit": credit, "recordedAt": now_ms() });
+    if let Ok(text) = serde_json::to_string_pretty(&state) {
+        let _ = atomic_write(&benefits_state_file(), &text);
+    }
+}
+
+/// `end_time` 等可能为字符串/浮点的数字字段 → i64（对齐参考实现的 `_as_int`）。
+fn num_of(value: Option<&Value>) -> i64 {
+    match value {
+        Some(Value::Number(n)) => n.as_i64().unwrap_or_else(|| n.as_f64().map(|f| f as i64).unwrap_or(0)),
+        Some(Value::String(s)) => s.trim().parse().unwrap_or(0),
+        _ => 0,
+    }
+}
+
+/// `/billing/meter/*` 状态回执的 `data` → camelCase（缺字段给默认值）。
+pub fn parse_benefit(data: &Value) -> Value {
+    json!({
+        "active": bool_of(data.get("active")),
+        "claimed": bool_of(data.get("claimed")),
+        "creditNum": num_of(data.get("credit_num")),
+        "endTime": text_of(data.get("end_time")),
+    })
+}
+
+/// 状态查询是幂等 POST，按只读重试；领取按写操作不重试。
+async fn billing_post(call: &Call, path: &str, retry: RetryClass) -> ApiReply {
+    request(
+        &call.budget,
+        &format!("{WORKBUDDY_API_ENDPOINT}{path}"),
+        "POST",
+        Some(json!({})),
+        &call.headers(),
+        retry,
+    )
+    .await
+}
+
+/// 企业版账号「无个人成长体系」：400 code 10001「企业账号不支持该操作」。
+fn is_enterprise_denial(reply: &ApiReply) -> bool {
+    reply.code() == 10001 || reply.message().contains("企业")
+}
+
+/// 领一类福利（compensation / gift 二选一，路径与文案由调用方给）。
+/// 返回 `{result: success|skipped|error, detail, credit}`。
+async fn claim_benefit(
+    call: &Call,
+    kind: &str,
+    status_path: &str,
+    claim_path: &str,
+    label: &str,
+) -> Value {
+    let status = billing_post(call, status_path, RetryClass::Read).await;
+    if !status.ok() {
+        if is_enterprise_denial(&status) {
+            return json!({ "result": "skipped", "detail": format!("{label}: 企业版账号不支持") });
+        }
+        return json!({ "result": "error", "detail": format!("{label}: {}", status.message()),
+                       "needsAttention": status.is_hard_failure() });
+    }
+    let info = parse_benefit(payload(&status));
+    if !bool_of(info.get("active")) {
+        return json!({ "result": "skipped", "detail": format!("{label}: 无待领福利") });
+    }
+    if bool_of(info.get("claimed")) {
+        return json!({ "result": "skipped", "detail": format!("{label}: 已领取") });
+    }
+    let credit_num = int_of(&info, "creditNum");
+    if credit_num <= 0 {
+        return json!({ "result": "skipped", "detail": format!("{label}: 无积分") });
+    }
+    let deadline = text_of(info.get("endTime"));
+    let guard_key = format!("{kind}|{}|{deadline}", call.uid);
+    if benefit_guard_get(&guard_key).is_some() {
+        return json!({ "result": "skipped", "detail": format!("{label}: 本期已处理") });
+    }
+    let claim = billing_post(call, claim_path, RetryClass::Write).await;
+    if claim.ok() {
+        let credit = payload(&claim).get("credit").cloned();
+        benefit_guard_mark(&guard_key, "processed", credit.clone().unwrap_or(Value::Null));
+        let actual = credit
+            .as_ref()
+            .map(|v| num_of(Some(v)))
+            .unwrap_or(credit_num);
+        return json!({ "result": "success", "detail": format!("{label}: +{actual}积分"),
+                       "credit": actual });
+    }
+    let raw = claim.message().to_lowercase();
+    if raw.contains("already") || claim.message().contains("已领取") {
+        benefit_guard_mark(&guard_key, "already_claimed", Value::Null);
+        return json!({ "result": "skipped", "detail": format!("{label}: 已领取") });
+    }
+    if is_enterprise_denial(&claim) {
+        benefit_guard_mark(&guard_key, "enterprise", Value::Null);
+        return json!({ "result": "skipped", "detail": format!("{label}: 企业版账号不支持") });
+    }
+    json!({ "result": "error", "detail": format!("{label}: {}", claim.message()),
+            "needsAttention": claim.is_hard_failure() })
+}
+
+/// 礼包补偿：一次性补偿 + 新手礼包（各自独立，一边失败不影响另一边）。
+async fn step_benefits(account: &Value, call: &Call, cfg: &Value) -> Value {
+    if !feature_on(cfg, "benefits") {
+        return json!({ "action": "benefits", "result": "skipped", "detail": "功能未开启" });
+    }
+    let compensation = claim_benefit(
+        call,
+        "compensation",
+        "/billing/meter/compensation-status",
+        "/billing/meter/claim-compensation",
+        "补偿",
+    )
+    .await;
+    let gift = claim_benefit(
+        call,
+        "gift",
+        "/billing/meter/check-gift-claimed",
+        "/billing/meter/claim-gift",
+        "新手礼包",
+    )
+    .await;
+    let rows = [compensation, gift];
+    let any_success = rows
+        .iter()
+        .any(|r| r.get("result").and_then(Value::as_str) == Some("success"));
+    let any_error = rows
+        .iter()
+        .any(|r| r.get("result").and_then(Value::as_str) == Some("error"));
+    let result = if any_error {
+        "error"
+    } else if any_success {
+        "success"
+    } else {
+        "skipped"
+    };
+    let detail = rows
+        .iter()
+        .filter_map(|r| r.get("detail").and_then(Value::as_str))
+        .collect::<Vec<_>>()
+        .join("；");
+    let credit: i64 = rows
+        .iter()
+        .filter(|r| r.get("result").and_then(Value::as_str) == Some("success"))
+        .map(|r| int_of(r, "credit"))
+        .sum();
+    if result == "error" {
+        let error = rows
+            .iter()
+            .filter(|r| r.get("result").and_then(Value::as_str) == Some("error"))
+            .filter_map(|r| r.get("detail").and_then(Value::as_str))
+            .collect::<Vec<_>>()
+            .join("；");
+        write_log(account, "benefits", "error", &detail, Some(&error), Value::Null);
+    } else if result == "success" {
+        write_log(account, "benefits", "success", &detail, None, json!({ "credit": credit }));
+    }
+    let needs_attention = rows
+        .iter()
+        .any(|r| bool_of(r.get("needsAttention")));
+    json!({
+        "action": "benefits",
+        "result": result,
+        "detail": detail,
+        "credit": credit,
+        "needsAttention": needs_attention,
+    })
+}
+
 /// 写一条成长中心日志（只在真正发起写操作或硬失败时调用）。
 fn write_log(
     account: &Value,
@@ -811,6 +1031,7 @@ async fn run_account(account: &Value, cfg: &Value) -> Value {
         step_redeem(account, &call, cfg).await,
         step_lottery(account, &call, cfg).await,
         step_buddy_open(account, &call, cfg).await,
+        step_benefits(account, &call, cfg).await,
     ] {
         steps.push(step);
     }
@@ -916,6 +1137,7 @@ pub async fn run_growth_center_action(account_id: &str, action: &str) -> Value {
         "redeem" => step_redeem(&account, &call, &cfg).await,
         "lottery" => step_lottery(&account, &call, &cfg).await,
         "buddy_open" => step_buddy_open(&account, &call, &cfg).await,
+        "benefits" => step_benefits(&account, &call, &cfg).await,
         other => json!({ "result": "error", "error": format!("未知动作: {other}") }),
     };
     json!({
@@ -1100,6 +1322,42 @@ mod tests {
                 .unwrap()
                 .is_empty()
         );
+    }
+
+    #[test]
+    fn benefit_status_parses_tolerant_shapes() {
+        let out = parse_benefit(&json!({
+            "active": true,
+            "claimed": false,
+            "credit_num": "30",
+            "end_time": "2026-12-31",
+        }));
+        assert_eq!(out["active"], true);
+        assert_eq!(out["claimed"], false);
+        assert_eq!(out["creditNum"], 30);
+        assert_eq!(out["endTime"], "2026-12-31");
+
+        // 缺字段 / 数字形态 / 浮点积分。
+        let loose = parse_benefit(&json!({ "active": 1, "credit_num": 12.5 }));
+        assert_eq!(loose["active"], true);
+        assert_eq!(loose["creditNum"], 12);
+        let empty = parse_benefit(&json!({}));
+        assert_eq!(empty["active"], false);
+        assert_eq!(empty["creditNum"], 0);
+    }
+
+    #[test]
+    fn buddy_info_prefers_nested_buddy_object() {
+        let out = parse_buddy_info(&json!({
+            "buddy": { "name": "糯米", "rarity": "SSR", "personality": "活泼" }
+        }));
+        assert_eq!(out["name"], "糯米");
+        assert_eq!(out["rarity"], "SSR");
+        assert_eq!(out["personality"], "活泼");
+        // data 直接就是 buddy 的形态也兼容。
+        let flat = parse_buddy_info(&json!({ "name": "团子", "rarity": "SR" }));
+        assert_eq!(flat["name"], "团子");
+        assert_eq!(flat["personality"], "");
     }
 
     #[test]

@@ -57,10 +57,17 @@ fn trace(line: &str) {
     if let Some(parent) = path.parent() {
         let _ = std::fs::create_dir_all(parent);
     }
-    if std::fs::metadata(&path).map(|m| m.len() > 128 * 1024).unwrap_or(false) {
+    if std::fs::metadata(&path)
+        .map(|m| m.len() > 128 * 1024)
+        .unwrap_or(false)
+    {
         let _ = std::fs::remove_file(&path);
     }
-    if let Ok(mut file) = std::fs::OpenOptions::new().create(true).append(true).open(&path) {
+    if let Ok(mut file) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(&path)
+    {
         let _ = writeln!(
             file,
             "{} {}",
@@ -229,7 +236,9 @@ async fn fetch_manifest(mirror: &str) -> Result<Value, String> {
         };
         match client.get(&url).send().await {
             Ok(resp) if resp.status().is_success() => match resp.json::<Value>().await {
-                Ok(body) if body.get("version").and_then(Value::as_str).is_some() => return Ok(body),
+                Ok(body) if body.get("version").and_then(Value::as_str).is_some() => {
+                    return Ok(body)
+                }
                 Ok(_) => last = "更新清单缺少 version 字段".into(),
                 Err(e) => last = format!("更新清单解析失败：{e}"),
             },
@@ -313,7 +322,11 @@ pub async fn check(force: bool) -> Value {
         result.get("ok").and_then(Value::as_bool).unwrap_or(false),
         APP_VERSION,
         result.get("latest").and_then(Value::as_str).unwrap_or("-"),
-        if cfg.mirror.is_empty() { "direct" } else { cfg.mirror.as_str() }
+        if cfg.mirror.is_empty() {
+            "direct"
+        } else {
+            cfg.mirror.as_str()
+        }
     ));
     result
 }
@@ -352,7 +365,8 @@ pub fn download(app: AppHandle) -> Value {
         // 重试三次：GitHub 的下载域名（objects.githubusercontent.com）在国内经常
         // 第一次就 reset，重试往往第二次就通。每次都是独立的 updater + 独立进度。
         let mut version = String::new();
-        let mut outcome: Result<(tauri_plugin_updater::Update, Vec<u8>), String> = Err("未开始".into());
+        let mut outcome: Result<(tauri_plugin_updater::Update, Vec<u8>), String> =
+            Err("未开始".into());
         for attempt in 1..=3u32 {
             if attempt > 1 {
                 // 2s / 5s 退避，给线路一点恢复时间
@@ -382,7 +396,10 @@ pub fn download(app: AppHandle) -> Value {
             version = update.version.clone();
             let app_for_progress = app.clone();
             let downloaded = AtomicU64::new(0);
-            let _ = app.emit("update://progress", json!({ "downloaded": 0, "total": null }));
+            let _ = app.emit(
+                "update://progress",
+                json!({ "downloaded": 0, "total": null }),
+            );
             // 只 download 不 install：包留在返回值里，安装交给 restart()
             let dl = update
                 .download(
@@ -498,7 +515,11 @@ pub fn spawn_poller(app: AppHandle) {
         loop {
             if load_config().auto_check {
                 let status = check(false).await;
-                if status.get("hasUpdate").and_then(Value::as_bool).unwrap_or(false) {
+                if status
+                    .get("hasUpdate")
+                    .and_then(Value::as_bool)
+                    .unwrap_or(false)
+                {
                     let _ = app.emit("update://available", status);
                 }
             } else {
@@ -526,8 +547,14 @@ mod tests {
         assert_eq!(normalize_mirror(""), "");
         assert_eq!(normalize_mirror("  "), "");
         assert_eq!(normalize_mirror("ftp://x"), "");
-        assert_eq!(normalize_mirror("https://ghproxy.net"), "https://ghproxy.net/");
-        assert_eq!(normalize_mirror("https://ghproxy.net/"), "https://ghproxy.net/");
+        assert_eq!(
+            normalize_mirror("https://ghproxy.net"),
+            "https://ghproxy.net/"
+        );
+        assert_eq!(
+            normalize_mirror("https://ghproxy.net/"),
+            "https://ghproxy.net/"
+        );
     }
 
     #[test]

@@ -17,16 +17,13 @@ import {
   CircleCheck,
   Dices,
   Download,
-  Gauge,
   Loader2,
   Pencil,
   RotateCw,
-  Star,
   Tags,
   Trash2,
   Upload,
   UserPlus,
-  Zap,
 } from "lucide-vue-next";
 
 import {
@@ -36,14 +33,12 @@ import {
   accountSetNote,
   importLocalAccounts,
   refreshAllTokens,
-  switchPreflight,
   switchWorkbuddyAccount,
   workbuddyStatus,
   type AccountForecastRow,
   type AccountHealth,
   type AccountOverviewRow,
   type AccountPackage,
-  type SwitchPreflight,
   type WorkbuddyStatus,
 } from "@/lib/api";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
@@ -53,6 +48,7 @@ import { useArmedConfirm } from "@/composables/useArmedConfirm";
 import { useLogin } from "@/composables/useLogin";
 import { useShell } from "@/composables/useShell";
 import { useListAnim } from "@/composables/useListAnim";
+import { useStaggerList } from "@/composables/useStagger";
 import { t, type I18nKey } from "@/lib/i18n";
 import { mask } from "@/lib/task-meta";
 
@@ -101,6 +97,9 @@ const refreshIcon = computed<IconNode>(() => {
   return RefreshCw;
 });
 let refreshDoneTimer: ReturnType<typeof setTimeout> | null = null;
+
+/** 卡片交错入场：数据到位/刷新时重播（用原始 rows 做源，筛选/搜索不重播）。 */
+const stagger = useStaggerList(() => rows.value);
 
 /** refresh=false 读本地快照；true 拉官方资源包（较慢，页面先显示旧数据）。 */
 async function load(refresh = false) {
@@ -527,7 +526,6 @@ const orderedRows = computed(() => {
 const query = ref("");
 type SortKey = "default" | "balance" | "health" | "expiry";
 const sortBy = ref<SortKey>("default");
-const viewMode = ref<"cards" | "list">("cards");
 
 const visibleRows = computed(() => {
   const keyword = query.value.trim().toLowerCase();
@@ -699,28 +697,15 @@ const switchError = ref<null | {
   message: string;
 }>(null);
 
-/** 切换前安全检查：源/目标会话数 + 将删除清单 + 备份信息（打开弹框时拉） */
-const preflight = ref<SwitchPreflight | null>(null);
-const preflightLoading = ref(false);
-
-async function loadPreflight(accountId: string) {
-  preflight.value = null;
-  preflightLoading.value = true;
-  try {
-    preflight.value = await switchPreflight(accountId);
-  } catch {
-    preflight.value = null;
-  } finally {
-    preflightLoading.value = false;
-  }
-}
-
+/**
+ * 热切换不再做「会话预检」：既不动会话也不备份，扫描目标账号的会话清单没有意义。
+ * 弹框只做一次确认，省掉一次几秒的磁盘遍历。
+ */
 function openSwitch(row: AccountOverviewRow) {
   if (switching.value) return;
   switchError.value = null;
   switchTarget.value = row;
   switchProgress.value = "";
-  void loadPreflight(row.accountId);
 }
 
 /**
@@ -831,92 +816,25 @@ async function doSwitch() {
   <div class="flex min-h-0 flex-1 flex-col">
     <header class="flex shrink-0 flex-wrap items-center justify-between gap-x-3 gap-y-1 border-b border-border bg-panel px-4 py-2 wb-flat">
       <div class="min-w-0">
-        <h1 class="text-[13px] tracking-[0.12em] text-foreground">{{ t("ac.title") }}</h1>
-        <div class="readout mt-0.5 flex flex-wrap items-center gap-x-3 text-[9px] text-faint">
-          <span>{{ t("ac.count") }} {{ String(rows.length).padStart(2, "0") }}</span>
-          <span class="flex items-center gap-1">Σ <AnimatedNumber :value="totalRemaining" /></span>
-          <span>{{ mode === "official" ? t("ac.officialMode") : t("ac.localMode") }}</span>
-          <span v-if="failedCount > 0" class="text-hazard">{{ t("ac.failed") }} {{ failedCount }}</span>
+        <h1 class="text-[13px] text-foreground">{{ t("ac.title") }}</h1>
+        <div class="mt-0.5 flex flex-wrap items-center gap-x-4 gap-y-0.5">
+          <span class="flex items-baseline gap-1.5">
+            <span class="text-[9px] text-faint">{{ t("ac.count") }}</span>
+            <span class="readout text-[15px] font-semibold leading-none text-foreground tabular-nums">
+              {{ String(rows.length).padStart(2, "0") }}
+            </span>
+          </span>
+          <span class="flex items-baseline gap-1.5">
+            <span class="text-[11px] font-medium leading-none text-muted-foreground">Σ</span>
+            <span class="readout text-[15px] font-semibold leading-none text-foreground tabular-nums">
+              <AnimatedNumber :value="totalRemaining" />
+            </span>
+            <span class="text-[9px] text-faint">{{ mode === "official" ? t("ac.officialMode") : t("ac.localMode") }}</span>
+          </span>
+          <span v-if="failedCount > 0" class="text-[10px] text-hazard">{{ t("ac.failed") }} {{ failedCount }}</span>
         </div>
       </div>
-      <div class="flex shrink-0 items-center gap-1.5">
-        <!-- 随机切换：从非当前账号里抽一个，点击后进同一个确认弹框 -->
-        <button
-          type="button"
-          class="flex items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
-          :disabled="switching || orderedRows.length < 2"
-          :title="`${t('ac.randomHint')}（${randomCandidates.length}）`"
-          @click="pickRandom()"
-        >
-          <Dices class="size-3" />
-          {{ t("ac.random") }}
-        </button>
-        <button
-          type="button"
-          class="flex items-center gap-1.5 bg-primary px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
-          :disabled="refreshing"
-          @click="load(true)"
-        >
-          <MorphIcon
-            :icon="refreshIcon"
-            :size="12"
-            :stroke-width="1.75"
-            spring="snappy"
-            reduced-motion="user"
-            color="currentColor"
-            :class="refreshing ? 'animate-spin' : ''"
-          />
-          {{ t("ac.refresh") }}
-        </button>
-        <button
-          type="button"
-          class="flex items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
-          :disabled="tokenRefreshing"
-          :title="t('ac.refreshToken')"
-          @click="refreshTokens()"
-        >
-          <Loader2 v-if="tokenRefreshing" class="size-3 animate-spin" />
-          <RotateCw v-else class="size-3" />
-          {{ t("ac.refreshToken") }}
-        </button>
-        <button
-          type="button"
-          class="flex items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
-          :disabled="importing"
-          :title="t('ac.importLocalHint')"
-          @click="importLocal(false)"
-        >
-          <Loader2 v-if="importing" class="size-3 animate-spin" />
-          <Download v-else class="size-3" />
-          {{ t("ac.importLocal") }}
-        </button>
-        <button
-          type="button"
-          class="flex items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
-          :disabled="loginPending"
-          @click="startLogin()"
-        >
-          <Loader2 v-if="loginPending" class="size-3 animate-spin" />
-          <UserPlus v-else class="size-3" />
-          {{ t("ac.add") }}
-        </button>
-        <button
-          type="button"
-          class="flex items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
-          @click="importAccounts()"
-        >
-          <Upload class="size-3" />
-          {{ t("ac.import") }}
-        </button>
-        <button
-          type="button"
-          class="flex items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
-          @click="exportAccounts()"
-        >
-          <Download class="size-3" />
-          {{ t("ac.export") }}
-        </button>
-      </div>
+
 
       <!-- 搜索 / 排序 / 视图：账号多了靠眼睛扫不过来 -->
       <div class="mt-2 flex w-full items-center gap-1.5">
@@ -939,19 +857,12 @@ async function doSwitch() {
         <span class="readout text-[9px] text-faint">{{ visibleRows.length }}/{{ rows.length }}</span>
         <button
           type="button"
-          class="flex h-6 items-center gap-1 border border-border-strong px-1.5 text-[9px] uppercase tracking-[0.08em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+          class="flex h-6 items-center gap-1 border border-border-strong px-1.5 text-[9px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
           :title="t('ag.manageHint')"
           @click="openGroupDialog"
         >
           <Tags class="size-3" />
           {{ t("ag.manage") }}<span v-if="groups.length" class="text-faint">·{{ groups.length }}</span>
-        </button>
-        <button
-          type="button"
-          class="ml-auto flex h-6 items-center border border-border-strong px-1.5 text-[9px] uppercase tracking-[0.08em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
-          @click="viewMode = viewMode === 'cards' ? 'list' : 'cards'"
-        >
-          {{ viewMode === "cards" ? t("ac.viewList") : t("ac.viewCards") }}
         </button>
       </div>
 
@@ -1010,7 +921,7 @@ async function doSwitch() {
       <!-- 首次加载：骨架卡（呼吸块）比一个「···」更像在干活 -->
       <div
         v-if="visibleRows.length === 0 && loading"
-        class="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3"
+        class="grid grid-cols-2 gap-2 lg:grid-cols-3"
       >
         <div
           v-for="n in 6"
@@ -1046,17 +957,17 @@ async function doSwitch() {
         <div class="mt-4 flex items-center justify-center gap-2">
           <button
             type="button"
-            class="border border-foreground bg-foreground px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-background"
+            class="border border-foreground bg-foreground px-2.5 py-1 text-[10px] text-background"
             @click="importLocal(false)"
           >
-            {{ t("ac.importLocal") }}
+            <span class="max-[640px]:hidden">{{ t("ac.importLocal") }}</span>
           </button>
           <button
             type="button"
-            class="border border-border-strong px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground hover:border-foreground hover:text-foreground"
+            class="border border-border-strong px-2.5 py-1 text-[10px] text-muted-foreground hover:border-foreground hover:text-foreground"
             @click="startLogin()"
           >
-            {{ t("ac.add") }}
+            <span class="max-[640px]:hidden">{{ t("ac.add") }}</span>
           </button>
         </div>
       </div>
@@ -1065,85 +976,70 @@ async function doSwitch() {
       </div>
 
       <div
-        v-else-if="viewMode === 'cards'"
+        v-else
         ref="cardsEl"
-        class="grid grid-cols-1 gap-2.5 md:grid-cols-2 xl:grid-cols-3"
+        class="grid grid-cols-2 gap-2 lg:grid-cols-3"
+        :class="stagger.listClass()"
       >
         <article
-          v-for="(row, index) in visibleRows"
+          v-for="row in visibleRows"
           :key="row.accountId"
           class="flex min-w-0 flex-col border bg-card"
           :class="[
-            isPrimary(row) ? 'border-hazard shadow-[0_0_0_1px_var(--color-hazard)]' : 'border-border',
+            isPrimary(row) ? 'border-hazard bg-hazard-soft' : 'border-border',
             row.ok ? '' : 'border-l-2 border-l-hazard',
           ]"
         >
-          <!-- 卡头：序号 + 名称 + 档位 + 徽标（限流内联，不占额外高度） -->
+          <!-- 卡头：名称 + 档位 + 状态；操作收成图标按钮 -->
           <div class="flex items-start justify-between gap-2 px-3 pt-2.5">
-            <div class="min-w-0">
-              <div class="flex min-w-0 items-center gap-1.5">
-                <!-- 健康点：一眼扫出「哪个号快废了」，不占额外高度 -->
-                <span
-                  class="size-1.5 shrink-0 rounded-full"
-                  :class="healthDot(row.health)"
-                  :title="healthTitle(row.health)"
-                />
-                <span class="readout shrink-0 text-[9px] text-faint">{{ String(index + 1).padStart(2, "0") }}</span>
-                <span class="min-w-0 truncate text-[12px] text-foreground" :title="mask(row.label)">
-                  {{ mask(row.label) }}
-                </span>
-                <span class="lbl shrink-0 border border-border-strong px-1 py-0.5 text-[8px] text-muted-foreground">
-                  {{ variantText(row.variant) }}
-                </span>
-                <span
-                  v-if="isPrimary(row)"
-                  class="lbl-ink flex shrink-0 items-center gap-0.5 border border-hazard bg-hazard-soft px-1 py-0.5 text-[8px] text-hazard"
-                  :title="t('ac.currentBadgeHint')"
-                >
-                  <CircleCheck class="size-2.5" />
-                  {{ t("ac.currentBadge") }}
-                </span>
-                <span
-                  v-if="isPriority(row)"
-                  class="lbl-ink flex shrink-0 items-center gap-0.5 border border-hazard px-1 py-0.5 text-[8px] text-hazard"
-                  :title="t('ac.priorityHint')"
-                >
-                  <Star class="size-2.5" />
-                  {{ t("ac.priority") }}
-                </span>
-                <span
-                  v-if="activeLimits(row).length > 0"
-                  class="lbl-ink flex min-w-0 shrink items-center gap-0.5 border border-hazard px-1 py-0.5 text-[8px] text-hazard"
-                  :title="limitTitle(activeLimits(row))"
-                >
-                  <Gauge class="size-2.5 shrink-0" />
-                  <span class="min-w-0 truncate">{{ limitShort(row) }}</span>
-                </span>
-              </div>
-              <div class="readout mt-0.5 truncate text-[9px] text-faint" :title="row.accountId">
-                {{ row.accountId }}
-              </div>
+            <div class="flex min-w-0 items-center gap-1.5">
+              <span
+                class="size-1.5 shrink-0 rounded-full"
+                :class="healthDot(row.health)"
+                :title="healthTitle(row.health)"
+              />
+              <span
+                class="min-w-0 truncate text-[13px] font-medium text-foreground"
+                :title="mask(row.label)"
+              >
+                {{ mask(row.label) }}
+              </span>
+              <span class="shrink-0 text-[10px] text-faint max-[720px]:hidden">{{ variantText(row.variant) }}</span>
+              <span
+                v-if="isPrimary(row)"
+                class="shrink-0 border border-hazard px-1 text-[9px] leading-4 text-hazard"
+              >
+                {{ t("ac.currentShort") }}
+              </span>
+              <span v-else-if="isPriority(row)" class="shrink-0 text-[10px] text-muted-foreground max-[720px]:hidden">
+                {{ t("ac.priority") }}
+              </span>
+              <span
+                v-if="activeLimits(row).length > 0"
+                class="min-w-0 shrink truncate text-[11px] text-warning"
+                :title="limitTitle(activeLimits(row))"
+              >
+                {{ limitShort(row) }}
+              </span>
             </div>
-            <div class="flex shrink-0 items-center gap-1">
+            <div class="flex shrink-0 items-center gap-0.5">
               <button
                 v-if="!isPrimary(row)"
                 type="button"
-                class="flex items-center gap-1 border border-foreground bg-foreground px-1.5 py-0.5 text-[9px] font-medium text-background transition-opacity hover:opacity-85 disabled:opacity-40"
+                class="p-1 text-muted-foreground transition-colors hover:text-foreground disabled:opacity-40"
                 :title="t('ac.switchTitle')"
                 :disabled="switching"
                 @click="openSwitch(row)"
               >
-                <ArrowLeftRight class="size-2.5" />
-                {{ t("ac.setCurrent") }}
+                <ArrowLeftRight class="size-3.5" />
               </button>
               <button
                 type="button"
-                class="flex items-center gap-1 border border-border-strong px-1.5 py-0.5 text-[9px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+                class="p-1 text-muted-foreground transition-colors hover:text-foreground"
                 :title="t('ac.edit')"
                 @click="editingId === row.accountId ? cancelNote() : startNote(row)"
               >
-                <Pencil class="size-2.5" />
-                {{ t("ac.edit") }}
+                <Pencil class="size-3.5" />
               </button>
             </div>
           </div>
@@ -1151,11 +1047,10 @@ async function doSwitch() {
           <!-- 余额读数 -->
           <div class="mt-2 flex items-end justify-between gap-2 px-3">
             <div class="flex min-w-0 items-baseline gap-1.5 overflow-hidden">
-              <Zap class="size-3.5 shrink-0 self-center text-hazard" />
               <!-- 骨架只做遮罩，不卸载数字组件：卸载后重挂会直接显示终值，滚动动画就丢了 -->
-              <span class="relative inline-flex min-w-[6rem] items-baseline">
+              <span class="relative inline-flex min-w-0 items-baseline">
                 <span
-                  class="readout text-[24px] leading-none text-foreground"
+                  class="readout text-[18px] leading-none text-foreground"
                   :class="refreshing && row.ok ? 'opacity-0' : ''"
                 >
                   <AnimatedNumber :value="row.ok ? row.remaining : null" :decimals="0" />
@@ -1181,7 +1076,7 @@ async function doSwitch() {
               </span>
               <!-- 次级信息合成一行：三行 9px 堆叠读不出主次 -->
               <span v-if="refreshing" class="inline-block h-2 w-28 animate-pulse bg-border" />
-              <span v-else class="readout whitespace-nowrap text-[9px] leading-none text-faint">
+              <span v-else class="readout whitespace-nowrap text-[9px] leading-none text-faint max-[760px]:hidden">
                 {{ row.packages }} {{ t("ac.packages") }}
                 <span class="px-0.5">·</span>
                 <span :title="`${t('ac.updated')} ${fmtTime(row.updatedAt)}`">{{ fmtTime(row.updatedAt) }}</span>
@@ -1191,7 +1086,7 @@ async function doSwitch() {
 
           <!-- 余额进度 -->
           <div class="mt-1.5 px-3" aria-hidden="true">
-            <div class="h-[3px] bg-border-strong">
+            <div class="h-[2px] bg-border-strong">
               <!-- 余量越低越亮：<10% 转红（唯一需要警觉的档），其余按明度分层 -->
               <div
                 class="h-full transition-[width] duration-300 ease-out"
@@ -1203,7 +1098,7 @@ async function doSwitch() {
 
           <!-- 近期到期：一行摘要（几个包 · 最近到期），明细进弹框 -->
           <div class="mt-2 flex flex-1 items-center gap-2 border-t border-border px-3 py-1.5">
-            <span class="lbl shrink-0">// {{ t("ac.expiring") }}</span>
+            <span class="lbl shrink-0">{{ t("ac.expiring") }}</span>
             <span v-if="refreshing" class="inline-block h-2.5 w-full max-w-48 animate-pulse bg-border" />
             <p
               v-else-if="!row.ok"
@@ -1233,8 +1128,8 @@ async function doSwitch() {
             </button>
           </div>
 
-          <!-- 备注 / 分组 / 标签 / 删除 -->
-          <div class="border-t border-border px-3 py-1.5">
+          <!-- 备注 / 分组 / 标签 / 删除：双列卡太窄，窄面板下让位给余额与到期 -->
+          <div class="border-t border-border px-3 py-1 max-[720px]:hidden">
             <div v-if="editingId === row.accountId" class="flex flex-col gap-1.5">
               <div class="flex items-center gap-1">
                 <input
@@ -1334,55 +1229,6 @@ async function doSwitch() {
           </div>
         </article>
       </div>
-
-      <!-- 列表视图：20+ 账号时一屏看更多，只保留最关键的列 -->
-      <div v-else class="border border-border bg-card">
-        <div class="readout grid grid-cols-[2.2rem_minmax(0,1fr)_5.5rem_4rem_5.5rem_7rem] gap-px border-b border-border bg-muted text-[9px] text-faint">
-          <span class="px-2 py-1">#</span>
-          <span class="px-2 py-1">{{ t("ac.name") }}</span>
-          <span class="px-2 py-1 text-right">{{ t("ac.balanceShort") }}</span>
-          <span class="px-2 py-1 text-right">{{ t("ac.packages") }}</span>
-          <span class="px-2 py-1">{{ t("ac.expiring") }}</span>
-          <span class="px-2 py-1 text-right">{{ t("ac.ops") }}</span>
-        </div>
-        <div
-          v-for="(row, index) in visibleRows"
-          :key="row.accountId"
-          class="grid grid-cols-[2.2rem_minmax(0,1fr)_5.5rem_4rem_5.5rem_7rem] items-center gap-px border-b border-border/60 text-[11px] last:border-b-0 hover:bg-muted/60"
-          :class="isPrimary(row) ? 'border-l-2 border-l-hazard' : ''"
-        >
-          <span class="readout px-2 py-1.5 text-[9px] text-faint">{{ String(index + 1).padStart(2, "0") }}</span>
-          <div class="min-w-0 px-2 py-1.5">
-            <div class="flex min-w-0 items-center gap-1.5">
-              <span class="size-1.5 shrink-0 rounded-full" :class="healthDot(row.health)" :title="healthTitle(row.health)" />
-              <span class="min-w-0 truncate text-foreground" :title="mask(row.label)">{{ mask(row.label) }}</span>
-              <span v-if="isPrimary(row)" class="lbl-ink shrink-0 border border-hazard px-1 text-[8px] text-hazard">
-                {{ t("ac.currentBadge") }}
-              </span>
-            </div>
-          </div>
-          <span class="readout px-2 py-1.5 text-right text-foreground">
-            {{ row.ok ? fmt(row.remaining) : t("ac.noSnapshot") }}
-          </span>
-          <span class="readout px-2 py-1.5 text-right text-muted-foreground">{{ row.packages }}</span>
-          <span class="readout truncate px-2 py-1.5 text-[10px]" :class="expiringTone(row)">
-            {{ row.resources.length > 0 ? expiringSummary(row) : "—" }}
-          </span>
-          <span class="flex items-center justify-end gap-1 px-2 py-1.5">
-            <button
-              v-if="!isPrimary(row)"
-              type="button"
-              class="border border-foreground bg-foreground px-1 py-0.5 text-[9px] text-background"
-              @click="openSwitch(row)"
-            >
-              {{ t("ac.setCurrent") }}
-            </button>
-            <button type="button" class="border border-border-strong px-1 py-0.5 text-[9px] text-muted-foreground hover:border-hazard hover:text-hazard" @click="openPackages(row)">
-              {{ t("ac.viewAll") }}
-            </button>
-          </span>
-        </div>
-      </div>
     </div>
 
     <!-- OAuth 扫码登录：采集完成后的收尾提示（扫码在浏览器里，界面必须回话） -->
@@ -1417,7 +1263,7 @@ async function doSwitch() {
           <footer class="flex justify-end border-t border-border px-3 py-2">
             <button
               type="button"
-              class="bg-primary px-4 py-1 text-[10px] uppercase tracking-[0.1em] text-primary-foreground transition-opacity hover:opacity-85"
+              class="bg-primary px-4 py-1 text-[10px] text-primary-foreground transition-opacity hover:opacity-85"
               @click="dismissCollected"
             >
               {{ t("ac.oauthDone") }}
@@ -1454,7 +1300,7 @@ async function doSwitch() {
               </div>
               <button
                 type="button"
-                class="border border-border-strong px-2 py-1 text-[9px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
+                class="border border-border-strong px-2 py-1 text-[9px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground"
                 @click="closePackages"
               >
                 {{ t("ac.close") }}
@@ -1516,8 +1362,6 @@ async function doSwitch() {
     :switching="switching"
     :progress="switchProgress"
     :error="switchError"
-    :preflight="preflight"
-    :preflight-loading="preflightLoading"
     @close="closeSwitch"
     @confirm="doSwitch"
   />
@@ -1535,5 +1379,83 @@ async function doSwitch() {
     @remove="removeGroup"
     @toggle-exclude="toggleGroupExclude"
   />
+    <div class="grid shrink-0 grid-cols-12 gap-1 border-t border-border bg-panel px-2 py-1.5">
+        <!-- 随机切换：从非当前账号里抽一个，点击后进同一个确认弹框 -->
+        <button
+          type="button"
+          class="col-span-3 flex items-center justify-center gap-1 whitespace-nowrap border border-border-strong px-1 py-1 text-[9px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40 "
+          :disabled="switching || orderedRows.length < 2"
+          :title="`${t('ac.randomHint')}（${randomCandidates.length}）`"
+          @click="pickRandom()"
+        >
+          <Dices class="size-3" />
+          <span>{{ t("ac.random") }}</span>
+        </button>
+        <button
+          type="button"
+          class="col-span-3 flex items-center justify-center gap-1 whitespace-nowrap bg-primary px-1 py-1 text-[9px] text-primary-foreground transition-opacity hover:opacity-90 disabled:opacity-40"
+          :disabled="refreshing"
+          @click="load(true)"
+        >
+          <MorphIcon
+            :icon="refreshIcon"
+            :size="12"
+            :stroke-width="1.75"
+            spring="snappy"
+            reduced-motion="user"
+            color="currentColor"
+            :class="refreshing ? 'animate-spin' : ''"
+          />
+          {{ t("ac.refresh") }}
+        </button>
+        <button
+          type="button"
+          class="col-span-3 flex items-center justify-center gap-1 whitespace-nowrap border border-border-strong px-1 py-1 text-[9px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40 "
+          :disabled="tokenRefreshing"
+          :title="t('ac.refreshToken')"
+          @click="refreshTokens()"
+        >
+          <Loader2 v-if="tokenRefreshing" class="size-3 animate-spin" />
+          <RotateCw v-else class="size-3" />
+          <span>{{ t("ac.refreshToken") }}</span>
+        </button>
+        <button
+          type="button"
+          class="col-span-3 flex items-center justify-center gap-1 whitespace-nowrap border border-border-strong px-1 py-1 text-[9px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40 "
+          :disabled="importing"
+          :title="t('ac.importLocalHint')"
+          @click="importLocal(false)"
+        >
+          <Loader2 v-if="importing" class="size-3 animate-spin" />
+          <Download v-else class="size-3" />
+          <span>{{ t("ac.importLocal") }}</span>
+        </button>
+        <button
+          type="button"
+          class="col-span-4 flex items-center justify-center gap-1 whitespace-nowrap border border-border-strong px-1 py-1 text-[9px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40 "
+          :disabled="loginPending"
+          @click="startLogin()"
+        >
+          <Loader2 v-if="loginPending" class="size-3 animate-spin" />
+          <UserPlus v-else class="size-3" />
+          <span>{{ t("ac.add") }}</span>
+        </button>
+        <button
+          type="button"
+          class="col-span-4 flex items-center justify-center gap-1 whitespace-nowrap border border-border-strong px-1 py-1 text-[9px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground "
+          @click="importAccounts()"
+        >
+          <Upload class="size-3" />
+          <span>{{ t("ac.import") }}</span>
+        </button>
+        <button
+          type="button"
+          class="col-span-4 flex items-center justify-center gap-1 whitespace-nowrap border border-border-strong px-1 py-1 text-[9px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground "
+          @click="exportAccounts()"
+        >
+          <Download class="size-3" />
+          <span>{{ t("ac.export") }}</span>
+        </button>
+      </div>
   </div>
 </template>

@@ -7,11 +7,14 @@
 
 mod alerts;
 mod commands;
+mod deck_http;
 mod executor;
 mod export;
+mod launcher;
 mod preflight;
 mod purge;
 mod scheduler;
+mod skin;
 mod token_cache;
 mod tray;
 mod update;
@@ -28,6 +31,15 @@ fn show_main(app: &AppHandle) {
         let _ = window.unminimize();
         let _ = window.set_focus();
     }
+}
+
+/// headless 模式：只做「启动器 + 注入器」，不建窗口、不建托盘。
+///
+/// `npm run deck`（= `tauri dev -- --headless`）启动：桥 + CDP 注入照跑，
+/// 只是没有桌面窗口。前端改 vite HMR 直生效，后端改 tauri dev 自动重编译重启。
+fn headless_mode() -> bool {
+    std::env::args().any(|arg| arg == "--headless")
+        || std::env::var_os("WB_DECK_HEADLESS").is_some()
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -55,6 +67,14 @@ pub fn run() {
             commands::growth_assets,
             commands::run_travel,
             commands::run_daily,
+            commands::cdp_status,
+            commands::cdp_restart_client,
+            commands::skin_state,
+            commands::skin_apply,
+            commands::skin_remove,
+            commands::skin_wallpapers,
+            commands::skin_wallpaper_data,
+            commands::skin_wallpaper_upload,
             commands::launch_main_app,
             commands::export_accounts_file,
             commands::preview_import_file,
@@ -113,76 +133,107 @@ pub fn run() {
             // 恢复时把这行取消注释（与 spawn_auto_switch 一起恢复，只恢复一个会变成半残状态）。
             // start_rate_limit_watcher(app.handle().clone());
 
-            // 托盘菜单：快捷执行在上，退出压到最下面并与其他项分隔。
-            let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
-            let checkin = MenuItem::with_id(app, "checkin", "一键签到（全部账号）", true, None::<&str>)?;
-            let daily = MenuItem::with_id(app, "daily", "执行全部日常", true, None::<&str>)?;
-            let refresh = MenuItem::with_id(app, "refresh", "刷新窗口数据", true, None::<&str>)?;
-            let update = MenuItem::with_id(app, "update", "检查更新", true, None::<&str>)?;
-            let quit = MenuItem::with_id(app, "quit", "退出程序", true, None::<&str>)?;
-            let sep_a = PredefinedMenuItem::separator(app)?;
-            let sep_b = PredefinedMenuItem::separator(app)?;
-            let menu = Menu::with_items(
-                app,
-                &[&show, &sep_a, &checkin, &daily, &refresh, &update, &sep_b, &quit],
-            )?;
-
-            let mut builder = TrayIconBuilder::with_id("main-tray")
-                .tooltip("WorkBuddy 任务助手")
-                .menu(&menu)
-                // 左键留给「显示窗口」，右键才弹菜单
-                .show_menu_on_left_click(false)
-                .on_menu_event(|app, event| match event.id.as_ref() {
-                    "show" => show_main(app),
-                    "checkin" => {
-                        let app = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            let _ = executor::execute("checkin", Vec::new()).await;
-                            let _ = app.emit("tray://done", "签到");
-                        });
+            let headless = headless_mode();
+            if headless {
+                // 配置里的 main 窗口由 Tauri 自动创建（visible:false，从没显示过，不会闪）。
+                // headless 下立刻销毁：不占 WebView2，也不触发「关窗即隐藏」的拦截。
+                if let Some(window) = app.get_webview_window("main") {
+                    let _ = window.destroy();
+                }
+                // 已有实例占着本地桥时再起一个，WorkBuddy 页面里会长出两个悬浮图标。
+                // 先等 800ms 再判：tauri dev 热重启时旧进程刚被杀，端口还在 TIME_WAIT，
+                // 一上来就判会把自己判成「已有实例」然后永远起不来。
+                if deck_http::already_serving() {
+                    std::thread::sleep(std::time::Duration::from_millis(800));
+                    if deck_http::already_serving() {
+                        eprintln!("[deck] 已有实例在运行（本地桥端口被占用），本次退出");
+                        // 直接退进程：走 app.exit() 会被下面 ExitRequested 的拦截挡住。
+                        std::process::exit(0);
                     }
-                    "daily" => {
-                        let app = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            let _ = executor::execute("daily", Vec::new()).await;
-                            let _ = app.emit("tray://done", "全部日常");
-                        });
-                    }
-                    "refresh" => {
-                        // 前端监听后重新拉账号与详情
-                        let _ = app.emit("tray://refresh", ());
-                    }
-                    "update" => {
-                        // 托盘手动检查：结果走事件，前端据此点亮标题栏更新标记
-                        let app = app.clone();
-                        tauri::async_runtime::spawn(async move {
-                            let status = update::check(true).await;
-                            let _ = app.emit("update://checked", status);
-                            show_main(&app);
-                        });
-                    }
-                    "quit" => app.exit(0),
-                    _ => {}
-                })
-                .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click {
-                        button: MouseButton::Left,
-                        button_state: MouseButtonState::Up,
-                        ..
-                    } = event
-                    {
-                        show_main(tray.app_handle());
-                    }
-                });
-
-            if let Some(icon) = app.default_window_icon() {
-                builder = builder.icon(icon.clone());
+                }
+                eprintln!("[deck] headless 模式：只跑本地桥 + 注入，无桌面窗口");
             }
-            builder.build(app)?;
 
-            // 启动即给托盘一个真读数（而不是默认的「任务助手」）：
-            // 常驻用户多数时间不开窗，tooltip 就是他对余额的唯一感知。
-            tray::refresh(app.handle());
+            // 启动器前置校验（2026-11-21 打包分发）：官方客户端没装弹窗退出；
+            // 运行中提示先关闭；未运行直接带调试端口拉起 —— 之后 widget 守护负责注入。
+            launcher::spawn_preflight(app.handle().clone());
+
+            if !headless {
+                // 托盘菜单：快捷执行在上，退出压到最下面并与其他项分隔。
+                let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
+                let checkin =
+                    MenuItem::with_id(app, "checkin", "一键签到（全部账号）", true, None::<&str>)?;
+                let daily = MenuItem::with_id(app, "daily", "执行全部日常", true, None::<&str>)?;
+                let refresh =
+                    MenuItem::with_id(app, "refresh", "刷新窗口数据", true, None::<&str>)?;
+                let update = MenuItem::with_id(app, "update", "检查更新", true, None::<&str>)?;
+                let quit = MenuItem::with_id(app, "quit", "退出程序", true, None::<&str>)?;
+                let sep_a = PredefinedMenuItem::separator(app)?;
+                let sep_b = PredefinedMenuItem::separator(app)?;
+                let menu = Menu::with_items(
+                    app,
+                    &[
+                        &show, &sep_a, &checkin, &daily, &refresh, &update, &sep_b, &quit,
+                    ],
+                )?;
+
+                let mut builder = TrayIconBuilder::with_id("main-tray")
+                    .tooltip("WorkBuddy 任务助手")
+                    .menu(&menu)
+                    // 左键留给「显示窗口」，右键才弹菜单
+                    .show_menu_on_left_click(false)
+                    .on_menu_event(|app, event| match event.id.as_ref() {
+                        "show" => show_main(app),
+                        "checkin" => {
+                            let app = app.clone();
+                            tauri::async_runtime::spawn(async move {
+                                let _ = executor::execute("checkin", Vec::new()).await;
+                                let _ = app.emit("tray://done", "签到");
+                            });
+                        }
+                        "daily" => {
+                            let app = app.clone();
+                            tauri::async_runtime::spawn(async move {
+                                let _ = executor::execute("daily", Vec::new()).await;
+                                let _ = app.emit("tray://done", "全部日常");
+                            });
+                        }
+                        "refresh" => {
+                            // 前端监听后重新拉账号与详情
+                            let _ = app.emit("tray://refresh", ());
+                        }
+                        "update" => {
+                            // 托盘手动检查：结果走事件，前端据此点亮标题栏更新标记
+                            let app = app.clone();
+                            tauri::async_runtime::spawn(async move {
+                                let status = update::check(true).await;
+                                let _ = app.emit("update://checked", status);
+                                show_main(&app);
+                            });
+                        }
+                        "quit" => app.exit(0),
+                        _ => {}
+                    })
+                    .on_tray_icon_event(|tray, event| {
+                        if let TrayIconEvent::Click {
+                            button: MouseButton::Left,
+                            button_state: MouseButtonState::Up,
+                            ..
+                        } = event
+                        {
+                            show_main(tray.app_handle());
+                        }
+                    });
+
+                if let Some(icon) = app.default_window_icon() {
+                    builder = builder.icon(icon.clone());
+                }
+                builder.build(app)?;
+
+                // 启动即给托盘一个真读数（而不是默认的「任务助手」）：
+                // 常驻用户多数时间不开窗，tooltip 就是他对余额的唯一感知。
+                tray::refresh(app.handle());
+            }
 
             // 限流巡检：默认关闭，开启后每 2 分钟判定一次
             // 2026-11-09 用户要求暂时关闭「自动切换账号」：先注释调度入口，手动切换不受影响。
@@ -192,11 +243,30 @@ pub fn run() {
             // 每日定时调度：常驻期间后台自转，到点自动跑「全部日常」
             scheduler::spawn(app.handle().clone());
 
-            // 自动更新轮询：启动 8s 后首查，之后每 6 小时（可在设置里关闭）
-            update::spawn_poller(app.handle().clone());
+            // 自动更新轮询 / 异常提醒都靠桌面窗口呈现，headless 下没有窗口可弹，跳过。
+            if !headless {
+                // 自动更新轮询：启动 8s 后首查，之后每 6 小时（可在设置里关闭）
+                update::spawn_poller(app.handle().clone());
 
-            // 异常提醒中心：启动 20s 首评，之后每 10 分钟
-            alerts::spawn_poller(app.handle().clone());
+                // 异常提醒中心：启动 20s 首评，之后每 10 分钟
+                alerts::spawn_poller(app.handle().clone());
+            }
+
+            // CDP 悬浮图标守护：WorkBuddy 页面右下角常驻小图标，
+            // 点击在**页面内**弹出 Deck 面板（iframe 指向本地桥，对齐 WorkDaddy 形态）。
+            // 客户端未开调试端口时守护进程自动带参拉起（冷却 60s），不影响任何功能。
+            match deck_http::start(app.handle().clone()) {
+                Some(panel_url) => {
+                    let url = panel_url.clone();
+                    // spawn_widget_daemon 内部用 tokio::spawn，必须在运行时上下文里调用。
+                    tauri::async_runtime::spawn(async move {
+                        wb_switch_core::modules::cdp::spawn_widget_daemon(url);
+                    });
+                }
+                None => {
+                    eprintln!("[deck] 本地桥启动失败，页面内面板不可用（独立窗口不受影响）");
+                }
+            }
             Ok(())
         })
         // 关闭即隐藏：保留后台执行与托盘，不销毁 WebView（下次显示无需重建）
@@ -221,10 +291,19 @@ pub fn run() {
                 ));
             }
         })
-        .run(tauri::generate_context!())
-        .expect("启动 WorkBuddy 任务助手失败");
+        .build(tauri::generate_context!())
+        .expect("启动 WorkBuddy 任务助手失败")
+        .run(|_app, event| {
+            // headless 下窗口在 setup 里就被销毁了，Tauri 默认「最后一个窗口关掉就退出」，
+            // 必须显式拦下，否则进程起来 1 秒就自己退了。
+            // 非 headless 不拦：托盘「退出」与 app.exit() 要能真正结束进程。
+            if headless_mode() {
+                if let tauri::RunEvent::ExitRequested { api, .. } = event {
+                    api.prevent_exit();
+                }
+            }
+        });
 }
-
 
 /// 限流实时响应：走 hook 事件文件的 1 秒 stat 快路径，**不扫日志目录**。
 ///

@@ -7,7 +7,7 @@ import { CircleAlert, Inbox, Loader2 } from "lucide-vue-next";
 import GrowthBadgeGrid from "@/components/GrowthBadgeGrid.vue";
 import GrowthTaskBoard from "@/components/GrowthTaskBoard.vue";
 import Button from "@/components/ui/Button.vue";
-import type { BuddyQuota, GrowthBadge, GrowthTask } from "@/lib/api";
+import type { BuddyInfo, BuddyQuota, GrowthBadge, GrowthTask } from "@/lib/api";
 import { t } from "@/lib/i18n";
 
 const props = withDefaults(
@@ -15,6 +15,8 @@ const props = withDefaults(
     open: boolean;
     badges: GrowthBadge[];
     quota: BuddyQuota | null;
+    /** Buddy 信息：无 Buddy / 未返回时为 null，不显示这一行。 */
+    buddyInfo: BuddyInfo | null;
     tasks: GrowthTask[];
     loading: boolean;
     error?: string;
@@ -30,6 +32,13 @@ const props = withDefaults(
 const emit = defineEmits<{ close: []; refresh: []; claim: [] }>();
 
 const affordable = computed(() => props.quota?.affordable ?? 0);
+/** Buddy 展示行：`糯米（SSR · 活泼）`，缺性格只给稀有度。 */
+const buddyLine = computed(() => {
+  const info = props.buddyInfo;
+  if (!info?.name) return "";
+  const tail = [info.rarity, info.personality].filter(Boolean).join(" · ");
+  return tail ? `${info.name}（${tail}）` : info.name;
+});
 const showLoading = computed(
   () =>
     props.loading &&
@@ -64,12 +73,12 @@ onBeforeUnmount(() => {
     <Transition name="wb-modal">
       <div
         v-if="props.open"
-        class="fixed inset-0 z-50 flex justify-end bg-background/80"
+        class="fixed inset-0 z-50 flex items-center justify-center bg-background/70 p-3"
         role="dialog"
         aria-modal="true"
         @click.self="emit('close')"
       >
-        <div class="flex h-full w-[440px] max-w-[92vw] flex-col border-l border-border-strong bg-card wb-modal-card">
+        <div class="flex max-h-full w-full max-w-[520px] flex-col overflow-hidden border border-border-strong bg-card wb-modal-card">
           <header class="flex shrink-0 items-center gap-1.5 border-b border-border bg-panel px-3 py-2 wb-flat">
             <span class="lbl text-hazard">[</span>
             <span class="lbl lbl-ink">{{ t("gr.title") }}</span>
@@ -92,7 +101,7 @@ onBeforeUnmount(() => {
             </div>
           </header>
 
-          <div class="min-h-0 flex-1 space-y-3 overflow-y-auto px-3 py-3">
+          <div class="min-h-0 flex-1 space-y-2 overflow-y-auto px-2 py-2">
             <!-- 错误：只按 error prop 判断，原文透出便于排查接口 -->
             <div v-if="props.error" class="border border-hazard bg-hazard-soft px-3 py-2">
               <div class="flex items-center gap-1.5 text-[11px] text-hazard">
@@ -132,6 +141,13 @@ onBeforeUnmount(() => {
                   <span class="lbl text-hazard">[</span>
                   <span class="lbl lbl-ink">{{ t("gr.buddy") }}</span>
                   <span class="lbl text-hazard">]</span>
+                  <span
+                    v-if="buddyLine"
+                    class="lbl ml-auto truncate text-[11px] text-foreground"
+                    :title="buddyLine"
+                  >
+                    {{ buddyLine }}
+                  </span>
                 </header>
 
                 <div class="grid grid-cols-2 gap-px bg-border">

@@ -9,6 +9,7 @@ import { computed, onMounted, ref, watch } from "vue";
 import { ArrowDown, ArrowUp, CircleAlert, Loader2, RefreshCw } from "lucide-vue-next";
 
 import { creditStatistics, type CreditOfficialUsage, type CreditStatistics } from "@/lib/api";
+import { useStaggerList } from "@/composables/useStagger";
 import { t } from "@/lib/i18n";
 import { chartStyle, fmtNum } from "@/lib/prefs";
 import { mask } from "@/lib/task-meta";
@@ -243,9 +244,11 @@ const dimRows = computed(() => {
   return dropZero(models.value);
 });
 
+/** 排行行交错入场：数据到位/切换维度时按行依次进入。 */
+const stagger = useStaggerList(() => dimRows.value);
+
 /** 维度汇总：项数 / 合计 / 单次均耗 / TOP1 占比，全部按当前维度重算。 */
-const dimStats = computed(() => {
-  const list = dimRows.value;
+const dimStats = computed(() => {  const list = dimRows.value;
   const totalCredit = list.reduce((sum, item) => sum + item.credit, 0);
   const totalRequests = list.reduce((sum, item) => sum + item.requestCount, 0);
   return {
@@ -348,7 +351,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
     <!-- 页头 -->
     <header class="flex shrink-0 items-center justify-between gap-3 border-b border-border bg-panel px-4 py-2 wb-flat">
       <div class="min-w-0">
-        <h1 class="text-[13px] tracking-[0.12em] text-foreground">{{ t("cr.title") }}</h1>
+        <h1 class="text-[13px] text-foreground">{{ t("cr.title") }}</h1>
         <div class="readout mt-0.5 text-[9px] text-faint">
           {{ t("cr.updated") }} {{ updatedAt }}
           <span v-if="official" class="ml-2 text-muted-foreground">
@@ -359,7 +362,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
       </div>
       <button
         type="button"
-        class="flex items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
+        class="flex items-center gap-1.5 border border-border-strong px-2.5 py-1 text-[10px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
         :disabled="loading"
         @click="load(true)"
       >
@@ -498,7 +501,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
                 v-for="option in dimensionOptions"
                 :key="option.key"
                 type="button"
-                class="px-2 py-0.5 text-[10px] tracking-[0.1em] transition-colors"
+                class="px-2 py-0.5 text-[10px] transition-colors"
                 :class="
                   dimension === option.key
                     ? 'bg-foreground text-background'
@@ -521,7 +524,9 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
         <div v-else-if="dimRows.length === 0" class="px-3 py-10 text-center text-[11px] text-faint">
           {{ t("cr.flowEmpty") }}
         </div>
-        <div v-else class="grid grid-cols-[1fr_252px] gap-3 p-3">
+        <!-- 上下布局为默认：注入面板只有 30vw 宽，左右两列会挤到占比被裁掉；
+             独立桌面窗口足够宽（≥880px 视口）才回到左右布局 -->
+        <div v-else class="grid grid-cols-1 gap-3 p-3 min-[880px]:grid-cols-[1fr_252px]">
           <!-- 模型排行 -->
           <div class="min-w-0 border border-border bg-card px-3 py-2">
             <div class="readout grid grid-cols-[18px_1fr_64px_52px_52px] gap-2 border-b border-border pb-1 text-[9px] text-faint">
@@ -531,7 +536,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
               <span class="text-right">{{ t("cr.reqCount") }}</span>
               <span class="text-right">{{ t("cr.share") }}</span>
             </div>
-            <ul class="mt-1 space-y-1">
+            <ul class="mt-1 space-y-1" :class="stagger.listClass()">
               <li
                 v-for="(model, index) in dimRows"
                 :key="`${model.name}-${index}`"
@@ -607,7 +612,7 @@ const flowTime = (value: string) => (value ? value.slice(5, 16) : "—");
               v-for="tab in (['accounts', 'flow'] as const)"
               :key="tab"
               type="button"
-              class="px-2.5 py-1 text-[10px] tracking-[0.1em] transition-colors"
+              class="px-2.5 py-1 text-[10px] transition-colors"
               :class="detailTab === tab ? 'bg-foreground text-background' : 'bg-card text-muted-foreground hover:text-foreground'"
               @click="detailTab = tab"
             >

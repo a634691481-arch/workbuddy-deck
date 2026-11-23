@@ -2,7 +2,7 @@
 // 完全同步切换的确认弹框：警示结构 + 切换前安全检查 + 失败现场。
 // 纯展示：目标/进度/失败原因/预检结果都由 AccountsView 传进来，确认与关闭只用 emit 回抛。
 import { computed } from "vue";
-import { CircleAlert, Loader2, ShieldCheck } from "lucide-vue-next";
+import { CircleAlert, Loader2 } from "lucide-vue-next";
 
 import { useShell } from "@/composables/useShell";
 import type { SwitchPreflight } from "@/lib/api";
@@ -49,11 +49,6 @@ const STAGE_KEYS: Record<string, I18nKey> = {
 };
 const stageLabel = (stage: string) => (STAGE_KEYS[stage] ? t(STAGE_KEYS[stage]) : stage || "-");
 
-function fmtBytes(bytes: number): string {
-  if (bytes >= 1024 * 1024) return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
-  if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`;
-  return `${bytes} B`;
-}
 
 /** 失败现场里的「查看运行日志」：跳日志分区，弹框交给视图关 */
 function viewLogs() {
@@ -89,8 +84,8 @@ function viewLogs() {
           </header>
 
           <div class="min-h-0 flex-1 overflow-y-auto px-3 py-3">
-            <div class="border border-hazard bg-hazard-soft px-3 py-2.5">
-              <div class="flex items-center gap-1.5 text-[11px] text-hazard">
+            <div class="border border-border bg-muted/40 px-3 py-2.5">
+              <div class="flex items-center gap-1.5 text-[11px] text-foreground">
                 <CircleAlert class="size-3.5 shrink-0" />
                 {{ t("ac.switchWarn") }}
               </div>
@@ -98,71 +93,6 @@ function viewLogs() {
                 <li v-for="(bullet, bulletIndex) in switchBullets" :key="bulletIndex">{{ bullet }}</li>
               </ul>
             </div>
-
-            <!-- 切换前安全检查：源/目标会话数 + 将删除清单 + 备份 -->
-            <div v-if="preflightLoading" class="readout mt-3 flex items-center gap-2 text-[10px] text-muted-foreground">
-              <Loader2 class="size-3 animate-spin" />
-              {{ t("pf.loading") }}
-            </div>
-            <div v-else-if="preflight?.ok" class="mt-3 border border-border">
-              <div class="flex items-center gap-1.5 border-b border-border bg-muted px-3 py-1.5 text-[11px] text-foreground">
-                <ShieldCheck class="size-3.5 shrink-0" />
-                {{ t("pf.title") }}
-              </div>
-              <div class="flex gap-2 border-b border-border px-3 py-1.5 text-[10px]">
-                <span class="w-14 shrink-0 text-faint">{{ t("pf.source") }}</span>
-                <span class="readout min-w-0 flex-1 text-foreground">
-                  {{ preflight.source?.label ? mask(preflight.source.label) : t("pf.sourceUnknown") }}
-                  · {{ t("pf.sessionCount", { n: String(preflight.source?.sessionCount ?? 0) }) }}
-                </span>
-              </div>
-              <div class="flex gap-2 border-b border-border px-3 py-1.5 text-[10px]">
-                <span class="w-14 shrink-0 text-faint">{{ t("pf.target") }}</span>
-                <span class="readout min-w-0 flex-1 text-foreground">
-                  {{ t("pf.sessionCount", { n: String(preflight.target?.sessionCount ?? 0) }) }}
-                  <span class="text-hazard">{{ t("pf.willReplace") }}</span>
-                </span>
-              </div>
-              <!-- 将被删除的会话：只露前 5 条，全量在备份清单里 -->
-              <div v-if="(preflight.target?.sessions?.length ?? 0) > 0" class="border-b border-border px-3 py-1.5">
-                <p class="lbl mb-1 text-[8px] text-faint">{{ t("pf.deleteList") }}</p>
-                <ul class="space-y-0.5">
-                  <li
-                    v-for="item in preflight.target?.sessions.slice(0, 5)"
-                    :key="item.id"
-                    class="readout truncate text-[10px] text-muted-foreground"
-                    :title="item.title ?? item.id"
-                  >
-                    · {{ item.isPlayground ? t("pf.playground") : t("pf.space") }} {{ item.title || item.id }}
-                  </li>
-                  <li v-if="(preflight.target?.sessions?.length ?? 0) > 5" class="text-[9px] text-faint">
-                    {{ t("pf.more", { n: String((preflight.target?.sessions?.length ?? 0) - 5) }) }}
-                  </li>
-                </ul>
-              </div>
-              <!-- 备份：skipped 时红色警示（不拦切换，但必须让用户知道没有备份） -->
-              <div class="flex gap-2 px-3 py-1.5 text-[10px]">
-                <span class="w-14 shrink-0 text-faint">{{ t("pf.backup") }}</span>
-                <div
-                  v-if="preflight.backup && !preflight.backup.skipped"
-                  class="readout min-w-0 flex-1 break-all leading-4 text-muted-foreground"
-                  :title="preflight.backup.path"
-                >
-                  {{ t("pf.backupOk", {
-                    n: String(preflight.backup.fileCount ?? 0),
-                    size: fmtBytes(preflight.backup.totalBytes ?? 0),
-                  }) }}
-                  <span class="block text-faint">sha256 {{ (preflight.backup.manifestSha256 ?? "").slice(0, 16) }}…</span>
-                </div>
-                <span v-else-if="preflight.backup?.reason === 'size'" class="min-w-0 flex-1 leading-4 text-hazard">
-                  {{ t("pf.backupSkipped", { size: fmtBytes(preflight.backup.totalBytes ?? 0) }) }}
-                </span>
-                <span v-else class="min-w-0 flex-1 leading-4 text-hazard">{{ t("pf.backupFailed") }}</span>
-              </div>
-            </div>
-            <p v-else-if="preflight" class="readout mt-3 text-[10px] text-hazard">
-              {{ t("pf.failed") }}{{ preflight.error ? ` · ${preflight.error}` : "" }}
-            </p>
 
             <!-- 失败现场：阶段 + 是否回滚 + 原始原因，全部留在弹框里 -->
             <div v-if="error" class="mt-3 border border-hazard">
@@ -193,7 +123,7 @@ function viewLogs() {
               </p>
               <button
                 type="button"
-                class="w-full border-t border-border px-3 py-1.5 text-left text-[10px] uppercase tracking-[0.1em] text-faint transition-colors hover:text-foreground"
+                class="w-full border-t border-border px-3 py-1.5 text-left text-[10px] text-faint transition-colors hover:text-foreground"
                 @click="viewLogs"
               >
                 {{ t("ac.switchViewLog") }}
@@ -210,7 +140,7 @@ function viewLogs() {
           <footer class="flex shrink-0 items-center justify-end gap-2 border-t border-border px-3 py-2">
             <button
               type="button"
-              class="border border-border-strong px-3 py-1 text-[10px] uppercase tracking-[0.1em] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
+              class="border border-border-strong px-3 py-1 text-[10px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
               :disabled="switching"
               @click="emit('close')"
             >
@@ -218,7 +148,7 @@ function viewLogs() {
             </button>
             <button
               type="button"
-              class="flex items-center gap-1.5 bg-hazard px-3 py-1 text-[10px] uppercase tracking-[0.1em] text-white transition-opacity hover:opacity-85 disabled:opacity-40"
+              class="flex items-center gap-1.5 bg-hazard px-3 py-1 text-[10px] text-white transition-opacity hover:opacity-85 disabled:opacity-40"
               :disabled="switching"
               @click="emit('confirm')"
             >

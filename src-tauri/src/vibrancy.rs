@@ -46,7 +46,7 @@ pub fn set_backdrop(app: tauri::AppHandle, kind: String) -> Value {
         ) {
             Ok(()) => json!({ "ok": true }),
             Err(err) => json!({ "ok": false, "error": err.to_string() }),
-        }
+        };
     }
 
     #[cfg(not(any(target_os = "windows", target_os = "macos")))]

@@ -3,26 +3,17 @@
  * 任务面板：原 App.vue 的六段布局整体搬入这里，成为左侧导航的第一个分区。
  * 状态与副作用仍全部在 composables（AGENTS.md §0 分层）。
  */
-import { computed, onBeforeUnmount, onMounted, ref, watch } from "vue";
+import { computed, onBeforeUnmount, onMounted, watch } from "vue";
 import { listen, type UnlistenFn } from "@tauri-apps/api/event";
-import { CircleAlert } from "lucide-vue-next";
 
-import AccountHeader from "@/components/AccountHeader.vue";
 import AccountList from "@/components/AccountList.vue";
 import ActionBar from "@/components/ActionBar.vue";
 import AppToolbar from "@/components/AppToolbar.vue";
-import AutoDailyPanel from "@/components/AutoDailyPanel.vue";
-import GrowthDrawer from "@/components/GrowthDrawer.vue";
-import LogPanel from "@/components/LogPanel.vue";
 import StatusBar from "@/components/StatusBar.vue";
 import TaskTable from "@/components/TaskTable.vue";
-import TelemetryBar from "@/components/TelemetryBar.vue";
 import { useAssistant } from "@/composables/useAssistant";
 import { useBalance } from "@/composables/useBalance";
 import { useAccountGroups } from "@/composables/useAccountGroups";
-import { useGrowthCenter } from "@/composables/useGrowthCenter";
-import { t } from "@/lib/i18n";
-import { isDone, mask } from "@/lib/task-meta";
 import { isTauri } from "@/lib/tauri-env";
 import { useShell } from "@/composables/useShell";
 
@@ -34,20 +25,14 @@ const {
   detailLoading,
   detailError,
   logs,
-  scope,
   lastRefresh,
   tab,
   sidebarWidth,
-  failures,
-  showFailures,
-  pendingRows,
-  openTaskJump,
   goComplete,
   etaText,
   cancelling,
   busyAction,
   run,
-  busy,
   activeAccount,
   runLabel,
   selectAccount,
@@ -59,57 +44,8 @@ const {
   resizeSidebar,
   runAction,
   cancel,
-  signinOnce,
-  clearLogs,
   pushLog,
 } = useAssistant();
-
-// 未完成明细默认收起（与失败条一致）
-const showPending = ref(false);
-
-// 成长抽屉：徽章/盲盒额度走 useGrowthCenter，任务直接用当前账号的 detail.growth.tasks
-const {
-  open: growthOpen,
-  loading: growthLoading,
-  error: growthError,
-  badges: growthBadges,
-  quota: growthQuota,
-  claiming: growthClaiming,
-  openGrowth,
-  refresh: refreshGrowth,
-  claim: claimGrowth,
-} = useGrowthCenter();
-
-/** 领取完成后的结果行（抽屉内可见，不依赖 toast）。 */
-const growthNote = ref("");
-
-function openGrowthDrawer() {
-  openGrowth(activeId.value);
-}
-
-function reloadGrowth() {
-  void refreshGrowth(activeId.value);
-  growthNote.value = "";
-}
-
-// 抽屉开着时切账号：徽章/额度跟着换，别让上一号的图挂在屏幕上
-watch(activeId, (id) => {
-  if (growthOpen.value) void refreshGrowth(id);
-});
-
-/** 领取复用批量「成长」动作；composable 不依赖 useAssistant，runner 由视图注入。 */
-async function claimGrowthTasks() {
-  const id = activeId.value;
-  if (!id) return;
-  const before = claimableCount.value;
-  await claimGrowth(id, (target) => runAction("growth", [target]));
-  // 看板数据在 detail.growth 里：跑完重拉详情才能看到 claimed 变化
-  await selectAccount(id);
-  growthNote.value = t("gr.claimNote", {
-    from: String(before),
-    to: String(claimableCount.value),
-  });
-}
 
 // 分组速选：只读分组数据，编辑入口在账号管理页
 const { groups, load: loadGroups, groupMemberIds } = useAccountGroups();
@@ -122,13 +58,12 @@ const groupChips = computed(() =>
     ),
   })),
 );
-/** 按组勾选：选完把作用域也切到「所选账号」，点执行就是跑这一组 */
+/** 按组勾选：勾上即生效——有勾选时动作只跑勾选的账号（作用域自动判定） */
 function selectGroupIds(ids: string[]) {
   selected.value = new Set(ids);
-  scope.value = "selected";
 }
 
-const { balance, loading: balanceLoading, load: loadBalance, total, totalLoading, totalFailed, loadTotal } =
+const { load: loadBalance, loadTotal } =
   useBalance();
 
 watch(activeId, (id) => void loadBalance(id), { immediate: true });
@@ -154,17 +89,7 @@ onBeforeUnmount(() => {
   unlisteners = [];
 });
 
-const errorLogCount = computed(() => logs.value.filter((line) => line.level === "err").length);
 const tasks = computed(() => detail.value?.growth.tasks ?? []);
-/** 可领取数（做完未领）：领取前后对比用。 */
-const claimableCount = computed(
-  () => tasks.value.filter((task) => task.accept_status === "completed").length,
-);
-const taskDone = computed(() => tasks.value.filter(isDone).length);
-const signedToday = computed(() => detail.value?.checkin.todayCheckedIn === true);
-const balanceValue = computed(() =>
-  balance.value?.ok && typeof balance.value.remaining === "number" ? balance.value.remaining : null,
-);
 
 // 外壳侧栏：账号数与运行状态由本页实时回写（useShell 是模块级共享 ref）。
 const { setAccountCount, setRunning } = useShell();
@@ -179,12 +104,6 @@ watch(
   { immediate: true },
 );
 
-/** 只重跑失败的那几个号：避免为了 1 个失败把 30 个账号整套重来。 */
-function retryFailures() {
-  const ids = failures.value.map((item) => item.accountId).filter(Boolean);
-  if (ids.length === 0) return;
-  void runAction((run.value.action || "checkin") as "checkin" | "growth" | "travel", ids);
-}
 </script>
 
 <template>
@@ -200,7 +119,7 @@ function retryFailures() {
       @refresh="refreshAll"
     />
 
-    <div class="flex min-h-0 flex-1 gap-3 p-3">
+    <div class="flex min-h-0 flex-1 gap-3 p-3 max-[760px]:flex-col max-[760px]:gap-2 max-[760px]:p-2">
       <AccountList
         :accounts="accounts"
         :selected="selected"
@@ -219,99 +138,7 @@ function retryFailures() {
 
       <!-- min-w-0：允许整列收缩到窗口剩余宽度，内容不把面板撑出屏幕 -->
       <main class="flex min-h-0 min-w-0 flex-1 flex-col gap-3">
-        <AccountHeader
-          :detail="detail"
-          :account-label="mask(activeAccount?.label ?? '')"
-          :has-account="!!activeAccount"
-          :signing="busyAction === 'single'"
-          :disabled="busy"
-          @signin="signinOnce"
-          @growth="openGrowthDrawer"
-        />
-
-        <TelemetryBar
-          :accounts="accounts.length"
-          :signed="signedToday"
-          :task-done="taskDone"
-          :task-total="tasks.length"
-          :total-credit="total"
-          :total-loading="totalLoading"
-          :total-failed="totalFailed"
-          :balance="balanceValue"
-          :balance-loading="balanceLoading"
-          :run-ok="run.ok"
-          :run-fail="run.fail"
-          :run-skip="run.skip"
-          :running="run.running"
-        />
-
-        <div v-if="failures.length > 0" class="wb-view shrink-0 border border-hazard bg-hazard-soft px-2 py-1">
-          <button
-            class="flex w-full items-center gap-1.5 text-[10px] uppercase tracking-[0.1em] text-hazard"
-            @click="showFailures = !showFailures"
-          >
-            <CircleAlert class="size-3 shrink-0" />
-            [ {{ t("fail.title") }} {{ String(failures.length).padStart(2, "0") }} ]
-            <span class="text-hazard/70">
-              {{ showFailures ? t("fail.collapse") : t("fail.expand") }}
-            </span>
-            <span
-              class="ml-auto border border-hazard px-1.5 py-0.5 text-[9px] hover:bg-hazard hover:text-white"
-              :class="busyAction ? 'pointer-events-none opacity-40' : ''"
-              @click.stop="retryFailures"
-            >
-              {{ t("fail.retry") }}
-            </span>
-          </button>
-          <ul v-if="showFailures" class="mt-1 max-h-24 space-y-0.5 overflow-y-auto pl-4 text-[10px] text-hazard">
-            <li
-              v-for="(item, index) in failures"
-              :key="index"
-              class="truncate"
-              :title="`${mask(item.label)}：${item.reason}`"
-            >
-              ✕ {{ mask(item.label) }} — {{ item.reason }}
-            </li>
-          </ul>
-        </div>
-
-        <!-- 没做哪些、为什么：与失败分开展示（失败是错的，这里是「有缺口但没推进」） -->
-        <div v-if="pendingRows.length > 0" class="wb-view shrink-0 border border-border bg-panel px-2 py-1">
-          <button
-            class="flex w-full items-center gap-1.5 text-[10px] uppercase tracking-[0.1em] text-muted-foreground"
-            @click="showPending = !showPending"
-          >
-            [ {{ t("tm.pendingTitle") }}
-            {{ String(pendingRows.reduce((sum, row) => sum + row.items.length, 0)).padStart(2, "0") }} ]
-            <span class="text-muted-foreground/70">
-              {{ showPending ? t("fail.collapse") : t("fail.expand") }}
-            </span>
-          </button>
-          <ul v-if="showPending" class="mt-1 max-h-32 space-y-1 overflow-y-auto pl-2 text-[10px] text-muted-foreground">
-            <li v-for="row in pendingRows" :key="row.label">
-              <div class="truncate text-foreground">{{ mask(row.label) }}</div>
-              <div class="flex flex-wrap items-center gap-1 pt-0.5">
-                <span
-                  v-for="item in row.items"
-                  :key="item.code"
-                  class="flex items-center gap-1 border border-border px-1 py-0.5"
-                  :title="`${item.title} · ${item.reason}`"
-                >
-                  {{ item.title }}
-                  <span class="text-faint">（{{ item.reason }}）</span>
-                  <button
-                    v-if="item.jumpUrl"
-                    type="button"
-                    class="text-hazard hover:underline"
-                    @click="openTaskJump(item.jumpUrl)"
-                  >
-                    {{ t("tm.openSite") }} ↗
-                  </button>
-                </span>
-              </div>
-            </li>
-          </ul>
-        </div>
+        <div class="flex min-h-0 flex-1 flex-col gap-3">
 
         <TaskTable
           v-model="tab"
@@ -326,7 +153,6 @@ function retryFailures() {
         />
 
         <ActionBar
-          v-model="scope"
           :total="accounts.length"
           :selected-count="selected.size"
           :running="run.running"
@@ -336,11 +162,10 @@ function retryFailures() {
           @cancel="cancel"
         />
 
-        <AutoDailyPanel />
+        </div>
       </main>
     </div>
 
-    <LogPanel :logs="logs" :error-count="errorLogCount" @clear="clearLogs" />
 
     <StatusBar
       :total="accounts.length"
@@ -349,19 +174,5 @@ function retryFailures() {
       :running="run.running"
     />
 
-    <GrowthDrawer
-      :open="growthOpen"
-      :badges="growthBadges"
-      :quota="growthQuota"
-      :tasks="tasks"
-      :loading="growthLoading"
-      :error="growthError"
-      :claiming="growthClaiming"
-      :note="growthNote"
-      :busy="run.running"
-      @close="growthOpen = false"
-      @refresh="reloadGrowth"
-      @claim="claimGrowthTasks"
-    />
   </div>
 </template>

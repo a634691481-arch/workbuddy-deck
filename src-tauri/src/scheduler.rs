@@ -76,8 +76,7 @@ fn append_log(entry: &Value) {
     // 30 天外的旧日志直接丢弃（ts 是 ISO 字符串，按字典序比较即可）
     let cutoff = format!(
         "{}Z",
-        (chrono::Local::now() - chrono::Duration::days(LOG_KEEP_DAYS))
-            .format("%Y-%m-%dT%H-%M-%S")
+        (chrono::Local::now() - chrono::Duration::days(LOG_KEEP_DAYS)).format("%Y-%m-%dT%H-%M-%S")
     );
     logs.retain(|row| row.get("ts").and_then(Value::as_str).unwrap_or("") >= cutoff.as_str());
     while logs.len() > LOG_MAX {
@@ -95,7 +94,11 @@ fn today() -> String {
 
 /// 把一轮 daily 的结果压成日志行。ok=签到/领奖/旅行任一命中，error 才算失败。
 fn summarize(result: &Value) -> (usize, usize, usize) {
-    let rows = result.get("accounts").and_then(Value::as_array).cloned().unwrap_or_default();
+    let rows = result
+        .get("accounts")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
     let mut ok = 0;
     let mut fail = 0;
     let mut skip = 0;
@@ -231,5 +234,8 @@ async fn tick(app: &tauri::AppHandle) {
         today, total, ok, other, growth_skipped
     );
     // 通知前端：刷新数据 + 写一行日志
-    let _ = app.emit("auto://daily-done", json!({ "runs": sections, "growthSkipped": growth_skipped }));
+    let _ = app.emit(
+        "auto://daily-done",
+        json!({ "runs": sections, "growthSkipped": growth_skipped }),
+    );
 }

@@ -46,3 +46,4 @@ wb-switch-core = { path = "../crates/wb-switch-core" }
 rusqlite = { version = "0.32", features = ["bundled", "backup"] }
 # 窗口毛玻璃：Windows acrylic / macOS vibrancy，纯原生效果，关掉即恢复不透明
 window-vibrancy = "0.6"
+base64 = "0.22"

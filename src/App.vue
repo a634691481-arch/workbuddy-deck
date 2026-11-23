@@ -6,8 +6,9 @@
  */
 import { computed, onMounted, ref } from "vue";
 
-import AppSidebar from "@/components/AppSidebar.vue";
-import BootOverlay from "@/components/BootOverlay.vue";
+import TopNav from "@/components/TopNav.vue";
+import AppearanceView from "@/views/AppearanceView.vue";
+import SkinView from "@/views/SkinView.vue";
 import CommandPalette from "@/components/CommandPalette.vue";
 import TitleBar from "@/components/TitleBar.vue";
 import UpdateDialog from "@/components/UpdateDialog.vue";
@@ -21,11 +22,22 @@ import TokensView from "@/views/TokensView.vue";
 import { useShell } from "@/composables/useShell";
 import { useUpdate } from "@/composables/useUpdate";
 import { autoSwitchCancel, autoSwitchConfirm, importLocalAccounts } from "@/lib/api";
-import { isTauri } from "@/lib/tauri-env";
+import { isEmbedded, isTauri } from "@/lib/tauri-env";
 import { t } from "@/lib/i18n";
 import type { NavKey } from "@/lib/nav";
 
-const { accountCount, running, nav } = useShell();
+const { nav, go } = useShell();
+/** 模板里比较用的纯字符串：解构出来的 ref 在 inline 编译下不保证自动解包。 */
+const currentNav = computed(() => nav.value);
+/** 嵌入面板（WorkBuddy 页面内的窄 iframe）与独立窗口的分叉点：
+ * 外层已有标题条（拖动 + 关闭），内层不再重复渲染。 */
+const embedded = isEmbedded();
+
+// 面板只有 400px 宽，侧栏已被顶部导航取代；这里保留 compact 以防回退到侧栏布局。
+// （56px，图标自带 title），不复制第二套导航。
+// 只改内存 ref、不走 setSidebar()：面板与独立窗口本来就不同源（桥是
+// 127.0.0.1:17653，窗口是 tauri 源），localStorage 各存各的，没必要把「面板默认
+// 紧凑」写成面板自己的偏好，否则外观面板会把默认值显示成用户的显式选择。
 
 // 静默更新的可见层：下载/安装阶段弹框展示版本说明与进度，重启后由安装器接管
 const {
@@ -177,7 +189,8 @@ onMounted(async () => {
 });
 
 // hash 直达分区（浏览器预览与 WB_START_NAV 深链共用）：#tasks / #credits / #tokens / #accounts / #logs / #archived / #settings
-const NAV_KEYS: NavKey[] = ["accounts", "tasks", "credits", "tokens", "logs", "archived", "settings"];
+// "skin" 暂不进白名单（入口已隐藏，深链一并关掉）；恢复时加回。
+const NAV_KEYS: NavKey[] = ["accounts", "tasks", "credits", "tokens", "logs", "archived", "appearance", "settings"];
 function navFromHash(): NavKey | null {
   const key = window.location.hash.replace("#", "") as NavKey;
   return NAV_KEYS.includes(key) ? key : null;
@@ -198,33 +211,28 @@ const views = {
   tokens: TokensView,
   logs: LogsView,
   archived: ArchivedView,
+  appearance: AppearanceView,
+  skin: SkinView,
   settings: SettingsView,
 } as const;
 
 const activeView = computed(() => views[nav.value]);
 
-// 启动动画覆盖在主界面之上：窗口显示时遮罩已绘好，不会先白后黑。
-const booting = ref(true);
+// 启动动画已移除（2026-11-20 用户要求）：打开即进界面，不要开场遮罩。
+// BootOverlay.vue 文件保留未引用，要恢复时把 import + <BootOverlay v-if="booting" @done="finishBoot" /> 加回来。
 </script>
 
 <template>
   <div class="crt flex h-full min-h-0 flex-col bg-background wb-flat">
-    <TitleBar />
+    <TitleBar v-if="!embedded" />
 
-    <div class="flex min-h-0 flex-1 wb-flat">
-      <AppSidebar
-        :current="nav"
-        :account-count="accountCount"
-        :running="running"
-        @select="nav = $event"
-      />
+    <TopNav :current="currentNav" @select="go" />
 
-      <!-- 注释必须在 KeepAlive 外：里面只允许一个子组件，注释会被当成额外节点 -->
-      <!-- min-w-0：分区视图可收缩，内部宽内容不允许把窗口撑出横向溢出 -->
-      <KeepAlive>
-        <component :is="activeView" class="wb-view min-w-0 flex-1" />
-      </KeepAlive>
-    </div>
+    <!-- 注释必须在 KeepAlive 外：里面只允许一个子组件，注释会被当成额外节点 -->
+    <!-- min-w-0：分区视图可收缩，内部宽内容不允许把窗口撑出横向溢出 -->
+    <KeepAlive>
+      <component :is="activeView" class="wb-view min-w-0 flex-1" />
+    </KeepAlive>
 
     <!-- 限流自动切换倒计时：3 秒内可取消，避免正在打字时被直接关窗 -->
     <Transition name="wb-modal">
@@ -253,14 +261,14 @@ const booting = ref(true);
             <span class="flex items-center gap-1.5">
               <button
                 type="button"
-                class="border border-foreground bg-foreground px-2 py-0.5 text-[10px] uppercase tracking-[0.1em] text-background"
+                class="border border-foreground bg-foreground px-2 py-0.5 text-[10px] text-background"
                 @click="confirmPendingSwitch()"
               >
                 {{ t("as.switchNow") }}
               </button>
               <button
                 type="button"
-                class="border border-border-strong px-2 py-0.5 text-[10px] uppercase tracking-[0.1em] text-muted-foreground hover:border-foreground hover:text-foreground"
+                class="border border-border-strong px-2 py-0.5 text-[10px] text-muted-foreground hover:border-foreground hover:text-foreground"
                 @click="cancelPendingSwitch()"
               >
                 {{ t("as.cancel") }}
@@ -276,7 +284,7 @@ const booting = ref(true);
     </Transition>
 
     <UpdateDialog
-      :open="updateOpen"
+      :open="updateOpen && !embedded"
       :current="updateCurrent"
       :latest="updateLatest"
       :notes="updateNotes"
@@ -290,8 +298,6 @@ const booting = ref(true);
       @restart="restartUpdate"
     />
 
-    <CommandPalette :open="paletteOpen" @close="paletteOpen = false" @nav="nav = $event" />
-
-    <BootOverlay v-if="booting" @done="booting = false" />
+    <CommandPalette :open="paletteOpen" @close="paletteOpen = false" @nav="go" />
   </div>
 </template>

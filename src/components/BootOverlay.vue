@@ -7,6 +7,9 @@
  */
 import { onMounted, ref } from "vue";
 
+/** 构建时由 vite define 注入的 package.json 版本，别再写死。 */
+const APP_VERSION = __APP_VERSION__;
+
 const emit = defineEmits<{ done: [] }>();
 
 const SEGMENTS = 24;
@@ -79,7 +82,7 @@ onMounted(() => {
       </div>
 
       <div class="foot">
-        <span>rev 0.1.1</span>
+        <span>rev {{ APP_VERSION }}</span>
         <span class="st" :class="{ ok: loaded }">{{ loaded ? "ready" : "initialising" }}</span>
       </div>
     </div>
@@ -94,11 +97,7 @@ onMounted(() => {
   z-index: 100;
   display: grid;
   place-items: center;
-  background: #08080a;
-  background-image:
-    linear-gradient(to right, rgba(255, 255, 255, 0.028) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.028) 1px, transparent 1px);
-  background-size: 26px 26px;
+  background: var(--color-background);
   transition: opacity 0.32s ease-in;
 }
 .boot.out {
@@ -174,7 +173,7 @@ onMounted(() => {
   font-family: var(--font-mono, ui-monospace);
   font-size: 14px;
   letter-spacing: 0.2em;
-  text-transform: uppercase;
+  text-transform:;
   color: var(--color-foreground);
   line-height: 1.2;
 }
@@ -222,7 +221,7 @@ onMounted(() => {
   font-family: var(--font-mono, ui-monospace);
   font-size: 9px;
   letter-spacing: 0.16em;
-  text-transform: uppercase;
+  text-transform:;
   color: var(--color-faint);
 }
 .row b {
@@ -263,7 +262,7 @@ onMounted(() => {
   font-family: var(--font-mono, ui-monospace);
   font-size: 8.5px;
   letter-spacing: 0.16em;
-  text-transform: uppercase;
+  text-transform:;
   color: var(--color-faint);
   animation: rise 0.35s 1.5s cubic-bezier(0.16, 1, 0.3, 1) both;
 }

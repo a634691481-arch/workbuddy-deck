@@ -35,7 +35,11 @@ fn sha256_hex(bytes: &[u8]) -> String {
 
 /// 备份失败结果：`skipped:true` 让弹框红字警示，`stage`/`failedFile`/`error` 说明卡在哪。
 /// 所有失败都走这里，绝不再返回「已备份 N 个文件」的半份结果。
-fn backup_failed(stage: &str, file: impl std::fmt::Display, detail: impl std::fmt::Display) -> Value {
+fn backup_failed(
+    stage: &str,
+    file: impl std::fmt::Display,
+    detail: impl std::fmt::Display,
+) -> Value {
     let file = file.to_string();
     json!({
         "skipped": true, "reason": "io", "stage": stage,
@@ -97,11 +101,14 @@ fn fill_backup(
     for (item, source) in bodies {
         let id = item.get("id").and_then(Value::as_str).unwrap_or("unknown");
         let name = format!("{id}.jsonl");
-        let bytes = std::fs::read(source).map_err(|e| backup_failed("读取正文", source.display(), e))?;
+        let bytes =
+            std::fs::read(source).map_err(|e| backup_failed("读取正文", source.display(), e))?;
         let sha = sha256_hex(&bytes);
         let target = dir.join(&name);
-        std::fs::write(&target, &bytes).map_err(|e| backup_failed("写入正文", target.display(), e))?;
-        let written = std::fs::read(&target).map_err(|e| backup_failed("校验正文", target.display(), e))?;
+        std::fs::write(&target, &bytes)
+            .map_err(|e| backup_failed("写入正文", target.display(), e))?;
+        let written =
+            std::fs::read(&target).map_err(|e| backup_failed("校验正文", target.display(), e))?;
         if sha256_hex(&written) != sha {
             return Err(backup_failed("校验正文", target.display(), "sha256 不一致"));
         }
@@ -122,7 +129,11 @@ fn fill_backup(
     atomic_write(&path, &text).map_err(|e| backup_failed("写入清单", path.display(), e))?;
     let written = std::fs::read(&path).map_err(|e| backup_failed("校验清单", path.display(), e))?;
     if written != text.as_bytes() {
-        return Err(backup_failed("校验清单", path.display(), "内容与写入值不一致"));
+        return Err(backup_failed(
+            "校验清单",
+            path.display(),
+            "内容与写入值不一致",
+        ));
     }
     Ok((files.len(), sha))
 }
@@ -135,7 +146,11 @@ fn promote(staging: &Path, backups_root: &Path, now: i64) -> Result<PathBuf, Val
         .unwrap_or_else(|| now.to_string());
     let base = format!("switch-preflight-{stamp}");
     for attempt in 0..PROMOTE_ATTEMPTS {
-        let name = if attempt == 0 { base.clone() } else { format!("{base}-{attempt}") };
+        let name = if attempt == 0 {
+            base.clone()
+        } else {
+            format!("{base}-{attempt}")
+        };
         let dest = backups_root.join(name);
         if dest.exists() {
             continue;
@@ -195,7 +210,11 @@ fn source_summary() -> (Option<String>, String, usize) {
     match account::find_account(&id) {
         Some(acc) => {
             let list = session::list_sessions_for_account(&acc);
-            let count = list.get("sessions").and_then(Value::as_array).map(Vec::len).unwrap_or(0);
+            let count = list
+                .get("sessions")
+                .and_then(Value::as_array)
+                .map(Vec::len)
+                .unwrap_or(0);
             (Some(id), account::account_display_name(&acc), count)
         }
         None => (None, String::new(), 0),
@@ -231,10 +250,15 @@ pub fn preflight(account_id: &str) -> Value {
 
     // 目标账号现有会话（这些在完全同步切换中会被删除）
     let target_list = session::list_sessions_for_account(&target);
-    let sessions = target_list.get("sessions").and_then(Value::as_array).cloned().unwrap_or_default();
+    let sessions = target_list
+        .get("sessions")
+        .and_then(Value::as_array)
+        .cloned()
+        .unwrap_or_default();
 
     // 备份根目录固定在 `~/.wb-switch/backups/`，正文目录取自目标账号档位
-    let projects_dir = session::SessionPaths::for_variant(account::variant_of(&target)).projects_dir();
+    let projects_dir =
+        session::SessionPaths::for_variant(account::variant_of(&target)).projects_dir();
     let backup = build_backup_at(
         &store_dir().join("backups"),
         &projects_dir,
@@ -286,13 +310,28 @@ mod tests {
         std::fs::create_dir_all(staging.join("s1.jsonl")).unwrap();
 
         let sessions = vec![json!({ "id": "s1", "title": "one" })];
-        let out = build_backup_at(&backups, &root.join("projects"), &sessions, "acc", "label", now);
+        let out = build_backup_at(
+            &backups,
+            &root.join("projects"),
+            &sessions,
+            "acc",
+            "label",
+            now,
+        );
 
         assert_eq!(out.get("skipped"), Some(&json!(true)));
-        let failed_file = out.get("failedFile").and_then(Value::as_str).unwrap_or_default();
-        assert!(failed_file.contains("s1.jsonl"), "失败文件名要能指认：{failed_file}");
+        let failed_file = out
+            .get("failedFile")
+            .and_then(Value::as_str)
+            .unwrap_or_default();
+        assert!(
+            failed_file.contains("s1.jsonl"),
+            "失败文件名要能指认：{failed_file}"
+        );
         assert!(!staging.exists(), "半份备份目录必须被删除");
-        let leftovers = std::fs::read_dir(&backups).map(|entries| entries.flatten().count()).unwrap_or(0);
+        let leftovers = std::fs::read_dir(&backups)
+            .map(|entries| entries.flatten().count())
+            .unwrap_or(0);
         assert_eq!(leftovers, 0, "失败时 backups/ 下不能留任何目录");
 
         let _ = std::fs::remove_dir_all(&root);

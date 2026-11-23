@@ -2,7 +2,7 @@
 // 编排层是唯一允许直接调 lib/api 的地方（AGENTS.md §0）；视图只拿状态与方法。
 import { ref } from "vue";
 
-import { growthAssets, type BuddyQuota, type GrowthBadge } from "@/lib/api";
+import { growthAssets, type BuddyInfo, type BuddyQuota, type GrowthBadge } from "@/lib/api";
 import { t } from "@/lib/i18n";
 
 export function useGrowthCenter() {
@@ -11,6 +11,7 @@ export function useGrowthCenter() {
   const error = ref("");
   const badges = ref<GrowthBadge[]>([]);
   const quota = ref<BuddyQuota | null>(null);
+  const buddyInfo = ref<BuddyInfo | null>(null);
   const claiming = ref(false);
 
   /** 请求序号：快速切账号时丢弃过期响应，避免旧账号数据覆盖新账号。 */
@@ -25,6 +26,7 @@ export function useGrowthCenter() {
     if (accountId && accountId !== owner.value) {
       badges.value = [];
       quota.value = null;
+      buddyInfo.value = null;
     }
     try {
       const result = await growthAssets(accountId ?? undefined);
@@ -32,12 +34,14 @@ export function useGrowthCenter() {
       owner.value = accountId;
       badges.value = result.badges ?? [];
       quota.value = result.quota ?? null;
+      buddyInfo.value = result.buddyInfo ?? null;
       if (result.ok !== true) error.value = result.error || t("gr.error");
     } catch (cause) {
       if (mine !== seq) return;
       owner.value = null;
       badges.value = [];
       quota.value = null;
+      buddyInfo.value = null;
       error.value = String(cause);
     } finally {
       if (mine === seq) loading.value = false;
@@ -61,5 +65,17 @@ export function useGrowthCenter() {
     }
   }
 
-  return { open, loading, error, badges, quota, claiming, owner, openGrowth, refresh, claim };
+  return {
+    open,
+    loading,
+    error,
+    badges,
+    quota,
+    buddyInfo,
+    claiming,
+    owner,
+    openGrowth,
+    refresh,
+    claim,
+  };
 }

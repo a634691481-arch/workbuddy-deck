@@ -1066,7 +1066,7 @@ export interface ArchivedStats {
   ok: boolean;
   /** 库文件是否存在；不存在时 count 恒为 0，按钮禁用 */
   dbExists: boolean;
-  /** WorkBuddy 是否正在运行（运行中后端拒绝清理） */
+  /** WorkBuddy 是否正在运行：运行中照样可清理，仅用于提示「列表是即时快照」 */
   running: boolean;
   count: number;
   bytes: number;
@@ -1087,6 +1087,8 @@ export interface PurgeResult {
   stage?: string;
   /** WorkBuddy 运行中拿不到独占锁，VACUUM 跳过（不影响删除语义） */
   vacuumError?: string | null;
+  /** 顺带清掉的「被 WB 回写复活」的空壳归档行 */
+  revived?: number;
   error?: string;
 }
 

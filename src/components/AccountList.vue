@@ -3,6 +3,7 @@ import { computed, ref } from "vue";
 import { ArrowRight, Loader2, Search } from "lucide-vue-next";
 import Button from "@/components/ui/Button.vue";
 import { useShell } from "@/composables/useShell";
+import { useStaggerList } from "@/composables/useStagger";
 import type { AccountSummary } from "@/lib/api";
 import { t } from "@/lib/i18n";
 import { mask } from "@/lib/task-meta";
@@ -45,6 +46,9 @@ const filtered = computed(() => {
   if (!q) return props.accounts;
   return props.accounts.filter((item) => item.label.toLowerCase().includes(q));
 });
+
+/** 条目交错入场：用原始 accounts 做源，搜索过滤不重播动画。 */
+const stagger = useStaggerList(() => props.accounts);
 
 /** 分组速选：值复位到占位项，避免误导「当前停留在哪个组」。 */
 function onGroupPick(event: Event) {
@@ -103,11 +107,11 @@ const unitNo = (index: number) => String(index + 1).padStart(2, "0");
 
 <template>
   <aside
-    class="relative flex shrink-0 flex-col border border-border bg-panel"
+    class="relative flex shrink-0 flex-col border border-border bg-panel max-[760px]:!w-full max-[760px]:flex-row max-[760px]:flex-wrap"
     :style="{ width: `${width}px` }"
   >
     <!-- 检索框：方形、聚焦描红 -->
-    <div class="border-b border-border p-2">
+    <div class="border-b border-border p-2 max-[760px]:hidden">
       <div
         class="flex h-7 items-center gap-1.5 border border-border-strong bg-background px-2 focus-within:border-hazard"
       >
@@ -125,7 +129,7 @@ const unitNo = (index: number) => String(index + 1).padStart(2, "0");
     <!-- 列头 -->
     <div
       v-if="accounts.length > 0"
-      class="flex h-5 shrink-0 items-center gap-2 border-b border-border px-2"
+      class="flex h-5 shrink-0 items-center gap-2 border-b border-border px-2 max-[760px]:hidden"
     >
       <span class="lbl w-5 text-faint">{{ t("al.id") }}</span>
       <span class="lbl flex-1">{{ t("al.account") }}</span>
@@ -134,7 +138,8 @@ const unitNo = (index: number) => String(index + 1).padStart(2, "0");
 
     <div
       ref="listRef"
-      class="min-h-0 flex-1 overflow-y-auto"
+      class="min-h-0 flex-1 overflow-y-auto max-[760px]:grid max-[760px]:grid-cols-3 max-[760px]:gap-1.5 max-[760px]:p-1.5 max-[760px]:overflow-visible"
+      :class="stagger.listClass()"
       role="listbox"
       tabindex="0"
       aria-label="账号列表"
@@ -145,7 +150,7 @@ const unitNo = (index: number) => String(index + 1).padStart(2, "0");
         :key="item.id"
         role="option"
         :aria-selected="item.id === activeId"
-        class="flex cursor-pointer items-center gap-2 border-b border-border/60 px-2 py-[7px]"
+        class="flex cursor-pointer items-center gap-2 border-b border-border/60 px-2 py-[7px] max-[760px]:border max-[760px]:bg-card max-[760px]:py-1.5"
         :class="cn(
           item.id === activeId
             ? 'bg-muted shadow-[inset_2px_0_0_0_var(--color-hazard)]'
@@ -154,13 +159,13 @@ const unitNo = (index: number) => String(index + 1).padStart(2, "0");
         @click="emit('select', item.id)"
       >
         <span
-          class="readout w-4 shrink-0 text-[10px]"
+          class="readout w-4 shrink-0 text-[10px] max-[760px]:hidden"
           :class="item.id === activeId ? 'text-hazard' : 'text-faint'"
         >{{ unitNo(index) }}</span>
 
         <input
           type="checkbox"
-          class="size-3.5 shrink-0 cursor-pointer appearance-none border border-[#6a6a62] bg-[#161615] checked:border-hazard checked:bg-hazard"
+          class="size-3.5 shrink-0 cursor-pointer appearance-none border border-border-strong bg-muted checked:border-hazard checked:bg-hazard"
           :checked="selected.has(item.id)"
           :aria-label="`勾选 ${mask(item.label)}`"
           @click.stop
@@ -172,7 +177,7 @@ const unitNo = (index: number) => String(index + 1).padStart(2, "0");
             <span class="truncate text-[11px] text-foreground" :title="mask(item.label)">{{ mask(item.label) }}</span>
             <span
               v-if="item.variant === 'intl'"
-              class="shrink-0 border border-border-strong px-1 text-[9px] uppercase leading-3 text-muted-foreground"
+              class="shrink-0 border border-border-strong px-1 text-[9px] leading-3 text-muted-foreground"
             >INTL</span>
           </div>
           <div v-if="item.note" class="truncate text-[10px] text-faint">{{ mask(item.note) }}</div>
@@ -206,7 +211,7 @@ const unitNo = (index: number) => String(index + 1).padStart(2, "0");
     </div>
 
     <!-- 底部：批量选择命令 -->
-    <div class="flex h-7 shrink-0 items-center gap-2 border-t border-border px-2">
+    <div class="flex h-7 shrink-0 items-center gap-2 border-t border-border px-2 max-[760px]:hidden">
       <button class="lbl text-muted-foreground hover:text-hazard" @click="emit('selectAll')">[A] {{ t("al.selectAll") }}</button>
       <button class="lbl text-muted-foreground hover:text-hazard" @click="emit('invert')">[I] {{ t("al.invert") }}</button>
       <!-- 分组速选：选完即把作用域切到「所选账号」 -->
@@ -226,7 +231,7 @@ const unitNo = (index: number) => String(index + 1).padStart(2, "0");
 
     <!-- 拖拽手柄 -->
     <div
-      class="absolute inset-y-0 -right-1 w-2 cursor-col-resize"
+      class="absolute inset-y-0 -right-1 w-2 cursor-col-resize max-[760px]:hidden"
       role="separator"
       aria-label="调整账号栏宽度"
       @mousedown.prevent="startDrag"

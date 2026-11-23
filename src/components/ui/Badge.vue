@@ -8,7 +8,7 @@ import { cn } from "@/lib/utils";
  * 色相只有红/绿两族，其余靠线型与明度区分（工业纪律，见 style.css 头注释）。
  */
 const badgeVariants = cva(
-  "inline-flex items-center whitespace-nowrap border px-1.5 py-[1px] font-mono text-[10px] uppercase leading-4 tracking-[0.08em]",
+  "inline-flex items-center whitespace-nowrap border px-1.5 py-[1px] font-mono text-[10px] leading-4",
   {
     variants: {
       tone: {

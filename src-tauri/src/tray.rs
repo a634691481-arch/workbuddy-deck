@@ -38,7 +38,10 @@ pub fn readout_text() -> String {
             continue;
         };
         if let Some(snapshot) = latest.get(id) {
-            total += snapshot.get("remaining").and_then(Value::as_f64).unwrap_or(0.0);
+            total += snapshot
+                .get("remaining")
+                .and_then(Value::as_f64)
+                .unwrap_or(0.0);
             with_balance += 1;
         }
     }
@@ -65,7 +68,11 @@ pub fn readout_text() -> String {
                 .to_string();
             Some((days, label))
         })
-        .min_by(|left, right| left.0.partial_cmp(&right.0).unwrap_or(std::cmp::Ordering::Equal));
+        .min_by(|left, right| {
+            left.0
+                .partial_cmp(&right.0)
+                .unwrap_or(std::cmp::Ordering::Equal)
+        });
 
     match tightest {
         Some((days, label)) if !label.is_empty() => {
