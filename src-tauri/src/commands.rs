@@ -842,10 +842,11 @@ pub async fn workbuddy_status() -> Value {
 /// **不抛 Err**：失败也返回 `{ ok:false, ... }`，把「停在哪一步 / 是否已回滚」变成
 /// 结构化字段。原先靠 catch 中文文案判断，前端无法区分「没写认证」和「已回滚」，
 /// 只能一律报「切换失败」——这正是两次事故里用户看不懂现场的原因。
-// 切换是否由 core 负责重启 WorkBuddy（`switch_account_detailed(..., restart=true)`）。
-// 改回热切换时，这里与两处调用点一起改，否则成功后会朝已关闭的页面发 reload。
-const SWITCH_RESTARTS_WORKBUDDY: bool = true;
-
+// 切换采用「热切换优先，重启兜底」（2026-11-23 用户定稿）：不重启 WorkBuddy 完成切换，
+// 会话池以当前为准划归新账号，客户端页面经 CDP reload 跟进。若探测到客户端身份没跟上
+// （CDP 不可用 / 页面还是旧 uid），自动回退「关进程 → 拉起」的重启路径——重启后客户端
+// 读到已写入的新认证，看到的就是划归后的同一套会话。任何情况下会话内容都不丢，
+// 划归有 reassign-preflight 整库备份兜底。
 #[tauri::command(rename_all = "camelCase")]
 pub async fn switch_workbuddy_account(app: tauri::AppHandle, account_id: String) -> Value {
     if account_id.trim().is_empty() {
@@ -859,20 +860,28 @@ pub async fn switch_workbuddy_account(app: tauri::AppHandle, account_id: String)
             "rolledBack": false,
         });
     }
+    // 划归需要的前置身份：切换前 uid（读磁盘 auth）与目标 uid（账号库）。
+    // core 的 switch_account_detailed 内部也各读了一遍，这里再取一次用于热收尾，
+    // 口径一致（auth_identity_at / account_uid）。
+    let target = account::find_account(&account_id);
+    let variant = target.as_ref().map(account::variant_of);
+    let before_uid = variant
+        .and_then(|v| auth_file::auth_identity_at(&auth_file::auth_file_path(v)))
+        .unwrap_or_default();
+    let expected_uid = target.as_ref().map(switch::account_uid).unwrap_or_default();
+
     let app_for_progress = app.clone();
     let progress: switch::ProgressFn = Box::new(move |message| {
         let _ = app_for_progress.emit("switch-progress", json!({ "message": message }));
     });
     let app_for_finish = app.clone();
     let outcome = tauri::async_runtime::spawn_blocking(move || {
-        // 切换只换认证，**不碰会话**：每个账号的会话/空间以它自己的数据为准。
-        // restart=true 让 WorkBuddy 真正以新身份重启一次——热 reload 会留着旧身份的
-        // 内存缓存，侧栏看起来「上下文全没了」，实际是没按新 uid 重新查库。
-        switch::switch_account_detailed(Some(&progress), &account_id, true, false, &[], &[], false)
+        // 热切换第一步：restart=false，core 只写认证 + 写后校验，不关不拉客户端。
+        switch::switch_account_detailed(Some(&progress), &account_id, false, false, &[], &[], false)
     })
     .await;
 
-    let payload = match outcome {
+    let mut payload = match outcome {
         Ok((result, diagnostics)) => switch_payload(result, &diagnostics),
         Err(join_error) => json!({
             "ok": false,
@@ -885,6 +894,170 @@ pub async fn switch_workbuddy_account(app: tauri::AppHandle, account_id: String)
             "sessionsDirty": false,
         }),
     };
+    // 热切换收尾。三步走，每步失败都有明确兜底，任何一步都不会丢会话：
+    //   ① 会话池划归（客户端仍在运行；WAL 短事务 + 5s 忙等，客户端无感）
+    //   ② CDP reload 刷新页面，让客户端按新认证重新查库
+    //   ③ 探测页面身份：已切新号 → 完成；仍是旧号 → 反向划归还原 + 报告；
+    //      探测不了 → 重启兜底（认证已写对、划归已完成，重启后即新身份）
+    let mut mode = "hot";
+    let mut reassign_report: Option<Value> = None;
+
+    if payload.get("ok").and_then(Value::as_bool).unwrap_or(false) {
+        let needs_reassign = !before_uid.is_empty() && before_uid != expected_uid;
+        if needs_reassign {
+            let variant_v = variant.expect("读到了切换前 uid，档位必然存在");
+            let (from, to) = (before_uid.clone(), expected_uid.clone());
+            let res = tauri::async_runtime::spawn_blocking(move || {
+                wb_switch_core::modules::session::reassign_session_pool(variant_v, &from, &to)
+            })
+            .await
+            .unwrap_or_else(|error| Err(format!("划归任务异常: {error}")));
+            match res {
+                Ok((sessions, spaces, backup)) => {
+                    reassign_report = Some(json!({
+                        "ok": true,
+                        "sessions": sessions,
+                        "spaces": spaces,
+                        "backup": backup.to_string_lossy(),
+                        "fromUid": before_uid,
+                        "toUid": expected_uid,
+                    }));
+                    let _ = app.emit(
+                        "switch-progress",
+                        json!({ "message": format!("已划归 {sessions} 条会话、{spaces} 个空间，正在刷新客户端…") }),
+                    );
+                }
+                Err(_) => {
+                    // 运行中划不进去（多半是客户端锁库）：直接回退重启路径，
+                    // 关进程后重试划归再拉起——与旧 restart=true 语义等价。
+                    mode = "restart_fallback";
+                    let _ = app.emit(
+                        "switch-progress",
+                        json!({ "message": "运行中无法完成划归，回退重启路径…" }),
+                    );
+                    let app2 = app.clone();
+                    let pg: switch::ProgressFn = Box::new(move |message| {
+                        let _ = app2.emit("switch-progress", json!({ "message": message }));
+                    });
+                    let (from, to) = (before_uid.clone(), expected_uid.clone());
+                    let fallback_report = tauri::async_runtime::spawn_blocking(move || {
+                        if let Err(error) = process::close_workbuddy(variant_v, 20) {
+                            pg(&error);
+                        }
+                        let report = match wb_switch_core::modules::session::reassign_session_pool(variant_v, &from, &to) {
+                            Ok((sessions, spaces, backup)) => {
+                                pg(&format!("已划归 {sessions} 条会话、{spaces} 个空间"));
+                                Some(json!({
+                                    "ok": true,
+                                    "sessions": sessions,
+                                    "spaces": spaces,
+                                    "backup": backup.to_string_lossy(),
+                                    "fromUid": from,
+                                    "toUid": to,
+                                }))
+                            }
+                            Err(error) => {
+                                // 账号已切对，划归失败不阻断；重试一次切换即可补上。
+                                pg(&format!("划归失败（不影响账号切换）: {error}"));
+                                None
+                            }
+                        };
+                        if let Err(error) = process::launch_workbuddy(variant_v, Some(&pg)) {
+                            pg(&format!("账号已切换，但启动 WorkBuddy 失败: {error}"));
+                        }
+                        report
+                    })
+                    .await;
+                    if let Ok(Some(report)) = fallback_report {
+                        reassign_report = Some(report);
+                    }
+                }
+            }
+        }
+
+        // ② + ③：刷新页面并探测身份（重启兜底分支不需要——进程已被拉起）。
+        if mode == "hot" {
+            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
+            let reloaded = wb_switch_core::modules::cdp::reload_workbuddy_page().await;
+            if needs_reassign && reassign_report.as_ref().is_some_and(|r| r["ok"] == json!(true)) {
+                let mut verdict: Option<bool> = None;
+                for _ in 0..8 {
+                    tokio::time::sleep(std::time::Duration::from_millis(700)).await;
+                    verdict =
+                        wb_switch_core::modules::cdp::probe_identity_uid(&before_uid, &expected_uid)
+                            .await;
+                    if verdict.is_some() {
+                        break;
+                    }
+                }
+                match verdict {
+                    // 客户端已是新身份：热切换完成，会话就是划归后的当前这套。
+                    Some(true) => {
+                        let _ = app.emit(
+                            "switch-progress",
+                            json!({ "message": "热切换完成，上下文以当前为准" }),
+                        );
+                    }
+                    // 客户端还在旧身份：反向划归还原归属，会话保持当前可见，
+                    // 如实告知用户需要重启才能完成切换。
+                    Some(false) => {
+                        mode = "hot_restored";
+                        let variant_v = variant.expect("读到了切换前 uid，档位必然存在");
+                        let (from, to) = (before_uid.clone(), expected_uid.clone());
+                        let restored =
+                            tauri::async_runtime::spawn_blocking(move || {
+                                wb_switch_core::modules::session::reassign_session_pool(
+                                    variant_v, &to, &from,
+                                )
+                            })
+                            .await
+                            .is_ok_and(|r| r.is_ok());
+                        let _ = wb_switch_core::modules::cdp::reload_workbuddy_page().await;
+                        if reassign_report.is_some() {
+                            reassign_report = Some(json!({
+                                "ok": restored,
+                                "reversed": true,
+                                "fromUid": before_uid,
+                                "toUid": expected_uid,
+                            }));
+                        }
+                        let _ = app.emit(
+                            "switch-progress",
+                            json!({ "message": "客户端未接受新身份，已还原会话归属；请重启 WorkBuddy 后重试切换" }),
+                        );
+                    }
+                    // CDP 不可用 / 探测不出来：不赌。重启兜底——认证与划归都已就位，
+                    // 重启后客户端按新身份读到划归后的同一套会话。
+                    None => {
+                        mode = "restart_fallback";
+                        let _ = app.emit(
+                            "switch-progress",
+                            json!({ "message": "无法确认客户端身份，已自动重启 WorkBuddy…" }),
+                        );
+                        let variant_v = variant.expect("读到了切换前 uid，档位必然存在");
+                        let _ = tauri::async_runtime::spawn_blocking(move || {
+                            if let Err(error) = process::close_workbuddy(variant_v, 20) {
+                                eprintln!("[switch] 关闭 WorkBuddy 失败: {error}");
+                            }
+                            if let Err(error) = process::launch_workbuddy(variant_v, None) {
+                                eprintln!("[switch] 启动 WorkBuddy 失败: {error}");
+                            }
+                        })
+                        .await;
+                    }
+                }
+            } else if !reloaded && !needs_reassign {
+                let _ = app.emit(
+                    "switch-progress",
+                    json!({ "message": "已写入认证，请手动刷新客户端" }),
+                );
+            }
+        }
+    }
+    payload["mode"] = json!(mode);
+    if let Some(report) = reassign_report {
+        payload["sessionReassign"] = report;
+    }
     // `switch-progress` 的最后一条只是阶段文案，不代表流程结束。
     // 统一补终态事件，让全局提示条无论成功、失败还是回滚都能关闭。
     let _ = app_for_finish.emit(
@@ -894,27 +1067,6 @@ pub async fn switch_workbuddy_account(app: tauri::AppHandle, account_id: String)
             "result": payload.get("result").cloned().unwrap_or(Value::Null),
         }),
     );
-
-    // 成功后的收尾：切换走 restart=true，WorkBuddy 由 core 重新拉起，
-    // 这里再发 CDP reload 只会打在已经关掉的页面上，还会误报「请手动刷新」。
-    // 保留热切换分支：将来若改回 restart=false，reload 才有意义。
-    if payload.get("ok").and_then(Value::as_bool).unwrap_or(false) {
-        if SWITCH_RESTARTS_WORKBUDDY {
-            let _ = app.emit(
-                "switch-progress",
-                json!({ "message": "已切换，WorkBuddy 正在重启…" }),
-            );
-        } else {
-            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-            let reloaded = wb_switch_core::modules::cdp::reload_workbuddy_page().await;
-            if !reloaded {
-                let _ = app.emit(
-                    "switch-progress",
-                    json!({ "message": "已写入认证，请手动刷新客户端" }),
-                );
-            }
-        }
-    }
     payload
 }
 

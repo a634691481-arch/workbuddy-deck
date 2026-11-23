@@ -309,6 +309,40 @@ pub async fn reload_workbuddy_page() -> bool {
         .is_ok()
 }
 
+/// 热切换身份探测：在 WorkBuddy 页面里搜 localStorage + cookie 是否出现目标 uid。
+///
+/// - `Some(true)`  = 只找到目标 uid → 页面身份已切到新账号
+/// - `Some(false)` = 只找到切换前 uid → 页面身份仍是旧账号
+/// - `None`        = CDP 不可用 / 两个都出现或都没出现（无法判断，调用方不得赌）
+///
+/// 不猜 localStorage 的键名：直接对整个序列化结果做子串匹配，uid 是 32 位
+/// 十六进制，作为子串足够特异。
+pub async fn probe_identity_uid(from_uid: &str, to_uid: &str) -> Option<bool> {
+    if from_uid.is_empty() || to_uid.is_empty() || from_uid == to_uid {
+        return None;
+    }
+    let Some(session) = workbuddy_page(false).await else {
+        return None;
+    };
+    let js = format!(
+        "(function(){{try{{var s=String(JSON.stringify(localStorage))+String(document.cookie);var a=s.indexOf('{from}')>=0,b=s.indexOf('{to}')>=0;if(b&&!a)return 'to';if(a&&!b)return 'from';return 'unknown';}}catch(e){{return 'unknown';}}}})()",
+        from = from_uid,
+        to = to_uid,
+    );
+    match session.evaluate(&js).await {
+        Ok(Value::String(v)) => {
+            if v == "to" {
+                Some(true)
+            } else if v == "from" {
+                Some(false)
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
 pub async fn workbuddy_page(force_reconnect: bool) -> Option<Arc<CdpSession>> {
     let cfg = load_cdp_config();
     if cfg.get("enabled").and_then(Value::as_bool) != Some(true) {

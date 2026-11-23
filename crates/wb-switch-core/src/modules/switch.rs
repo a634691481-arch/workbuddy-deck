@@ -222,7 +222,7 @@ fn rollback_session_note(trace: &SwitchTrace) -> &'static str {
 }
 
 /// 账号的判定身份：uid 优先，缺失时退回 id（与 `auth_file::auth_identity_at` 同口径）。
-fn account_uid(acc: &Value) -> String {
+pub fn account_uid(acc: &Value) -> String {
     account::get_str(acc, "uid")
         .or_else(|| account::get_str(acc, "id"))
         .unwrap_or_default()
