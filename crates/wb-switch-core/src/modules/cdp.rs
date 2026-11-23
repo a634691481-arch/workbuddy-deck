@@ -912,6 +912,10 @@ pub fn spawn_widget_daemon(panel_url: String) {
         return;
     }
     tokio::spawn(async move {
+        // 未就绪时的重试节奏：客户端冷启动 5–15s 就绪，固定 20s 重试会让图标
+        // 「明明页面早就起来了却要再等十几秒」。前 30 次 1s 快轮询（覆盖启动窗口），
+        // 之后 3s，最后退到 5s 长驻——回环探测连接被拒是瞬时失败，成本可忽略。
+        let mut fast_retries: u32 = 0;
         loop {
             let cfg = load_cdp_config();
             let placement = widget_placement(&cfg);
@@ -936,15 +940,27 @@ pub fn spawn_widget_daemon(panel_url: String) {
                     "detail": auto_detail,
                     "hint": "客户端没开调试端口：设置页点「带调试端口重启」，或带 --remote-debugging-port 手动启动",
                 }));
-                if auto_detail.is_empty() {
-                    eprintln!("[deck] cdp 未就绪 reason=cdp-unavailable auto_start={auto_label} retry_in=20s");
+                // 快速重试：客户端冷启动 5–15s 就绪，前 30 次 1s 轮询覆盖这段窗口，
+                // 之后 3s；再久退到 5s 长驻（回环探测连接被拒是瞬时失败，成本可忽略）。
+                let delay = if fast_retries < 30 {
+                    1
+                } else if fast_retries < 50 {
+                    3
                 } else {
-                    eprintln!("[deck] cdp 未就绪 reason=cdp-unavailable auto_start={auto_label} error={auto_detail} retry_in=20s");
+                    5
+                };
+                fast_retries = fast_retries.saturating_add(1);
+                if fast_retries == 1 || fast_retries == 31 || fast_retries == 51 {
+                    if auto_detail.is_empty() {
+                        eprintln!("[deck] cdp 未就绪 reason=cdp-unavailable auto_start={auto_label} retry_in={delay}s");
+                    } else {
+                        eprintln!("[deck] cdp 未就绪 reason=cdp-unavailable auto_start={auto_label} error={auto_detail} retry_in={delay}s");
+                    }
                 }
-                // 客户端冷启动 + 渲染进程就绪大约 20~30s，别刚拉起就判失败。
-                tokio::time::sleep(Duration::from_secs(20)).await;
+                tokio::time::sleep(Duration::from_secs(delay)).await;
                 continue;
             };
+            fast_retries = 0;
             // 注册是 per-session 的：导航后浏览器自动重跑同一份脚本，会话换代时由外层循环
             // 重新注册。**同一会话内绝不重复注册**——那会让脚本栈里叠多份（幂等守卫能挡住
             // 双图标，但没必要留着这层噪音）。
@@ -981,7 +997,9 @@ pub fn spawn_widget_daemon(panel_url: String) {
                         );
                     }
                 }
-                tokio::time::sleep(Duration::from_secs(20)).await;
+                // 5s 探活：SPA 导航把图标清掉后最多 5s 重注入（原 20s 太钝）。
+                // 单次 evaluate 只是一个 DOM 查询，成本可忽略。
+                tokio::time::sleep(Duration::from_secs(5)).await;
                 // 探活 + 图标存活性检查（导航重注入兜底）。版本号与注入脚本共用常量。
                 match session.evaluate(&widget_probe_js()).await {
                     Ok(v) if v.as_bool() == Some(true) => {}
