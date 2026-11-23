@@ -1,0 +1,266 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>WorkBuddy Deck · 多账号控制台</title>
+<meta name="description" content="WorkBuddy 多账号控制台：注入在客户端里的悬浮面板，切号、签到、成长任务、积分与 TOKEN 一块屏管完。">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
+<style>
+/* Hallmark · shape: Register sheet · genre: modern-minimal · theme: Blueprint (deal 3/3, seed workbuddy-token-7712·e34d3627·2026-11-23·r0) · job: try · draw: 7712
+ * hero: Stage, text 5 columns, the task screen at 7 · nav: slab, wordmark, three links, one action · footer: mast · imagery: three real captures, kept in colour inside the keyline · signature: the task table at real size, the product doing the one job · blueprint: cyanotype
+ * axes: mid/geometric-sans/neutral · posture: drenched · contrast: pass · fold: pass · v2.0.0 */
+/* Hallmark · pre-emit critique: P5 H4 E5 S4 R4 V4 · weakest: R, the register table and the step run both wanted to be the page's spine; kept the table, moved the steps to four lines on one rule */
+@import url("./tokens.css");
+@import url("./base.css");
+
+:root { --nav-h: 64px; --page-max: 1312px; }
+body { font-size: var(--text-md); }
+a { text-decoration: none; }
+a:hover { text-decoration: underline; }
+.nav nav a:active, footer a:active { color: var(--color-ink-2); }
+
+.sheet { border-top: var(--rule-heavy) solid var(--color-rule); }
+
+/* nav: slab */
+.nav { border-bottom: var(--rule-heavy) solid var(--color-rule); background: var(--color-paper-2); }
+.nav .container { height: var(--nav-h); display: flex; align-items: center; gap: var(--space-lg); }
+.brand { white-space: nowrap; font-family: var(--font-display); font-weight: 600; font-size: var(--text-lg); letter-spacing: var(--tracking-display); text-transform: uppercase; }
+.nav nav { margin-left: auto; display: flex; align-items: center; gap: var(--space-lg); }
+.nav nav a { font-size: var(--text-sm); font-weight: 500; white-space: nowrap; }
+.btn { white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 var(--space-lg); border: var(--rule-hair) solid var(--color-rule); border-radius: 0; background: transparent; color: var(--color-ink); font-size: var(--text-md); font-weight: 500; line-height: 1; }
+.btn:hover { background: var(--color-paper-3); text-decoration: none; }
+.btn:active { background: var(--color-paper); }
+.btn--primary { background: var(--color-ink); border-color: var(--color-ink); color: var(--color-accent-ink); }
+.btn--primary:hover { background: var(--color-ink-2); border-color: var(--color-ink-2); }
+.btn--primary:active { background: var(--color-ink); }
+
+/* hero: Stage */
+.hero .container { min-height: calc(100dvh - var(--nav-h)); display: grid; grid-template-columns: minmax(0, 4fr) minmax(0, 8fr); gap: var(--space-2xl); align-content: center; align-items: center; padding-block: var(--space-3xl); }
+.hero h1 { text-transform: uppercase; font-size: clamp(2.5rem, 4.2vw + 0.6rem, 4.25rem); }
+.hero .lead { margin-top: var(--space-lg); }
+.hero .actions { display: flex; gap: var(--space-md); margin-top: var(--space-xl); flex-wrap: wrap; }
+.hero .note { margin-top: var(--space-lg); font-size: var(--text-sm); color: var(--color-muted); max-width: 40ch; }
+
+/* the keyline figure */
+.fig { border: var(--rule-hair) solid var(--color-rule); position: relative; }
+.fig::after { content: ""; position: absolute; inset: 5px; border: var(--rule-hair) solid var(--color-rule-2); pointer-events: none; }
+.fig img { width: 100%; height: auto; }
+.fig figcaption { font-size: var(--text-sm); color: var(--color-muted); padding: var(--space-sm) var(--space-md); }
+
+/* section head block */
+.sec { padding-block: var(--section-gap); }
+.sec--tight { padding-block: var(--section-gap-s); }
+.sec .head { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--space-2xl); align-items: end; }
+.sec h2 { text-transform: uppercase; }
+.sec .head p { font-size: var(--text-lead); line-height: 1.4; color: var(--color-ink-2); max-width: 40ch; }
+
+/* register table */
+.reg { width: 100%; border-collapse: collapse; margin-top: var(--space-2xl); font-size: var(--text-md); }
+.reg th { text-align: left; font-weight: 500; font-size: var(--text-sm); color: var(--color-ink-2); padding: var(--space-sm) var(--space-md); border-bottom: var(--rule-heavy) solid var(--color-rule); }
+.reg td { padding: var(--space-md); border-bottom: var(--rule-hair) solid var(--color-rule-2); vertical-align: baseline; }
+.reg tr:hover td { background: var(--color-paper-2); }
+.reg .idx { width: 88px; font-family: var(--font-outlier); font-weight: 500; color: var(--color-ink-2); }
+.reg .name { width: 220px; font-weight: 500; }
+.reg td:last-child { color: var(--color-ink-2); }
+
+/* statement */
+.statement { border-top: var(--rule-heavy) solid var(--color-rule); border-bottom: var(--rule-heavy) solid var(--color-rule); background: var(--color-paper-2); }
+.statement p { font-family: var(--font-display); font-weight: 600; text-transform: uppercase; line-height: 1.04; font-size: clamp(1.75rem, 3vw + 0.6rem, 3.25rem); max-width: 30ch; padding-block: var(--section-gap-s); }
+
+/* step run on one rule */
+.steps { margin-top: var(--space-2xl); display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--space-2xl); border-top: var(--rule-heavy) solid var(--color-rule); }
+.steps li { list-style: none; padding-top: var(--space-md); border-top: var(--rule-hair) solid transparent; }
+.steps .n { font-family: var(--font-outlier); font-weight: 500; font-size: var(--text-sm); color: var(--color-ink-2); display: block; }
+.steps h3 { margin-top: var(--space-xs); font-size: var(--text-lg); }
+.steps p { margin-top: var(--space-xs); font-size: var(--text-sm); color: var(--color-ink-2); }
+.stepnote { margin-top: var(--space-lg); font-size: var(--text-sm); color: var(--color-muted); max-width: 52ch; }
+
+/* split */
+.split { display: grid; grid-template-columns: minmax(0, 5fr) minmax(0, 7fr); gap: var(--space-2xl); align-items: center; }
+.split .facts { margin: var(--space-xl) 0 0; padding: 0; display: grid; gap: var(--space-md); }
+.split .facts li { list-style: none; border-top: var(--rule-hair) solid var(--color-rule-2); padding-top: var(--space-sm); font-size: var(--text-md); color: var(--color-ink-2); }
+.split .facts strong { color: var(--color-ink); font-weight: 500; }
+
+/* band */
+.band { background: var(--color-paper-3); color: var(--color-ink); border-block: var(--rule-heavy) solid var(--color-rule); padding-block: var(--section-gap-s); }
+.band .container { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--space-2xl); align-items: center; }
+.band h2 { text-transform: uppercase; font-size: clamp(1.75rem, 2vw + 1rem, 2.5rem); }
+.band p { margin-top: var(--space-md); color: var(--color-ink-2); max-width: 44ch; }
+.band .actions { display: flex; gap: var(--space-md); margin-top: var(--space-xl); flex-wrap: wrap; }
+pre { margin: 0; border: var(--rule-hair) solid var(--color-rule); background: var(--color-paper-2); padding: var(--space-lg); overflow-x: auto; font-family: var(--font-outlier); font-size: var(--text-sm); line-height: 1.7; }
+
+/* footer: mast */
+footer { padding-block: var(--space-3xl); }
+footer .container { display: grid; grid-template-columns: minmax(0, 7fr) minmax(0, 5fr); gap: var(--space-2xl); align-items: end; }
+footer .word { font-family: var(--font-display); font-weight: 600; text-transform: uppercase; font-size: clamp(2rem, 3vw + 1rem, 3.5rem); letter-spacing: var(--tracking-display); line-height: 1; }
+footer ul { margin: 0; padding: 0; display: flex; gap: var(--space-lg); flex-wrap: wrap; }
+footer li { list-style: none; }
+footer .links, footer .legal { font-size: var(--text-sm); color: var(--color-ink-2); }
+footer .legal { margin-top: var(--space-lg); color: var(--color-muted); max-width: 46ch; }
+
+@media (max-width: 40rem) {
+  .reg .idx { display: none; }
+  .reg td, .reg th { padding-inline: var(--space-xs); }
+}
+
+@media (max-width: 60rem) {
+  .hero .container, .split, .band .container, footer .container, .sec .head { grid-template-columns: minmax(0, 1fr); gap: var(--space-xl); }
+  .steps { grid-template-columns: minmax(0, 1fr); gap: var(--space-lg); }
+  .nav nav a[href="#sections"], .nav nav a[href="#inject"] { display: none; }
+  .reg .name { width: auto; }
+  .reg .idx { width: 56px; }
+}
+</style>
+</head>
+<body>
+<div class="sheet">
+
+<header class="nav">
+  <div class="container">
+    <a class="brand" href="./">WorkBuddy Deck</a>
+    <nav aria-label="页面导航">
+      <a href="#sections">分区</a>
+      <a href="#inject">注入</a>
+      <a href="https://github.com/a634691481-arch/workbuddy-deck/releases/latest">下载</a>
+    </nav>
+  </div>
+</header>
+
+<main>
+  <section class="hero">
+    <div class="container">
+      <div>
+        <h1>八个账号，一块控制台</h1>
+        <p class="lead">切号、签到、成长任务、积分、TOKEN，都在一个注入面板里跑完，不用离开客户端。</p>
+        <div class="actions">
+          <a class="btn btn--primary" href="https://github.com/a634691481-arch/workbuddy-deck/releases/latest">下载安装包</a>
+          <a class="btn" href="https://github.com/a634691481-arch/workbuddy-deck">读源码</a>
+        </div>
+        <p class="note">Windows、macOS、Linux。账号数据只留在本机 ~/.wb-switch/，不上传。</p>
+      </div>
+      <figure class="fig">
+        <img src="./shots/02-tasks.png" alt="WorkBuddy Deck 任务页：左侧八个账号，右侧成长任务表，已完成三项，一项进行中" width="1600" height="1000">
+        <figcaption>任务页真机截图。八个账号串行跑成长任务，完成的打勾。</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="sec" id="sections">
+    <div class="container">
+      <div class="head">
+        <h2>六个分区</h2>
+        <p>每个分区只干一件事，数据来自同一份本地账号库。</p>
+      </div>
+      <table class="reg">
+        <thead>
+          <tr><th scope="col">编号</th><th scope="col">分区</th><th scope="col">解决的事</th></tr>
+        </thead>
+        <tbody>
+          <tr><td class="idx">01</td><td class="name">账号</td><td>扫码登录与导入导出，余额和积分包，剩余天数预测，健康点，限流标记，一键设为当前账号</td></tr>
+          <tr><td class="idx">02</td><td class="name">任务</td><td>选账号后跑签到、成长任务、旅行或全套日常，实时进度，失败项单独重跑</td></tr>
+          <tr><td class="idx">03</td><td class="name">积分</td><td>每日消耗与账号余额，模型、客户端、账号三个维度，官方用量优先，本地快照兜底</td></tr>
+          <tr><td class="idx">04</td><td class="name">TOKEN</td><td>多数据源汇总，会话排行，调用明细，周与时的热力图，七日环比</td></tr>
+          <tr><td class="idx">05</td><td class="name">日志</td><td>通知存档、自动日常、错误日志、切换台账四源合一，可按源清空</td></tr>
+          <tr><td class="idx">06</td><td class="name">设置</td><td>数据目录与规模，四份 CSV 导出，限流自动切换，镜像前缀</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <section class="statement">
+    <div class="container">
+      <p>会话只有一套，切到哪个账号都是这一套</p>
+    </div>
+  </section>
+
+  <section class="sec" id="inject">
+    <div class="container">
+      <div class="head">
+        <h2>注入是怎么接上的</h2>
+        <p>没有调试端口就注入不了，所以启动器和注入器是同一个 exe。</p>
+      </div>
+      <ol class="steps">
+        <li>
+          <span class="n">step 1</span>
+          <h3>校验客户端</h3>
+          <p>安装向导和启动器都读注册表，确认官方客户端装在哪，路径可手改。</p>
+        </li>
+        <li>
+          <span class="n">step 2</span>
+          <h3>带端口拉起</h3>
+          <p>客户端没开就以 --remote-debugging-port=9222 启动；已经在跑先提示关闭。</p>
+        </li>
+        <li>
+          <span class="n">step 3</span>
+          <h3>CDP 注入</h3>
+          <p>连上页面，注册新文档自动注入，右下角出现图标，之后每秒探活、清掉就补。</p>
+        </li>
+        <li>
+          <span class="n">step 4</span>
+          <h3>面板接管</h3>
+          <p>点图标弹出 iframe 面板，加载 127.0.0.1:17653，完整界面在客户端里跑。</p>
+        </li>
+      </ol>
+      <p class="stepnote">同一份前端也直接开独立窗口，双屏或不想挡着聊天区时用。</p>
+    </div>
+  </section>
+
+  <section class="sec sec--tight">
+    <div class="container split">
+      <div>
+        <h2>切号不重启</h2>
+        <p class="lead" style="margin-top: var(--space-md)">写认证，把当前会话池整体划给新账号，页面自己刷新。内容是同一批，只改归属。</p>
+        <ul class="facts">
+          <li><strong>不复制、不删除</strong>，只改 user_id 归属，划归前整库备份</li>
+          <li><strong>写完立刻探测</strong>，客户端没跟上新身份就自动回退重启路径</li>
+          <li><strong>会删除目标账号会话的旧参数</strong>已在命令层禁死，来自两次真实的数据丢失事故</li>
+        </ul>
+      </div>
+      <figure class="fig">
+        <img src="./shots/01-accounts.png" alt="账号页：八张账号卡片，各带余额、积分包数量、剩余天数预测与健康点" width="1600" height="1000">
+        <figcaption>账号页：余额旁边是剩余天数预测，健康点悬停能看到扣分原因。</figcaption>
+      </figure>
+    </div>
+  </section>
+
+  <section class="band">
+    <div class="container">
+      <div>
+        <h2>装一个，今天就少点一遍</h2>
+        <p>安装包自带向导，检测官方客户端，确认运行状态，装完把路径写进配置。也可以从源码构建。</p>
+        <div class="actions">
+          <a class="btn btn--primary" href="https://github.com/a634691481-arch/workbuddy-deck/releases/latest">下载最新版</a>
+          <a class="btn" href="https://github.com/a634691481-arch/workbuddy-deck/issues">提一个问题</a>
+        </div>
+      </div>
+      <pre><code>git clone https://github.com/a634691481-arch/workbuddy-deck.git
+cd workbuddy-deck
+npm install
+npm run tauri build</code></pre>
+    </div>
+  </section>
+</main>
+
+<footer>
+  <div class="container">
+    <div>
+      <div class="word">WorkBuddy Deck</div>
+      <p class="legal">仓库暂无 LICENSE 文件，默认保留所有权利。可以阅读、学习，商业使用或再分发请先开 Issue。界面截图为真机数据，账号名已脱敏。</p>
+    </div>
+    <div>
+      <ul class="links">
+        <li><a href="https://github.com/a634691481-arch/workbuddy-deck">GitHub</a></li>
+        <li><a href="https://github.com/a634691481-arch/workbuddy-deck/releases">Releases</a></li>
+        <li><a href="https://github.com/a634691481-arch/workbuddy-deck/issues">Issues</a></li>
+        <li><a href="https://github.com/a634691481-arch/workbuddy-deck/blob/main/README.md">说明</a></li>
+      </ul>
+    </div>
+  </div>
+</footer>
+
+</div>
+</body>
+</html>

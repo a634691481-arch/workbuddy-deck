@@ -31,3 +31,4 @@ wallpapers/
 
 # 调试截图：docs/screenshots 只放对外发布图，调试产物单独归到 debug/
 docs/screenshots/debug/
+.hallmark/
