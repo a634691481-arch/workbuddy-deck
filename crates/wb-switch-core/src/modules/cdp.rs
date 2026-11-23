@@ -516,7 +516,7 @@ const PANEL_DOM_ID: &str = "wb-deck-frame";
 ///
 /// 两处必须共用它：注入脚本里的 `window.__wbDeckVer`，以及守护进程的探针表达式。
 /// 写死两份会得到「探针永远判 false → 每 20s 白注入一次」的假故障。
-const WIDGET_VERSION: u32 = 8;
+const WIDGET_VERSION: u32 = 9;
 
 /// 图标默认位置：底部抬到 96px 是为了避让 WorkBuddy 自带的右下角吉祥物
 /// （它常驻 `right:22px; bottom:22px` 那一带，压上去用户点不到图标）。
@@ -620,7 +620,7 @@ pub fn widget_js_with(panel_url: &str, placement: WidgetPlacement) -> String {
                 const deadBtn = document.getElementById("__wbDeckDomId__");
                 if (deadBtn) deadBtn.remove();
             }
-            const SVG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><g fill="#f5f5f4"><rect x="11" y="2" width="2" height="3.2" rx="1"/><circle cx="12" cy="2" r="1.6"/><rect x="4.5" y="5.2" width="15" height="13" rx="3.4"/><rect x="2" y="8.2" width="1.8" height="5.4" rx="0.9"/><rect x="20.2" y="8.2" width="1.8" height="5.4" rx="0.9"/></g><circle cx="9.2" cy="11.4" r="1.7" fill="#17171a"/><circle cx="14.8" cy="11.4" r="1.7" fill="#17171a"/></svg>';
+            const SVG = '<svg viewBox="0 0 24 24" width="18" height="18" aria-hidden="true"><rect x="3" y="3" width="18" height="18" fill="none" stroke="#f5f5f4" stroke-width="2"/><rect x="14" y="14" width="6" height="6" fill="#8b8fe8"/></svg>';
             let mask = null;
             let frame = null;
             // box 必须提到外层：toggle 要在 ensure() 之外改动画状态，

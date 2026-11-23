@@ -5,6 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>WorkBuddy Deck · 多账号控制台</title>
 <meta name="description" content="WorkBuddy 多账号控制台：注入在客户端里的悬浮面板，切号、签到、成长任务、积分与 TOKEN 一块屏管完。">
+<link rel="icon" href="./favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Chakra+Petch:wght@600&family=IBM+Plex+Sans:wght@400;500&family=IBM+Plex+Mono:wght@500&display=swap" rel="stylesheet">
@@ -27,7 +28,8 @@ a:hover { text-decoration: underline; }
 /* nav: slab */
 .nav { border-bottom: var(--rule-heavy) solid var(--color-rule); background: var(--color-paper-2); }
 .nav .container { height: var(--nav-h); display: flex; align-items: center; gap: var(--space-lg); }
-.brand { white-space: nowrap; font-family: var(--font-display); font-weight: 600; font-size: var(--text-lg); letter-spacing: var(--tracking-display); text-transform: uppercase; }
+.brand .mark { display: inline-block; vertical-align: -4px; margin-right: var(--space-xs); }
+.brand { white-space: nowrap; display: inline-flex; align-items: center; font-family: var(--font-display); font-weight: 600; font-size: var(--text-lg); letter-spacing: var(--tracking-display); text-transform: uppercase; }
 .nav nav { margin-left: auto; display: flex; align-items: center; gap: var(--space-lg); }
 .nav nav a { font-size: var(--text-sm); font-weight: 500; white-space: nowrap; }
 .btn { white-space: nowrap; display: inline-flex; align-items: center; justify-content: center; min-height: 48px; padding: 0 var(--space-lg); border: var(--rule-hair) solid var(--color-rule); border-radius: 0; background: transparent; color: var(--color-ink); font-size: var(--text-md); font-weight: 500; line-height: 1; }
@@ -120,7 +122,7 @@ footer .legal { margin-top: var(--space-lg); color: var(--color-muted); max-widt
 
 <header class="nav">
   <div class="container">
-    <a class="brand" href="./">WorkBuddy Deck</a>
+    <a class="brand" href="./"><img class="mark" src="./favicon.svg" alt="" width="20" height="20">WorkBuddy Deck</a>
     <nav aria-label="页面导航">
       <a href="#sections">分区</a>
       <a href="#inject">注入</a>
