@@ -22,7 +22,7 @@ mod vibrancy;
 
 use tauri::menu::{Menu, MenuItem, PredefinedMenuItem};
 use tauri::tray::{MouseButton, MouseButtonState, TrayIconBuilder, TrayIconEvent};
-use tauri::{AppHandle, Emitter, Manager, WindowEvent};
+use tauri::{AppHandle, Emitter, Manager, WebviewUrl, WebviewWindowBuilder, WindowEvent};
 
 /// 统一入口：把窗口叫回前台。
 fn show_main(app: &AppHandle) {
@@ -30,16 +30,34 @@ fn show_main(app: &AppHandle) {
         let _ = window.show();
         let _ = window.unminimize();
         let _ = window.set_focus();
+        return;
     }
+    // 默认无窗口模式下游标把窗口销毁了：托盘点「显示主窗口」时按配置重建一个。
+    let _ = WebviewWindowBuilder::new(app, "main", WebviewUrl::App("index.html".into()))
+        .title("WorkBuddy Deck")
+        .inner_size(1360.0, 860.0)
+        .min_inner_size(1100.0, 700.0)
+        .visible(true)
+        .build();
 }
 
-/// headless 模式：只做「启动器 + 注入器」，不建窗口、不建托盘。
+/// 是否显示桌面窗口。
 ///
-/// `npm run deck`（= `tauri dev -- --headless`）启动：桥 + CDP 注入照跑，
-/// 只是没有桌面窗口。前端改 vite HMR 直生效，后端改 tauri dev 自动重编译重启。
-fn headless_mode() -> bool {
-    std::env::args().any(|arg| arg == "--headless")
+/// 2026-11-23 用户定稿：**打包版默认就是「启动器 + 注入器」**——双击只拉起
+/// WorkBuddy、带调试端口、注入面板，自己不开窗口。面板从客户端右下角图标进。
+///
+/// 窗口只在三种情况出现：debug 构建（开发）、显式 `--window` / `--ui`、
+/// 或托盘菜单「显示主窗口」。`--headless` 在 debug 下也强制无窗口（`npm run deck`）。
+fn window_mode() -> bool {
+    if std::env::args().any(|arg| arg == "--headless")
         || std::env::var_os("WB_DECK_HEADLESS").is_some()
+    {
+        return false;
+    }
+    if std::env::args().any(|arg| arg == "--window" || arg == "--ui") {
+        return true;
+    }
+    cfg!(debug_assertions)
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -133,8 +151,8 @@ pub fn run() {
             // 恢复时把这行取消注释（与 spawn_auto_switch 一起恢复，只恢复一个会变成半残状态）。
             // start_rate_limit_watcher(app.handle().clone());
 
-            let headless = headless_mode();
-            if headless {
+            let show_window = window_mode();
+            if !show_window {
                 // 配置里的 main 窗口由 Tauri 自动创建（visible:false，从没显示过，不会闪）。
                 // headless 下立刻销毁：不占 WebView2，也不触发「关窗即隐藏」的拦截。
                 if let Some(window) = app.get_webview_window("main") {
@@ -151,15 +169,15 @@ pub fn run() {
                         std::process::exit(0);
                     }
                 }
-                eprintln!("[deck] headless 模式：只跑本地桥 + 注入，无桌面窗口");
+                eprintln!("[deck] 无窗口模式：启动器 + 注入器，面板从客户端右下角图标进入");
             }
 
             // 启动器前置校验（2026-11-21 打包分发）：官方客户端没装弹窗退出；
             // 运行中提示先关闭；未运行直接带调试端口拉起 —— 之后 widget 守护负责注入。
             launcher::spawn_preflight(app.handle().clone());
 
-            if !headless {
-                // 托盘菜单：快捷执行在上，退出压到最下面并与其他项分隔。
+            {
+                // 托盘菜单（无窗口模式下也常驻：唯一能手动打开控制台窗口的入口）：快捷执行在上，退出压到最下面并与其他项分隔。
                 let show = MenuItem::with_id(app, "show", "显示主窗口", true, None::<&str>)?;
                 let checkin =
                     MenuItem::with_id(app, "checkin", "一键签到（全部账号）", true, None::<&str>)?;
@@ -243,8 +261,8 @@ pub fn run() {
             // 每日定时调度：常驻期间后台自转，到点自动跑「全部日常」
             scheduler::spawn(app.handle().clone());
 
-            // 自动更新轮询 / 异常提醒都靠桌面窗口呈现，headless 下没有窗口可弹，跳过。
-            if !headless {
+            // 自动更新轮询 / 异常提醒都靠桌面窗口呈现，无窗口模式下没有窗口可弹，跳过。
+            if show_window {
                 // 自动更新轮询：启动 8s 后首查，之后每 6 小时（可在设置里关闭）
                 update::spawn_poller(app.handle().clone());
 
@@ -294,10 +312,10 @@ pub fn run() {
         .build(tauri::generate_context!())
         .expect("启动 WorkBuddy 任务助手失败")
         .run(|_app, event| {
-            // headless 下窗口在 setup 里就被销毁了，Tauri 默认「最后一个窗口关掉就退出」，
+            // 无窗口模式下窗口在 setup 里就被销毁了，Tauri 默认「最后一个窗口关掉就退出」，
             // 必须显式拦下，否则进程起来 1 秒就自己退了。
-            // 非 headless 不拦：托盘「退出」与 app.exit() 要能真正结束进程。
-            if headless_mode() {
+            // 有窗口模式不拦：托盘「退出」与 app.exit() 要能真正结束进程。
+            if !window_mode() {
                 if let tauri::RunEvent::ExitRequested { api, .. } = event {
                     api.prevent_exit();
                 }
