@@ -21,7 +21,6 @@
 
 #ifndef SrcDir
   #define SrcDir "..\target\release"
-elease"
 #endif
 
 #ifndef AppVersion
