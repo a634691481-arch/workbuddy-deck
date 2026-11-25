@@ -724,7 +724,7 @@ fn switch_account_inner(
         match session::reassign_session_pool(variant, before_uid, &expected_uid) {
             Ok((moved, backup)) => {
                 progress(&format!(
-                    "已划归 {} 条会话、{} 个空间；目标账号原有 {} 条会话已换到原账号名下",
+                    "已划归 {} 条会话、{} 个空间；目标账号原有 {} 条会话已移入隔离区",
                     moved.moved_sessions, moved.moved_spaces, moved.parked_sessions
                 ));
                 reassign_report = Some(json!({

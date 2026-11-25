@@ -927,7 +927,7 @@ pub async fn switch_workbuddy_account(app: tauri::AppHandle, account_id: String)
                     let _ = app.emit(
                         "switch-progress",
                         json!({ "message": format!(
-                            "已划归 {} 条会话、{} 个空间（目标账号原有 {} 条已换到原账号名下），正在刷新客户端…",
+                            "已划归 {} 条会话、{} 个空间（目标账号原有 {} 条已移入隔离区），正在刷新客户端…",
                             moved.moved_sessions, moved.moved_spaces, moved.parked_sessions
                         ) }),
                     );
@@ -952,7 +952,7 @@ pub async fn switch_workbuddy_account(app: tauri::AppHandle, account_id: String)
                         let report = match wb_switch_core::modules::session::reassign_session_pool(variant_v, &from, &to) {
                             Ok((moved, backup)) => {
                                 pg(&format!(
-                                    "已划归 {} 条会话、{} 个空间；目标账号原有 {} 条已换到原账号名下",
+                                    "已划归 {} 条会话、{} 个空间；目标账号原有 {} 条已移入隔离区",
                                     moved.moved_sessions, moved.moved_spaces, moved.parked_sessions
                                 ));
                                 Some(json!({

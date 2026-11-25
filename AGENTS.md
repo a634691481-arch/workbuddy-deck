@@ -134,8 +134,8 @@ StatusBar   24px  ● READY · 最近刷新 · 账号数 · 日志数
   `switch_account_detailed(..., restart=false, share=false, [], [], replace_sessions=false)`，
   **热切换优先，重启兜底**（2026-11-23 三次改口径，用户定稿：不重启切换，会话保持当前这套）。
   WorkBuddy 侧栏按 `sessions.user_id` / `spaces.user_id` 过滤，切号后 uid 变了就「看不到上下文」。
-  定稿语义：**可见上下文永远只有一套，跟着当前账号走**——切换把上一账号名下的会话与空间整体
-  `UPDATE user_id` 划归目标账号（`session::reassign_session_pool`，事务保证会话+空间一起改挂；
+  定稿语义：**可见上下文永远只有一套，跟着当前账号走**——切换把上一账号名下的会话与空间整体搬进目标账号、
+  目标账号原有会话挪进隔离 uid（`__wb_deck_parked__`，不删除）（`session::reassign_session_pool`，事务保证会话+空间一起改挂；
   不复制、不删除、不改内容；划归前有 reassign-preflight 整库备份）。报告在返回值 `sessionReassign`。
   **禁止再传 `replace_sessions=true`**：那会物理删除目标账号的会话（历史上因此丢过 20 条上下文，
   只能靠 `~/.wb-switch/backups/switch-preflight-*` 逐条恢复）。自动切换同样用 false。

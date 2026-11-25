@@ -897,27 +897,33 @@ fn delete_sessions_physical_at(
 /// - 先复制后删，失败时最多是「旧会话 + 部分新会话」，不会丢东西。
 ///
 /// 若一个会话都没复制成功，**不执行删除**（保底：宁可留着旧会话，也不清空账号）。
-/// 会话池**互换**（2026-11-25 用户定稿）：可见上下文永远只有一套，切完不多不少。
+/// 会话池**替换**（2026-11-25 用户定稿，软替换）：切完只看见当前这一套。
 ///
-/// 早期实现是单向 `UPDATE ... SET user_id = to WHERE user_id = from`，把上一账号
-/// 的会话并进目标账号；目标账号自己原有的会话不会消失，两者相加 → 每切一次
-/// 就多一批（实测某账号攒到 193 条）。现在的做法是一次事务里**互换两个 uid**
-/// 的归属：`from` 的池子整体变成 `to` 的，`to` 原有的整体挪到 `from` 名下。
+/// 早期实现是单向 `UPDATE ... SET user_id = to WHERE user_id = from`，目标账号
+/// 自己的旧会话不动，两者相加 → 每切一次多一批（实测某账号攒到 193 条）。
 ///
-/// 结果：切完可见会话 = 切之前那一套，数量与内容不变；两个账号各自的旧会话
-/// 都不删除，只是暂时挂在对方名下，切回去时再换回来。纯 `UPDATE` 归属，
-/// 不复制、不删除、不改任何一行内容。
+/// 现在的做法，一次事务两步：
+/// 1. `to` 名下原有会话/空间 → 隔离 uid（`PARKED_UID`），从任何账号的视图里消失；
+/// 2. `from` 名下当前池整体 → `to`，成为可见的那一套。
+///
+/// **不删除任何一行**：隔离区的数据仍在库里，只是没有账号会按 uid 查到它；
+/// 配合切换前的整库备份，任何时候都能回放。物理删除目标账号会话的那条路
+/// （`replace_sessions=true`）保持禁用——历史上就是它丢过 20 条上下文。
 ///
 /// 返回 (移动统计, 划归前 DB 备份路径)。
+/// 目标账号旧会话的隔离归属：WorkBuddy 按登录 uid 过滤，任何账号都查不到它。
+/// 不是删除，数据仍在库里，需要时可按这个 uid 查回或回放备份。
+pub const PARKED_UID: &str = "__wb_deck_parked__";
+
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub struct PoolMove {
     /// from → to 的会话数（切换后可见的那套）
     pub moved_sessions: usize,
     /// from → to 的空间数
     pub moved_spaces: usize,
-    /// to → from 的会话数（目标账号原有、被暂时挪走的）
+    /// 被挪进隔离区的会话数（目标账号原有）
     pub parked_sessions: usize,
-    /// to → from 的空间数
+    /// 被挪进隔离区的空间数
     pub parked_spaces: usize,
 }
 
@@ -969,21 +975,29 @@ fn reassign_session_pool_at(db: &Path, from_uid: &str, to_uid: &str) -> Result<P
     let moved_spaces = count("spaces", from_uid)?;
     let parked_spaces = count("spaces", to_uid)?;
 
-    // 事务保证 all-or-nothing：会话与空间必须一起换，否则 space_id 引用会跨号悬空。
+    // 事务保证 all-or-nothing：会话与空间必须一起动，否则 space_id 引用会跨号悬空。
+    // 两步顺序固定：先把目标账号的旧数据挪进隔离区，再把当前池搬进目标账号。
     let tx = conn
         .transaction()
         .map_err(|error| format!("开启事务失败: {error}"))?;
-    let swap = |tx: &rusqlite::Transaction, table: &str| -> Result<usize, String> {
+    let park = |tx: &rusqlite::Transaction, table: &str| -> Result<usize, String> {
         tx.execute(
-            &format!(
-                "UPDATE {table} SET user_id = CASE user_id WHEN ?1 THEN ?2 WHEN ?2 THEN ?1 ELSE user_id END                  WHERE user_id IN (?1, ?2)"
-            ),
-            rusqlite::params![from_uid, to_uid],
+            &format!("UPDATE {table} SET user_id = ?1 WHERE user_id = ?2"),
+            rusqlite::params![PARKED_UID, to_uid],
         )
-        .map_err(|error| format!("互换 {table} 归属失败: {error}"))
+        .map_err(|error| format!("隔离 {table} 失败: {error}"))
     };
-    swap(&tx, "sessions")?;
-    swap(&tx, "spaces")?;
+    let adopt = |tx: &rusqlite::Transaction, table: &str| -> Result<usize, String> {
+        tx.execute(
+            &format!("UPDATE {table} SET user_id = ?1 WHERE user_id = ?2"),
+            rusqlite::params![to_uid, from_uid],
+        )
+        .map_err(|error| format!("替换 {table} 失败: {error}"))
+    };
+    park(&tx, "sessions")?;
+    park(&tx, "spaces")?;
+    adopt(&tx, "sessions")?;
+    adopt(&tx, "spaces")?;
     tx.commit()
         .map_err(|error| format!("提交划归失败: {error}"))?;
     Ok(PoolMove {
@@ -5439,26 +5453,38 @@ mod tests {
         assert_eq!(
             (moved.moved_sessions, moved.moved_spaces, moved.parked_sessions, moved.parked_spaces),
             (2, 1, 1, 1),
-            "a→b 2 会话 1 空间；b 原有 1 会话 1 空间被换到 a"
+            "a 的 2 会话 1 空间搬进 b；b 原有 1 会话 1 空间进隔离区"
         );
 
         let conn = Connection::open(&db).unwrap();
         let a_left: i64 = conn
             .query_row("SELECT COUNT(*) FROM sessions WHERE user_id = 'uid-a'", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(a_left, 1, "a 名下只剩 b 换过来的那 1 条，不是 0（互换不是单向搬走）");
+        assert_eq!(a_left, 0, "a 名下清空：它的池子已经整体搬走");
         let b_total: i64 = conn
             .query_row("SELECT COUNT(*) FROM sessions WHERE user_id = 'uid-b'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(b_total, 2, "b 只拿到 a 的 2 条，不会与自己的旧会话相加");
-        let spaces_a: i64 = conn
-            .query_row("SELECT COUNT(*) FROM spaces WHERE user_id = 'uid-a'", [], |r| r.get(0))
+        let parked: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM sessions WHERE user_id = ?1",
+                rusqlite::params![PARKED_UID],
+                |r| r.get(0),
+            )
             .unwrap();
-        assert_eq!(spaces_a, 1);
+        assert_eq!(parked, 1, "b 原有会话进隔离区，没有被删除");
         let spaces_b: i64 = conn
             .query_row("SELECT COUNT(*) FROM spaces WHERE user_id = 'uid-b'", [], |r| r.get(0))
             .unwrap();
         assert_eq!(spaces_b, 1);
+        let spaces_parked: i64 = conn
+            .query_row(
+                "SELECT COUNT(*) FROM spaces WHERE user_id = ?1",
+                rusqlite::params![PARKED_UID],
+                |r| r.get(0),
+            )
+            .unwrap();
+        assert_eq!(spaces_parked, 1);
         // 内容原样：标题不变
         let title: String = conn
             .query_row("SELECT title FROM sessions WHERE id = 's1'", [], |r| r.get(0))
