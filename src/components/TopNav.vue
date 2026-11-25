@@ -37,9 +37,7 @@ const items: { key: NavKey; labelKey: LabelKey }[] = [
   { key: "logs", labelKey: "navS.logs" },
   { key: "archived", labelKey: "navS.archived" },
   { key: "appearance", labelKey: "navS.appearance" },
-  // 皮肤（壁纸）入口 2026-11-20 暂时隐藏：图片主题切了没效果，先收起来。
-  // 恢复时取消下一行注释，并把 App.vue NAV_KEYS 里的 "skin" 加回去。
-  // { key: "skin", labelKey: "navS.skin" },
+  { key: "skin", labelKey: "navS.skin" },
   { key: "settings", labelKey: "navS.settings" },
 ];
 </script>

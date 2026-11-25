@@ -254,6 +254,23 @@ fn save_config(cfg: &SkinConfig) {
     }
 }
 
+/// 壁纸是否视频（按扩展名）：视频不能走 CSS background，要单独塞一个 `<video>`。
+fn is_video_wallpaper(path: &std::path::Path) -> bool {
+    matches!(
+        path.extension()
+            .and_then(|value| value.to_str())
+            .map(|value| value.to_ascii_lowercase())
+            .as_deref(),
+        Some("mp4") | Some("webm") | Some("ogv") | Some("mov")
+    )
+}
+
+/// 是否需要后台自动重放：非内置模式或有壁纸即视为「接管中」。
+/// WorkBuddy 刷新/换页会把注入样式清掉，靠它把皮肤贴回去。
+pub fn should_reapply(cfg: &SkinConfig) -> bool {
+    !is_builtin(&cfg.mode) || !cfg.wallpaper.trim().is_empty()
+}
+
 /// light / dark 是内置原生模式：不注入色板（对齐 WorkDaddy default/dark）。
 fn is_builtin(mode: &str) -> bool {
     matches!(mode, "light" | "dark")
@@ -354,6 +371,10 @@ fn mime_of(path: &std::path::Path) -> &'static str {
         Some("gif") => "image/gif",
         Some("avif") => "image/avif",
         Some("bmp") => "image/bmp",
+        Some("mp4") => "video/mp4",
+        Some("webm") => "video/webm",
+        Some("ogv") => "video/ogg",
+        Some("mov") => "video/quicktime",
         _ => "image/jpeg",
     }
 }
@@ -395,14 +416,16 @@ pub fn wallpaper_reply() -> (u16, String, Vec<u8>) {
     }
 }
 
-fn render_css(cfg: &SkinConfig, wall_url: Option<&str>) -> String {
+fn render_css(cfg: &SkinConfig, wall_url: Option<&str>, video_wall: bool) -> String {
     let mut palette_css = String::new();
     if !is_builtin(&cfg.mode) {
         palette_css = render_palette(cfg);
     }
 
-    // 壁纸块整段按有无壁纸生成：没图时不写 #root 规则，避免把官方背景清空
-    let wall_block = if let Some(url) = wall_url {
+    // 视频壁纸：CSS 只负责把 #root 让成透明，画面由 apply() 额外插入的 <video> 铺。
+    let wall_block = if video_wall {
+        "#root { background: transparent !important; position: relative; z-index: 1; }".to_string()
+    } else if let Some(url) = wall_url {
         let url = url.replace('"', "%22");
         let mask = cfg.mask;
         format!(
@@ -623,7 +646,11 @@ pub async fn apply(cfg: SkinConfig) -> Result<Value, String> {
     // 注入时把本地壁纸文件读成 data URL（配置里只存路径，方便整目录打包）
     let wall_url = resolve_wallpaper(&cfg);
     let has_wall = wall_url.is_some();
-    let css = render_css(&cfg, wall_url.as_deref());
+    let video_wall = wallpaper_path(&cfg)
+        .as_deref()
+        .map(is_video_wallpaper)
+        .unwrap_or(false);
+    let css = render_css(&cfg, wall_url.as_deref(), video_wall);
     let payload = APPLY_JS
         .replace(
             "__CSS__",
@@ -647,6 +674,36 @@ pub async fn apply(cfg: SkinConfig) -> Result<Value, String> {
         .evaluate(&payload)
         .await
         .map_err(|e| format!("注入失败: {e}"))?;
+    // 视频壁纸：CSS 之外再插一层 <video>（静音循环、切后台暂停），图片模式则清掉旧视频。
+    if let Some(url) = wall_url.as_deref() {
+        let video_js = video_wall
+            .then(|| {
+                format!(
+                    r#"(() => {{
+  const ID = '__wbDeckWallVideo', OV = '__wbDeckWallMask';
+  document.getElementById(ID)?.remove();
+  document.getElementById(OV)?.remove();
+  const v = document.createElement('video');
+  v.id = ID; v.src = "{url}"; v.muted = true; v.loop = true; v.autoplay = true; v.playsInline = true;
+  v.style.cssText = 'position:fixed;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;pointer-events:none;';
+  const mask = document.createElement('div');
+  mask.id = OV;
+  mask.style.cssText = 'position:fixed;inset:0;background:rgba(0,0,0,{mask});pointer-events:none;z-index:0;';
+  document.body.append(v, mask);
+  const play = () => {{ v.play().catch(() => {{}}); }};
+  document.addEventListener('visibilitychange', () => document.hidden ? v.pause() : play());
+  play();
+  return true;
+}})()"#,
+                    url = url,
+                    mask = cfg.mask
+                )
+            })
+            .unwrap_or_else(|| {
+                "(() => { document.getElementById('__wbDeckWallVideo')?.remove(); document.getElementById('__wbDeckWallMask')?.remove(); return true; })()".to_string()
+            });
+        let _ = session.evaluate(&video_js).await;
+    }
     save_config(&cfg);
 
     Ok(json!({
@@ -664,6 +721,13 @@ pub async fn remove() -> Result<Value, String> {
         .evaluate(REMOVE_JS)
         .await
         .map_err(|e| format!("恢复失败: {e}"))?;
+    let _ = session
+        .evaluate(
+            "(() => { document.getElementById('__wbDeckWallVideo')?.remove(); document.getElementById('__wbDeckWallMask')?.remove(); return true; })()",
+        )
+        .await;
+    // 配置归零：否则 15 秒守护会把刚恢复掉的皮肤又贴回去。
+    save_config(&SkinConfig::default());
     Ok(json!({ "ok": true }))
 }
 
@@ -767,19 +831,28 @@ pub async fn wallpaper_data(url: &str) -> Result<Value, String> {
 /// 本地图片上传：对话框选图 → 拷进壁纸目录（upload-<时间戳>.<ext>）→ 返回路径。
 pub async fn wallpaper_upload(app: tauri::AppHandle) -> Result<Value, String> {
     use tauri_plugin_dialog::DialogExt;
-    let picked =
-        tauri::async_runtime::spawn_blocking(move || app.dialog().file().blocking_pick_file())
+    let picked = tauri::async_runtime::spawn_blocking(move || {
+        app.dialog()
+            .file()
+            .add_filter("壁纸（图片或视频）", &["jpg", "jpeg", "png", "webp", "gif", "bmp", "avif", "mp4", "webm", "mov", "ogv"])
+            .blocking_pick_file()
+    })
             .await
             .map_err(|e| format!("文件对话框失败: {e}"))?;
     let src = picked
         .and_then(|p| p.as_path().map(|x| x.to_path_buf()))
-        .ok_or_else(|| "未选择图片".to_string())?;
+        .ok_or_else(|| "未选择文件".to_string())?;
     let dest = tokio::task::spawn_blocking(move || -> Result<PathBuf, String> {
         let ext = src
             .extension()
             .and_then(|e| e.to_str())
             .map(|e| e.to_ascii_lowercase())
-            .filter(|e| matches!(e.as_str(), "jpg" | "jpeg" | "png" | "webp" | "gif" | "bmp"))
+            .filter(|e| {
+                matches!(
+                    e.as_str(),
+                    "jpg" | "jpeg" | "png" | "webp" | "gif" | "bmp" | "avif" | "mp4" | "webm" | "mov" | "ogv"
+                )
+            })
             .unwrap_or_else(|| "jpg".to_string());
         let ts = std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)

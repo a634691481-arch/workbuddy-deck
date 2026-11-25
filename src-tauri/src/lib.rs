@@ -180,6 +180,18 @@ pub fn run() {
             // 运行中提示先关闭；未运行直接带调试端口拉起 —— 之后 widget 守护负责注入。
             launcher::spawn_preflight(app.handle().clone());
 
+            // 皮肤守护：WorkBuddy 刷新/换页会清掉注入样式，每 15 秒把接管中的皮肤贴回去。
+            // 只在「非内置模式或有壁纸」时才动，默认深色不打扰客户端。
+            tauri::async_runtime::spawn(async move {
+                loop {
+                    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
+                    let cfg = crate::skin::load_config();
+                    if crate::skin::should_reapply(&cfg) {
+                        let _ = crate::skin::apply(cfg).await;
+                    }
+                }
+            });
+
 
             // 限流巡检：默认关闭，开启后每 2 分钟判定一次
             // 2026-11-09 用户要求暂时关闭「自动切换账号」：先注释调度入口，手动切换不受影响。

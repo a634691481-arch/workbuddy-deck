@@ -197,7 +197,7 @@ onMounted(async () => {
 
 // hash 直达分区（浏览器预览与 WB_START_NAV 深链共用）：#tasks / #credits / #tokens / #accounts / #logs / #archived / #settings
 // "skin" 暂不进白名单（入口已隐藏，深链一并关掉）；恢复时加回。
-const NAV_KEYS: NavKey[] = ["accounts", "tasks", "credits", "tokens", "logs", "archived", "appearance", "settings"];
+const NAV_KEYS: NavKey[] = ["accounts", "tasks", "credits", "tokens", "logs", "archived", "appearance", "skin", "settings"];
 function navFromHash(): NavKey | null {
   const key = window.location.hash.replace("#", "") as NavKey;
   return NAV_KEYS.includes(key) ? key : null;
