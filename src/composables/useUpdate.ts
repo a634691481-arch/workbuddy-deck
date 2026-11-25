@@ -19,7 +19,7 @@ import {
   type UpdateProgress,
   type UpdateStatus,
 } from "@/lib/api";
-import { isEmbedded, isTauri } from "@/lib/tauri-env";
+import { isTauri } from "@/lib/tauri-env";
 
 /**
  * 嵌入面板里不自动开更新弹框：面板是 WorkBuddy 页面内的 iframe，
@@ -28,7 +28,9 @@ import { isEmbedded, isTauri } from "@/lib/tauri-env";
  * 下载/安装也不在面板里做：它会重启本进程，面板自己是挂在宿主页面上的。
  */
 function canPromptUpdate(): boolean {
-  return !isEmbedded();
+  // 2026-11-25 用户要求：面板里也要弹更新框，下载/安装都在面板内完成。
+  // 之前面板里静默，只是为了不挡宿主页面，代价是「有更新也不知道」。
+  return true;
 }
 
 const status = ref<UpdateStatus | null>(null);
@@ -156,8 +158,9 @@ export function useUpdate() {
       message.value = cause instanceof Error ? cause.message : String(cause);
     } finally {
       checking.value = false;
-      if (status.value?.hasUpdate === true && phase.value === "idle") {
-        phase.value = "available";
+      if (status.value?.hasUpdate === true) {
+        if (phase.value === "idle") phase.value = "available";
+        // 已下载待重启时也把弹框叫回来，避免用户点开设置却看不到「重启安装」。
         dialogOpen.value = canPromptUpdate();
       }
     }

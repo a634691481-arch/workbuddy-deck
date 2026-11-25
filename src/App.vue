@@ -52,11 +52,18 @@ const {
   downloaded: updateDownloaded,
   total: updateTotal,
   message: updateMessage,
+  check: checkUpdate,
   dismiss: dismissUpdate,
 } = useUpdate();
 
 // Ctrl/Cmd+K 命令面板：只做分区跳转，不复制业务动作
 const paletteOpen = ref(false);
+
+/** 进「设置」就查一次更新（force=true，绕过后端 6 小时缓存）：用户要的是点一次查一次。 */
+function onNav(key: NavKey) {
+  go(key);
+  if (key === "settings") void checkUpdate(true);
+}
 
 /**
  * 限流自动切换的 3 秒倒计时：后端决定要换号时先发事件，这 3 秒里
@@ -226,7 +233,7 @@ const activeView = computed(() => views[nav.value]);
   <div class="crt flex h-full min-h-0 flex-col bg-background wb-flat">
     <TitleBar v-if="!embedded" />
 
-    <TopNav :current="currentNav" @select="go" />
+    <TopNav :current="currentNav" @select="onNav" />
 
     <!-- 注释必须在 KeepAlive 外：里面只允许一个子组件，注释会被当成额外节点 -->
     <!-- min-w-0：分区视图可收缩，内部宽内容不允许把窗口撑出横向溢出 -->
@@ -284,7 +291,7 @@ const activeView = computed(() => views[nav.value]);
     </Transition>
 
     <UpdateDialog
-      :open="updateOpen && !embedded"
+      :open="updateOpen"
       :current="updateCurrent"
       :latest="updateLatest"
       :notes="updateNotes"
@@ -298,6 +305,6 @@ const activeView = computed(() => views[nav.value]);
       @restart="restartUpdate"
     />
 
-    <CommandPalette :open="paletteOpen" @close="paletteOpen = false" @nav="go" />
+    <CommandPalette :open="paletteOpen" @close="paletteOpen = false" @nav="onNav" />
   </div>
 </template>
