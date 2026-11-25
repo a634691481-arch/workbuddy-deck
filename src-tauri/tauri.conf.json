@@ -8,7 +8,9 @@
     "devUrl": "http://localhost:1420",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist",
-    "additionalWatchFolders": ["../crates"]
+    "additionalWatchFolders": [
+      "../crates"
+    ]
   },
   "app": {
     "windows": [
@@ -23,7 +25,8 @@
         "resizable": true,
         "center": true,
         "visible": false,
-        "transparent": true
+        "transparent": true,
+        "create": false
       }
     ],
     "security": {
@@ -32,7 +35,9 @@
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "windows": {
       "nsis": {
         "installerHooks": "./nsis-hooks.nsh"
