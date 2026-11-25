@@ -32,8 +32,7 @@ const staticItems = computed<Item[]>(() => [
   { key: "nav:tasks", label: t("cm.openTasks"), hint: "02", run: () => emit("nav", "tasks") },
   { key: "nav:credits", label: t("cm.openCredits"), hint: "03", run: () => emit("nav", "credits") },
   { key: "nav:tokens", label: t("cm.openTokens"), hint: "04", run: () => emit("nav", "tokens") },
-  { key: "nav:logs", label: t("cm.openLogs"), hint: "05", run: () => emit("nav", "logs") },
-  { key: "nav:settings", label: t("cm.openSettings"), hint: "06", run: () => emit("nav", "settings") },
+  { key: "nav:logs", label: t("cm.openLogs"), hint: "05", run: () => emit("nav", "logs") },  { key: "nav:settings", label: t("cm.openSettings"), hint: "07", run: () => emit("nav", "settings") },
 ]);
 
 const items = computed<Item[]>(() => {

@@ -49,21 +49,6 @@ pub(super) async fn dispatch(app: &AppHandle, cmd: &str, args: &Value) -> Result
         }
         "plugin:notification|is_permission_granted" => Ok(Value::Bool(true)),
         "plugin:notification|request_permission" => Ok(Value::from("granted")),
-        "skin_state" => Ok(c::skin_state()),
-        "skin_apply" => {
-            let cfg: crate::skin::SkinConfig = args
-                .get("config")
-                .cloned()
-                .map(serde_json::from_value)
-                .transpose()
-                .map_err(|e| format!("配置格式不对: {e}"))?
-                .unwrap_or_default();
-            c::skin_apply(cfg).await
-        }
-        "skin_remove" => c::skin_remove().await,
-        "skin_wallpapers" => c::skin_wallpapers(number("page").map(|v| v as u32)).await,
-        "skin_wallpaper_data" => c::skin_wallpaper_data(text("url").unwrap_or_default()).await,
-        "skin_wallpaper_upload" => c::skin_wallpaper_upload(app.clone()).await,
         "list_accounts" => Ok(c::list_accounts()),
         "import_local_accounts" => Ok(c::import_local_accounts()),
         "account_detail" => c::account_detail(text("accountId").unwrap_or_default()).await,

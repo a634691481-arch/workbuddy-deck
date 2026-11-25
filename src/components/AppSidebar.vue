@@ -23,7 +23,7 @@ defineProps<{
 const emit = defineEmits<{ select: [key: NavKey] }>();
 
 /** 有新版本时在「设置」项右上角点一个危险色方块：面板里不弹窗，只给这一处提示。 */
-const { hasUpdate } = useUpdate();
+const { hasUpdate, phase } = useUpdate();
 
 /** 刚点过的分区：给图标一个 260ms 的弹一下，点同一项也能重放。 */
 const popped = ref<NavKey | null>(null);
@@ -104,7 +104,8 @@ const items: { key: NavKey; idx: string; labelKey: LabelKey }[] = [
       <span
         v-if="item.key === 'settings' && hasUpdate"
         class="absolute right-2 top-1.5 size-1.5 bg-hazard"
-        :title="t('nav.updateDot')"
+        :class="phase === 'ready' || phase === 'restarting' ? 'ring-1 ring-hazard ring-offset-1 ring-offset-panel' : ''"
+        :title="phase === 'ready' || phase === 'restarting' ? t('nav.updateDotReady') : t('nav.updateDot')"
         aria-hidden="true"
       />
     </button>

@@ -26,7 +26,6 @@ type LabelKey =
   | "navS.logs"
   | "navS.archived"
   | "navS.appearance"
-  | "navS.skin"
   | "navS.settings";
 
 const items: { key: NavKey; labelKey: LabelKey }[] = [
@@ -37,7 +36,6 @@ const items: { key: NavKey; labelKey: LabelKey }[] = [
   { key: "logs", labelKey: "navS.logs" },
   { key: "archived", labelKey: "navS.archived" },
   { key: "appearance", labelKey: "navS.appearance" },
-  { key: "skin", labelKey: "navS.skin" },
   { key: "settings", labelKey: "navS.settings" },
 ];
 </script>

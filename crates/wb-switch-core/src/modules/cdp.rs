@@ -101,6 +101,51 @@ async fn fetch_json_loopback(url: &str, timeout: Duration) -> Result<Value, Stri
 }
 
 /// 在候选端口里发现 WorkBuddy 页面 target，返回 `(端口, target)`。
+/// 从 `/json/list` 的行里挑一个 page target。
+///
+/// ⚠ 不能「命中即返回」：WorkBuddy 会同时开一个 `?windowKind=global-search` 的辅助 page，
+/// 它的 URL 同样带 workbuddy.cn，会先被命中——连上它以后换肤的 CSS 一个选择器都不匹配
+/// （实测 `--wb-accent` 为空、`--cb-bg-primary` 仍是官方值），悬浮图标也会长进搜索窗。
+/// 所以**优先主壳（URL 不含 `windowKind=`）**，辅助窗只作兜底。
+pub fn pick_page_target(targets: &[Value]) -> Option<TargetInfo> {
+    let mut preferred: Option<TargetInfo> = None;
+    let mut fallback: Option<TargetInfo> = None;
+    for row in targets {
+        let url = row.get("url").and_then(Value::as_str).unwrap_or("");
+        let title = row.get("title").and_then(Value::as_str).unwrap_or("");
+        let target_type = row.get("type").and_then(Value::as_str).unwrap_or("");
+        if target_type != "page" {
+            continue;
+        }
+        let ws_url = row
+            .get("webSocketDebuggerUrl")
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        if ws_url.is_empty() {
+            continue;
+        }
+        let info = TargetInfo {
+            ws_url,
+            url: url.to_string(),
+            title: title.to_string(),
+            target_type: target_type.to_string(),
+        };
+        if is_workbuddy_cn_target(url, title) {
+            if !url.contains("windowKind=") && preferred.is_none() {
+                preferred = Some(info);
+            } else if fallback.is_none() {
+                fallback = Some(info);
+            }
+            continue;
+        }
+        if fallback.is_none() {
+            fallback = Some(info);
+        }
+    }
+    preferred.or(fallback)
+}
+
 pub async fn discover_workbuddy_target(ports: &[u16]) -> Result<(u16, TargetInfo), String> {
     let mut last_error = String::from("未发现 CDP 端口");
     for port in ports {
@@ -122,37 +167,7 @@ pub async fn discover_workbuddy_target(ports: &[u16]) -> Result<(u16, TargetInfo
             }
         };
         // 先找强信号页面；type=page 且 URL/标题命中 WorkBuddy。
-        let mut fallback: Option<TargetInfo> = None;
-        for row in &targets {
-            let url = row.get("url").and_then(Value::as_str).unwrap_or("");
-            let title = row.get("title").and_then(Value::as_str).unwrap_or("");
-            let target_type = row.get("type").and_then(Value::as_str).unwrap_or("");
-            if target_type != "page" {
-                continue;
-            }
-            let ws_url = row
-                .get("webSocketDebuggerUrl")
-                .and_then(Value::as_str)
-                .unwrap_or("")
-                .to_string();
-            if ws_url.is_empty() {
-                continue;
-            }
-            let info = TargetInfo {
-                ws_url,
-                url: url.to_string(),
-                title: title.to_string(),
-                target_type: target_type.to_string(),
-            };
-            if is_workbuddy_cn_target(url, title) {
-                return Ok((*port, info));
-            }
-            if fallback.is_none() {
-                fallback = Some(info);
-            }
-        }
-        // 端口活着但没有强信号页面：记录兜底候选（客户端可能刚启动还在加载）。
-        if let Some(info) = fallback {
+        if let Some(info) = pick_page_target(&targets) {
             return Ok((*port, info));
         }
         last_error = format!("端口 {port}: 无匹配页面");
@@ -1035,6 +1050,41 @@ pub fn spawn_widget_daemon(panel_url: String) {
 mod tests {
     use super::*;
     use serde_json::json;
+
+    /// 主壳优先：搜索窗（`windowKind=global-search`）也在 /json/list 里，
+    /// 命中即返回会连错窗口——那样换肤 CSS 全不匹配、悬浮图标长进搜索窗。
+    #[test]
+    fn pick_page_target_prefers_main_shell_over_search_window() {
+        let targets = vec![
+            json!({
+                "type": "page",
+                "url": "https://www.workbuddy.cn/app?windowKind=global-search",
+                "title": "WorkBuddy",
+                "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/search",
+            }),
+            json!({
+                "type": "page",
+                "url": "https://www.workbuddy.cn/app",
+                "title": "WorkBuddy",
+                "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/main",
+            }),
+        ];
+        let picked = pick_page_target(&targets).expect("应挑出一个 page");
+        assert_eq!(picked.ws_url, "ws://127.0.0.1:9222/devtools/page/main");
+    }
+
+    /// 只有辅助窗时不能返回 None —— 宁可连它也不要整条链路判死。
+    #[test]
+    fn pick_page_target_falls_back_to_auxiliary_window() {
+        let targets = vec![json!({
+            "type": "page",
+            "url": "https://www.workbuddy.cn/app?windowKind=global-search",
+            "title": "WorkBuddy",
+            "webSocketDebuggerUrl": "ws://127.0.0.1:9222/devtools/page/search",
+        })];
+        let picked = pick_page_target(&targets).expect("辅助窗应作兜底");
+        assert_eq!(picked.ws_url, "ws://127.0.0.1:9222/devtools/page/search");
+    }
 
     #[test]
     fn classify_target_only_accepts_strong_signals() {

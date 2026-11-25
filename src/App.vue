@@ -1,4 +1,4 @@
-<script setup lang="ts">
+﻿<script setup lang="ts">
 /**
  * 外壳：标题栏 + 左侧导航 + 分区页面（KeepAlive 保活，切页不丢运行状态与日志）。
  * 页面自闭环：每个 view 自己取数、自己处理动作，外壳不掺业务。
@@ -8,7 +8,6 @@ import { computed, onMounted, ref } from "vue";
 
 import TopNav from "@/components/TopNav.vue";
 import AppearanceView from "@/views/AppearanceView.vue";
-import SkinView from "@/views/SkinView.vue";
 import CommandPalette from "@/components/CommandPalette.vue";
 import TitleBar from "@/components/TitleBar.vue";
 import UpdateDialog from "@/components/UpdateDialog.vue";
@@ -195,9 +194,17 @@ onMounted(async () => {
   }
 });
 
-// hash 直达分区（浏览器预览与 WB_START_NAV 深链共用）：#tasks / #credits / #tokens / #accounts / #logs / #archived / #settings
-// "skin" 暂不进白名单（入口已隐藏，深链一并关掉）；恢复时加回。
-const NAV_KEYS: NavKey[] = ["accounts", "tasks", "credits", "tokens", "logs", "archived", "appearance", "skin", "settings"];
+// hash 直达分区（浏览器预览与 WB_START_NAV 深链共用）：#tasks / #credits / #tokens / #accounts / #logs / #archived / #appearance / #settings
+const NAV_KEYS: NavKey[] = [
+  "accounts",
+  "tasks",
+  "credits",
+  "tokens",
+  "logs",
+  "archived",
+  "appearance",
+  "settings",
+];
 function navFromHash(): NavKey | null {
   const key = window.location.hash.replace("#", "") as NavKey;
   return NAV_KEYS.includes(key) ? key : null;
@@ -219,7 +226,6 @@ const views = {
   logs: LogsView,
   archived: ArchivedView,
   appearance: AppearanceView,
-  skin: SkinView,
   settings: SettingsView,
 } as const;
 

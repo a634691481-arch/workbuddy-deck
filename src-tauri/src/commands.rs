@@ -1,4 +1,4 @@
-//! 薄命令层：只做参数校验与转调，业务编排在 `executor` 与 `wb-switch-core`。
+﻿//! 薄命令层：只做参数校验与转调，业务编排在 `executor` 与 `wb-switch-core`。
 //!
 //! 约定（见 AGENTS.md）：这里不写业务分支、不拼统计、不做重试；新增动作加一个薄包装即可。
 
@@ -2193,41 +2193,6 @@ pub fn update_download(app: tauri::AppHandle) -> Value {
 }
 
 /// 安装已暂存的更新包并重启。
-/// 换肤：当前配置 + 可选模式。
-#[tauri::command]
-pub fn skin_state() -> Value {
-    crate::skin::state()
-}
-
-/// 换肤：应用配置（模式 / 壁纸 / 模糊度），CDP 注入立即生效。
-#[tauri::command]
-pub async fn skin_apply(config: crate::skin::SkinConfig) -> Result<Value, String> {
-    crate::skin::apply(config).await
-}
-
-/// 换肤：wallhaven 壁纸列表（按页）。
-#[tauri::command]
-pub async fn skin_wallpapers(page: Option<u32>) -> Result<Value, String> {
-    crate::skin::wallpapers(page.unwrap_or(1)).await
-}
-
-/// 换肤：下载选中壁纸原图并转 data URL（绕过渲染进程 CSP）。
-#[tauri::command]
-pub async fn skin_wallpaper_data(url: String) -> Result<Value, String> {
-    crate::skin::wallpaper_data(&url).await
-}
-
-/// 换肤：本地上传壁纸（对话框选图 → data URL）。
-#[tauri::command]
-pub async fn skin_wallpaper_upload(app: tauri::AppHandle) -> Result<Value, String> {
-    crate::skin::wallpaper_upload(app).await
-}
-
-/// 换肤：恢复官方外观。
-#[tauri::command]
-pub async fn skin_remove() -> Result<Value, String> {
-    crate::skin::remove().await
-}
 
 #[tauri::command]
 pub fn update_restart(app: tauri::AppHandle) -> Value {
@@ -2308,3 +2273,7 @@ pub fn app_ready(app: tauri::AppHandle) {
         let _ = window.set_focus();
     }
 }
+
+// ---------------------------------------------------------------------------
+// ---------------------------------------------------------------------------
+

@@ -14,7 +14,6 @@ mod launcher;
 mod preflight;
 mod purge;
 mod scheduler;
-mod skin;
 mod token_cache;
 mod tray;
 mod update;
@@ -80,12 +79,6 @@ pub fn run() {
             commands::run_daily,
             commands::cdp_status,
             commands::cdp_restart_client,
-            commands::skin_state,
-            commands::skin_apply,
-            commands::skin_remove,
-            commands::skin_wallpapers,
-            commands::skin_wallpaper_data,
-            commands::skin_wallpaper_upload,
             commands::launch_main_app,
             commands::export_accounts_file,
             commands::preview_import_file,
@@ -180,18 +173,6 @@ pub fn run() {
             // 运行中提示先关闭；未运行直接带调试端口拉起 —— 之后 widget 守护负责注入。
             launcher::spawn_preflight(app.handle().clone());
 
-            // 皮肤守护：WorkBuddy 刷新/换页会清掉注入样式，每 15 秒把接管中的皮肤贴回去。
-            // 只在「非内置模式或有壁纸」时才动，默认深色不打扰客户端。
-            tauri::async_runtime::spawn(async move {
-                loop {
-                    tokio::time::sleep(std::time::Duration::from_secs(15)).await;
-                    let cfg = crate::skin::load_config();
-                    if crate::skin::should_reapply(&cfg) {
-                        let _ = crate::skin::apply(cfg).await;
-                    }
-                }
-            });
-
 
             // 限流巡检：默认关闭，开启后每 2 分钟判定一次
             // 2026-11-09 用户要求暂时关闭「自动切换账号」：先注释调度入口，手动切换不受影响。
@@ -225,6 +206,11 @@ pub fn run() {
                     eprintln!("[deck] 本地桥启动失败，页面内面板不可用（独立窗口不受影响）");
                 }
             }
+
+            // 换肤守护：CDP 注入跟着 renderer 存活，WorkBuddy 一重载就没了（方案天性）。
+            // 每 15s 查一次 `~/.wb-switch/skin.json`：贴着的主题掉了、或官方把明暗档位
+            // 翻回去了，就重贴；客户端没开调试端口时只记状态、不动进程。
+            // 打包形态是无窗口的，所以它必须放在 `if show_window` 之外。
             Ok(())
         })
         // 关闭即隐藏：保留后台执行与托盘，不销毁 WebView（下次显示无需重建）

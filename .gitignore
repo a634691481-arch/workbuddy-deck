@@ -28,7 +28,19 @@ design-demos/media/frames/
 
 # 壁纸原图（36MB 二进制）。skin.rs 读本地目录 wallpapers\，回落 ~/.wb-switch/wallpapers
 wallpapers/
+# 例外：12 张内置壁纸 + 缩略图随源码分发（skin.rs 用 include_bytes! 打进二进制，
+# 不入库会让别人 clone 后编译失败），合计约 1.9MB，不是用户的 36MB 大图
+!src-tauri/assets/skin/wallpapers/
 
 # 调试截图：docs/screenshots 只放对外发布图，调试产物单独归到 debug/
 docs/screenshots/debug/
 .hallmark/
+
+# 换肤调试产物：CDP 探针截图（重跑 scripts/skin-live.cjs 可再生成）与变量生成中间件。
+# 注意 assets/ref/nebula-theme.json **要入库**——它是 scripts/gen-skin-vars.cjs 的输入，
+# 别人 clone 后靠它才能重新生成 palette.css 里那 325 条 --wb-* 变量。
+assets/logo/renders/live-*.png
+assets/logo/renders/patch*.png
+assets/logo/renders/probe*.png
+assets/ref/gen-vars.css
+assets/ref/gen-vars.log

@@ -7,7 +7,6 @@ export type NavKey =
   | "logs"
   | "archived"
   | "appearance"
-  | "skin"
   | "settings";
 
 // ── 导航图标（morphicons：idle ↔ active 之间做形变过渡）──────────────────
@@ -22,8 +21,6 @@ import {
   KeyRound,
   Palette,
   Paintbrush,
-  Sparkles,
-  Brush,
   ListChecks,
   ListTodo,
   ScrollText,
@@ -46,6 +43,5 @@ export const NAV_ICONS: Record<NavKey, IconPair> = {
   logs: pair(ScrollText, SquareTerminal),
   archived: pair(Archive, Boxes),
   appearance: pair(Palette, Paintbrush),
-  skin: pair(Sparkles, Brush),
   settings: pair(Settings, Settings2),
 };

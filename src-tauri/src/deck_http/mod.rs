@@ -46,11 +46,6 @@ pub(super) type Reply = (u16, String, Vec<u8>);
 const PORT_CANDIDATES: [u16; 4] = [17653, 17654, 17655, 17656];
 
 /// 面板 iframe 的完整 URL（未启动时返回 None）。
-/// 面板桥的根地址（`http://127.0.0.1:<port>`），供皮肤等模块把本地素材挂成 URL。
-pub fn base_url() -> Option<String> {
-    PORT.get().map(|port| format!("http://127.0.0.1:{port}"))
-}
-
 pub fn panel_url() -> Option<String> {
     match (PORT.get(), TOKEN.get()) {
         (Some(port), Some(token)) => Some(format!("http://127.0.0.1:{port}/?__deck_t={token}")),
@@ -191,7 +186,6 @@ async fn route(app: &AppHandle, token: &str, req: &Request) -> Reply {
             "application/json; charset=utf-8".to_string(),
             serde_json::to_vec_pretty(&asset::diag(app).await).unwrap_or_default(),
         ),
-        ("GET", "/skin/wallpaper") => crate::skin::wallpaper_reply(),
         ("GET", _) => asset::serve(app, &req.path, &req.query).await,
         _ => (
             405,

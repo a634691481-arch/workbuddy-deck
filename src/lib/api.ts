@@ -891,55 +891,7 @@ export const cdpStatus = () => invoke<CdpStatus>("cdp_status");
 export const cdpRestartClient = () =>
   invoke<{ ok: boolean; port?: number; error?: string }>("cdp_restart_client");
 
-// ── 换肤（CDP 注入，对应 src-tauri/src/skin.rs）─────────────────────────
 
-export interface SkinConfig {
-  mode: string;
-  wallpaper: string;
-  blur: number;
-  /** 壁纸压暗蒙版 0–1 */
-  mask: number;
-}
-
-export interface SkinMode {
-  id: string;
-  label: string;
-  accent: string;
-  blur: number;
-}
-
-export const skinState = () =>
-  invoke<{ ok: boolean; config: SkinConfig; modes: SkinMode[] }>("skin_state");
-
-export const skinApply = (config: SkinConfig) =>
-  invoke<{ ok: boolean; mode?: string; label?: string; hasWallpaper?: boolean }>(
-    "skin_apply",
-    { config },
-  );
-
-export const skinRemove = () => invoke<{ ok: boolean }>("skin_remove");
-
-export interface SkinWallpaper {
-  id: string;
-  url: string;
-  thumb: string;
-  resolution: string;
-}
-
-/** wallhaven 壁纸列表（SFW / 横向 / 1080p+，按最近一个月热门排序）。缩略图已转 data URL。 */
-export const skinWallpapers = (page = 1) =>
-  invoke<{ ok: boolean; page: number; lastPage?: number; items: SkinWallpaper[] }>(
-    "skin_wallpapers",
-    { page },
-  );
-
-/** 选中壁纸：下载原图落盘，返回本地路径（配置只存路径，注入时后端临时读图）。 */
-export const skinWallpaperData = (url: string) =>
-  invoke<{ ok: boolean; path: string; dataUrl: string }>("skin_wallpaper_data", { url });
-
-/** 本地上传壁纸：选图拷进壁纸目录，返回本地路径。 */
-export const skinWallpaperUpload = () =>
-  invoke<{ ok: boolean; path: string; dataUrl: string }>("skin_wallpaper_upload");
 
 export const openStoreDir = () =>
   invoke<{ ok: boolean; path: string; error?: string }>("open_store_dir");
@@ -1180,3 +1132,4 @@ export const updateConfigGet = () => invoke<UpdateConfig>("update_config_get");
 
 export const updateConfigSet = (autoCheck: boolean, mirror: string) =>
   invoke<UpdateConfig>("update_config_set", { autoCheck, mirror });
+
