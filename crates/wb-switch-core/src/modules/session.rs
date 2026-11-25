@@ -897,24 +897,42 @@ fn delete_sessions_physical_at(
 /// - 先复制后删，失败时最多是「旧会话 + 部分新会话」，不会丢东西。
 ///
 /// 若一个会话都没复制成功，**不执行删除**（保底：宁可留着旧会话，也不清空账号）。
-/// 会话池划归（2026-11-20 用户定稿语义）：**可见上下文永远只有一套，跟着当前账号走**。
+/// 会话池**互换**（2026-11-25 用户定稿）：可见上下文永远只有一套，切完不多不少。
 ///
-/// 切换账号时把 `from_uid` 名下的会话与空间整体改挂到 `to_uid` 名下——
-/// 纯 `UPDATE` 归属，不复制、不删除、不改任何内容。WorkBuddy 侧栏按
-/// `user_id` 过滤，这就是「切号后上下文还在」的唯一正确实现。
-/// 返回 (划归会话数, 划归空间数, 划归前 DB 备份路径)。
+/// 早期实现是单向 `UPDATE ... SET user_id = to WHERE user_id = from`，把上一账号
+/// 的会话并进目标账号；目标账号自己原有的会话不会消失，两者相加 → 每切一次
+/// 就多一批（实测某账号攒到 193 条）。现在的做法是一次事务里**互换两个 uid**
+/// 的归属：`from` 的池子整体变成 `to` 的，`to` 原有的整体挪到 `from` 名下。
+///
+/// 结果：切完可见会话 = 切之前那一套，数量与内容不变；两个账号各自的旧会话
+/// 都不删除，只是暂时挂在对方名下，切回去时再换回来。纯 `UPDATE` 归属，
+/// 不复制、不删除、不改任何一行内容。
+///
+/// 返回 (移动统计, 划归前 DB 备份路径)。
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub struct PoolMove {
+    /// from → to 的会话数（切换后可见的那套）
+    pub moved_sessions: usize,
+    /// from → to 的空间数
+    pub moved_spaces: usize,
+    /// to → from 的会话数（目标账号原有、被暂时挪走的）
+    pub parked_sessions: usize,
+    /// to → from 的空间数
+    pub parked_spaces: usize,
+}
+
 pub fn reassign_session_pool(
     variant: WbVariant,
     from_uid: &str,
     to_uid: &str,
-) -> Result<(usize, usize, PathBuf), String> {
+) -> Result<(PoolMove, PathBuf), String> {
     let paths = SessionPaths::for_variant(variant);
     let db = paths.workbuddy_db();
     if from_uid.is_empty() || to_uid.is_empty() || from_uid == to_uid {
-        return Ok((0, 0, PathBuf::new()));
+        return Ok((PoolMove::default(), PathBuf::new()));
     }
     if !db.exists() {
-        return Ok((0, 0, PathBuf::new()));
+        return Ok((PoolMove::default(), PathBuf::new()));
     }
     // 划归前整库备份（db + wal + shm，带大小校验）：UPDATE 虽然可逆，但
     // 留一份现场快照，任何意外都能整库回放。备份失败即中止划归——
@@ -923,38 +941,57 @@ pub fn reassign_session_pool(
     let backup_root =
         crate::modules::config::backup_dir().join(format!("reassign-preflight-{}", crate::modules::config::utc_iso()));
     backup_workbuddy_db(&paths, &backup_root)?;
-    let (sessions, spaces) = reassign_session_pool_at(&db, from_uid, to_uid)?;
-    Ok((sessions, spaces, backup_root))
+    let moved = reassign_session_pool_at(&db, from_uid, to_uid)?;
+    Ok((moved, backup_root))
 }
 
 /// 可注入路径版本：单测用临时库，不碰真实数据区。
-fn reassign_session_pool_at(db: &Path, from_uid: &str, to_uid: &str) -> Result<(usize, usize), String> {
+fn reassign_session_pool_at(db: &Path, from_uid: &str, to_uid: &str) -> Result<PoolMove, String> {
     if from_uid.is_empty() || to_uid.is_empty() || from_uid == to_uid {
-        return Ok((0, 0));
+        return Ok(PoolMove::default());
     }
     if !db.exists() {
-        return Ok((0, 0));
+        return Ok(PoolMove::default());
     }
     let mut conn = open_db(db, false).ok_or_else(|| "打开 workbuddy.db 失败".to_string())?;
-    // 事务保证 all-or-nothing：会话与空间必须一起划归，否则 space_id 引用会跨号悬空。
+    // 先数清楚两个方向的数量，再做**互换**（单条 CASE 语句，原子，不需要中间态）。
+    let count = |table: &str, uid: &str| -> Result<usize, String> {
+        conn.query_row(
+            &format!("SELECT count(*) FROM {table} WHERE user_id = ?1"),
+            rusqlite::params![uid],
+            |row| row.get::<_, i64>(0),
+        )
+        .map(|n| n as usize)
+        .map_err(|error| format!("统计 {table} 失败: {error}"))
+    };
+    let moved_sessions = count("sessions", from_uid)?;
+    let parked_sessions = count("sessions", to_uid)?;
+    let moved_spaces = count("spaces", from_uid)?;
+    let parked_spaces = count("spaces", to_uid)?;
+
+    // 事务保证 all-or-nothing：会话与空间必须一起换，否则 space_id 引用会跨号悬空。
     let tx = conn
         .transaction()
         .map_err(|error| format!("开启事务失败: {error}"))?;
-    let sessions = tx
-        .execute(
-            "UPDATE sessions SET user_id = ?1 WHERE user_id = ?2",
-            rusqlite::params![to_uid, from_uid],
+    let swap = |tx: &rusqlite::Transaction, table: &str| -> Result<usize, String> {
+        tx.execute(
+            &format!(
+                "UPDATE {table} SET user_id = CASE user_id WHEN ?1 THEN ?2 WHEN ?2 THEN ?1 ELSE user_id END                  WHERE user_id IN (?1, ?2)"
+            ),
+            rusqlite::params![from_uid, to_uid],
         )
-        .map_err(|error| format!("划归会话失败: {error}"))?;
-    let spaces = tx
-        .execute(
-            "UPDATE spaces SET user_id = ?1 WHERE user_id = ?2",
-            rusqlite::params![to_uid, from_uid],
-        )
-        .map_err(|error| format!("划归空间失败: {error}"))?;
+        .map_err(|error| format!("互换 {table} 归属失败: {error}"))
+    };
+    swap(&tx, "sessions")?;
+    swap(&tx, "spaces")?;
     tx.commit()
         .map_err(|error| format!("提交划归失败: {error}"))?;
-    Ok((sessions, spaces))
+    Ok(PoolMove {
+        moved_sessions,
+        moved_spaces,
+        parked_sessions,
+        parked_spaces,
+    })
 }
 
 pub fn replace_sessions_for_switch(
@@ -5398,22 +5435,30 @@ mod tests {
         let db = root.join("workbuddy.db");
         create_pool_db(&db);
 
-        let (sessions, spaces) = reassign_session_pool_at(&db, "uid-a", "uid-b").unwrap();
-        assert_eq!((sessions, spaces), (2, 1));
+        let moved = reassign_session_pool_at(&db, "uid-a", "uid-b").unwrap();
+        assert_eq!(
+            (moved.moved_sessions, moved.moved_spaces, moved.parked_sessions, moved.parked_spaces),
+            (2, 1, 1, 1),
+            "a→b 2 会话 1 空间；b 原有 1 会话 1 空间被换到 a"
+        );
 
         let conn = Connection::open(&db).unwrap();
         let a_left: i64 = conn
             .query_row("SELECT COUNT(*) FROM sessions WHERE user_id = 'uid-a'", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(a_left, 0, "原账号名下不应残留");
+        assert_eq!(a_left, 1, "a 名下只剩 b 换过来的那 1 条，不是 0（互换不是单向搬走）");
         let b_total: i64 = conn
             .query_row("SELECT COUNT(*) FROM sessions WHERE user_id = 'uid-b'", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(b_total, 3, "划归 2 条 + 别人原有 1 条");
+        assert_eq!(b_total, 2, "b 只拿到 a 的 2 条，不会与自己的旧会话相加");
+        let spaces_a: i64 = conn
+            .query_row("SELECT COUNT(*) FROM spaces WHERE user_id = 'uid-a'", [], |r| r.get(0))
+            .unwrap();
+        assert_eq!(spaces_a, 1);
         let spaces_b: i64 = conn
             .query_row("SELECT COUNT(*) FROM spaces WHERE user_id = 'uid-b'", [], |r| r.get(0))
             .unwrap();
-        assert_eq!(spaces_b, 2);
+        assert_eq!(spaces_b, 1);
         // 内容原样：标题不变
         let title: String = conn
             .query_row("SELECT title FROM sessions WHERE id = 's1'", [], |r| r.get(0))
@@ -5424,13 +5469,13 @@ mod tests {
     #[test]
     fn reassign_pool_tolerates_missing_db_and_trivial_cases() {
         let missing = temp_root("reassign-missing").join("no.db");
-        assert_eq!(reassign_session_pool_at(&missing, "a", "b").unwrap(), (0, 0));
+        assert_eq!(reassign_session_pool_at(&missing, "a", "b").unwrap(), PoolMove::default());
         let root = temp_root("reassign-trivial");
         std::fs::create_dir_all(&root).unwrap();
         let db = root.join("workbuddy.db");
         create_pool_db(&db);
-        assert_eq!(reassign_session_pool_at(&db, "", "uid-b").unwrap(), (0, 0));
-        assert_eq!(reassign_session_pool_at(&db, "uid-a", "uid-a").unwrap(), (0, 0));
+        assert_eq!(reassign_session_pool_at(&db, "", "uid-b").unwrap(), PoolMove::default());
+        assert_eq!(reassign_session_pool_at(&db, "uid-a", "uid-a").unwrap(), PoolMove::default());
     }
 
     /// 能力探测：`projects/` 目录 + `workbuddy.db` 的 `sessions` 表同时存在才可用。

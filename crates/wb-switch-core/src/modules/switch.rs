@@ -722,12 +722,17 @@ fn switch_account_inner(
     {
         progress("正在把上下文划归新账号…");
         match session::reassign_session_pool(variant, before_uid, &expected_uid) {
-            Ok((sessions, spaces, backup)) => {
-                progress(&format!("已划归 {sessions} 条会话、{spaces} 个空间"));
+            Ok((moved, backup)) => {
+                progress(&format!(
+                    "已划归 {} 条会话、{} 个空间；目标账号原有 {} 条会话已换到原账号名下",
+                    moved.moved_sessions, moved.moved_spaces, moved.parked_sessions
+                ));
                 reassign_report = Some(json!({
                     "ok": true,
-                    "sessions": sessions,
-                    "spaces": spaces,
+                    "sessions": moved.moved_sessions,
+                    "spaces": moved.moved_spaces,
+                    "parkedSessions": moved.parked_sessions,
+                    "parkedSpaces": moved.parked_spaces,
                     "backup": backup.to_string_lossy(),
                     "fromUid": before_uid,
                     "toUid": expected_uid,

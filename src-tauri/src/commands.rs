@@ -913,18 +913,23 @@ pub async fn switch_workbuddy_account(app: tauri::AppHandle, account_id: String)
             .await
             .unwrap_or_else(|error| Err(format!("划归任务异常: {error}")));
             match res {
-                Ok((sessions, spaces, backup)) => {
+                Ok((moved, backup)) => {
                     reassign_report = Some(json!({
                         "ok": true,
-                        "sessions": sessions,
-                        "spaces": spaces,
+                        "sessions": moved.moved_sessions,
+                        "spaces": moved.moved_spaces,
+                        "parkedSessions": moved.parked_sessions,
+                        "parkedSpaces": moved.parked_spaces,
                         "backup": backup.to_string_lossy(),
                         "fromUid": before_uid,
                         "toUid": expected_uid,
                     }));
                     let _ = app.emit(
                         "switch-progress",
-                        json!({ "message": format!("已划归 {sessions} 条会话、{spaces} 个空间，正在刷新客户端…") }),
+                        json!({ "message": format!(
+                            "已划归 {} 条会话、{} 个空间（目标账号原有 {} 条已换到原账号名下），正在刷新客户端…",
+                            moved.moved_sessions, moved.moved_spaces, moved.parked_sessions
+                        ) }),
                     );
                 }
                 Err(_) => {
@@ -945,12 +950,17 @@ pub async fn switch_workbuddy_account(app: tauri::AppHandle, account_id: String)
                             pg(&error);
                         }
                         let report = match wb_switch_core::modules::session::reassign_session_pool(variant_v, &from, &to) {
-                            Ok((sessions, spaces, backup)) => {
-                                pg(&format!("已划归 {sessions} 条会话、{spaces} 个空间"));
+                            Ok((moved, backup)) => {
+                                pg(&format!(
+                                    "已划归 {} 条会话、{} 个空间；目标账号原有 {} 条已换到原账号名下",
+                                    moved.moved_sessions, moved.moved_spaces, moved.parked_sessions
+                                ));
                                 Some(json!({
                                     "ok": true,
-                                    "sessions": sessions,
-                                    "spaces": spaces,
+                                    "sessions": moved.moved_sessions,
+                                    "spaces": moved.moved_spaces,
+                                    "parkedSessions": moved.parked_sessions,
+                                    "parkedSpaces": moved.parked_spaces,
                                     "backup": backup.to_string_lossy(),
                                     "fromUid": from,
                                     "toUid": to,
