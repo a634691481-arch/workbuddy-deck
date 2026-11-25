@@ -11,6 +11,7 @@ import AnimatedIcon from "@/components/ui/AnimatedIcon.vue";
 import { t } from "@/lib/i18n";
 import { accent, sidebar } from "@/lib/prefs";
 import { NAV_ICONS, type NavKey } from "@/lib/nav";
+import { useUpdate } from "@/composables/useUpdate";
 import playIcon from "@/assets/lordicon/play.json?url";
 
 defineProps<{
@@ -20,6 +21,9 @@ defineProps<{
 }>();
 
 const emit = defineEmits<{ select: [key: NavKey] }>();
+
+/** 有新版本时在「设置」项右上角点一个危险色方块：面板里不弹窗，只给这一处提示。 */
+const { hasUpdate } = useUpdate();
 
 /** 刚点过的分区：给图标一个 260ms 的弹一下，点同一项也能重放。 */
 const popped = ref<NavKey | null>(null);
@@ -97,6 +101,12 @@ const items: { key: NavKey; idx: string; labelKey: LabelKey }[] = [
         />
       </span>
       <span v-if="sidebar === 'full'" class="truncate max-[560px]:hidden">{{ t(item.labelKey) }}</span>
+      <span
+        v-if="item.key === 'settings' && hasUpdate"
+        class="absolute right-2 top-1.5 size-1.5 bg-hazard"
+        :title="t('nav.updateDot')"
+        aria-hidden="true"
+      />
     </button>
 
     <div class="mt-auto border-t border-border max-[560px]:px-1 max-[560px]:py-2 max-[560px]:text-center" :class="sidebar === 'compact' ? 'px-1 py-2 text-center' : 'px-3 py-3'">

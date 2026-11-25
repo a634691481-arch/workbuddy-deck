@@ -11,12 +11,9 @@ import { open, save } from "@tauri-apps/plugin-dialog";
 import { useUpdate } from "@/composables/useUpdate";
 import { formatClock } from "@/lib/utils";
 import {
-  archivedTasksStats,
   autoSwitchCheck,
   autoSwitchSet,
   autoSwitchStatus,
-  cdpRestartClient,
-  cdpStatus,
   eventsClear,
   exportAllData,
   exportDiagnostics,
@@ -24,11 +21,9 @@ import {
   openExternal,
   openStoreDir,
   systemInfo,
-  type ArchivedStats,
   type AutoSwitchCheck,
   type AutoSwitchConfig,
   type AutoSwitchStatus,
-  type CdpStatus,
   type EventSource,
   type ExportKind,
   type SystemInfo,
@@ -70,76 +65,19 @@ async function load() {
   error.value = "";
   try {
     info.value = await systemInfo();
-    void loadCdp();
-  } catch (cause) {
+    } catch (cause) {
     error.value = cause instanceof Error ? cause.message : String(cause);
   } finally {
     loading.value = false;
   }
 }
 
-// ---------------------------------------------------------------------------
-// CDP 调试通道：任务在客户端真实上下文里执行（同源 fetch），失败自动回退 HTTP
-// ---------------------------------------------------------------------------
-
-const cdp = ref<CdpStatus | null>(null);
-const cdpBusy = ref(false);
-const cdpMessage = ref("");
-
-async function loadCdp() {
-  try {
-    cdp.value = await cdpStatus();
-  } catch {
-    cdp.value = null;
-  }
-}
-
-/** 带调试端口重启客户端；成功后状态立即刷新。 */
-async function restartCdpClient() {
-  if (cdpBusy.value) return;
-  cdpBusy.value = true;
-  cdpMessage.value = "";
-  try {
-    const result = await cdpRestartClient();
-    cdpMessage.value = result.ok
-      ? `${t("cd.okPrefix")} :${result.port ?? "?"}`
-      : result.error || t("cd.fail");
-    if (result.ok) {
-      // Electron 冷启动后页面加载要几秒，延迟再读一次状态。
-      await new Promise((resolve) => setTimeout(resolve, 3000));
-      await loadCdp();
-    }
-  } catch (cause) {
-    cdpMessage.value = cause instanceof Error ? cause.message : String(cause);
-  } finally {
-    cdpBusy.value = false;
-  }
-}
 
 
 onMounted(() => {
   void load();
   void loadAutoSwitch();
   void loadUpdate();
-  void loadArchived();
-});
-
-// ───────────────────────── 归档任务读数 ─────────────────────────
-// 这里只显示用量；删除入口唯一在「归档任务」分区（06），避免两处都能删。
-const archived = ref<ArchivedStats | null>(null);
-
-async function loadArchived() {
-  try {
-    archived.value = await archivedTasksStats();
-  } catch {
-    archived.value = null;
-  }
-}
-
-const purgeReadout = computed(() => {
-  const stats = archived.value;
-  if (!stats) return "—";
-  return `${stats.count} · ${stats.human}`;
 });
 
 // ───────────────────────── 自动更新 ─────────────────────────
@@ -274,19 +212,7 @@ const lastDecisionText = computed(() => {
 const schedule = computed(() => info.value?.schedule ?? {});
 const scheduleOn = computed(() => schedule.value.enabled === true);
 
-/** 文件行：只有通知与日志有「条数」，账号库与错误日志按条数口径各自取。 */
-const fileRows = computed(() => {
-  const files = info.value?.files;
-  const counts = info.value?.counts;
-  if (!files || !counts) return [];
-  return [
-    { key: "accounts", labelKey: "st.fileAccounts" as const, rows: info.value?.accountCount ?? 0, stat: files.accounts },
-    { key: "auto", labelKey: "st.fileAutoLogs" as const, rows: counts.autoLogs, stat: files.autoLogs },
-    { key: "notify", labelKey: "st.fileNotify" as const, rows: counts.notify, stat: files.notifications },
-    { key: "switch", labelKey: "st.fileSwitch" as const, rows: counts.switchHistory, stat: files.switchHistory },
-    { key: "error", labelKey: "st.fileError" as const, rows: counts.errorLines, stat: files.errorLog },
-  ];
-});
+
 
 async function openDir() {
   try {
@@ -517,42 +443,6 @@ void [
           </div>
         </section>
 
-        <!-- 数据规模 -->
-        <section class="border border-border bg-card">
-          <div class="border-b border-border px-3 py-1.5">
-            <span class="lbl">// {{ t("st.data") }}</span>
-          </div>
-          <div class="grid grid-cols-[minmax(90px,1fr)_56px_64px_56px] items-center gap-2 border-b border-border/60 px-3 py-1">
-            <span class="lbl">FILE</span>
-            <span class="lbl text-right">{{ t("st.rows") }}</span>
-            <span class="lbl text-right">SIZE</span>
-            <span class="lbl text-right">STATE</span>
-          </div>
-          <div
-            v-for="file in fileRows"
-            :key="file.key"
-            class="grid grid-cols-[minmax(90px,1fr)_56px_64px_56px] items-center gap-2 border-b border-border/40 px-3 py-1.5 last:border-b-0"
-          >
-            <span class="truncate text-[11px] text-foreground">{{ t(file.labelKey) }}</span>
-            <span class="readout text-right text-[11px] text-foreground">{{ file.rows }}</span>
-            <span class="readout text-right text-[10px] text-muted-foreground">{{ file.stat.human }}</span>
-            <span
-              class="readout text-right text-[9px]"
-              :class="file.stat.exists ? 'text-muted-foreground' : 'text-faint'"
-            >
-              {{ file.stat.exists ? "OK" : t("st.missing") }}
-            </span>
-          </div>
-
-          <!-- 归档任务：只读读数，删除入口在「归档任务」分区 -->
-          <div class="flex items-center justify-between gap-2 border-t border-border px-3 py-1.5" :title="t('pz.statHint')">
-            <span class="text-[11px] text-foreground">{{ t("pz.row") }}</span>
-            <span class="readout text-[10px]" :class="archived?.count ? 'text-hazard' : 'text-muted-foreground'">
-              {{ purgeReadout }}
-            </span>
-          </div>
-        </section>
-
         <!-- 自动更新：当前 / 最新 / 检查时刻 三格读数 + 一行动作 + 一行设置 -->
         <section class="border border-border bg-card lg:col-span-2">
           <div class="flex items-center justify-between border-b border-border px-3 py-1.5">
@@ -659,62 +549,6 @@ void [
               <span class="text-border-strong">/</span>
               <span class="text-hazard">{{ t("deck.noInstall") }}</span>
             </template>
-          </div>
-        </section>
-
-        <!-- CDP 调试通道：连接状态 + 带参重启客户端 -->
-        <section class="border border-border bg-card lg:col-span-2">
-          <div class="flex items-center justify-between border-b border-border px-3 py-1.5">
-            <div class="flex items-center gap-2">
-              <span class="lbl">// {{ t("cd.title") }}</span>
-              <span
-                class="readout border px-1 py-0.5 text-[8px]"
-                :class="cdp?.connected ? 'border-hazard text-hazard' : 'border-border-strong text-faint'"
-              >
-                {{ cdp?.connected ? t("cd.connected") : t("cd.disconnected") }}
-              </span>
-            </div>
-            <button
-              type="button"
-              class="flex items-center gap-1 border border-border-strong px-2 py-0.5 text-[9px] text-muted-foreground transition-colors hover:border-foreground hover:text-foreground disabled:opacity-40"
-              :disabled="cdpBusy"
-              @click="restartCdpClient()"
-            >
-              <Loader2 v-if="cdpBusy" class="size-3 animate-spin" />
-              <RefreshCw v-else class="size-3" />
-              {{ t("cd.restart") }}
-            </button>
-          </div>
-
-          <div class="grid grid-cols-3 gap-2 px-3 py-2">
-            <div class="bg-card px-0 py-0">
-              <div class="lbl">{{ t("cd.port") }}</div>
-              <div class="readout mt-0.5 text-[13px] text-foreground">
-                {{ cdp?.connected ? `:${cdp.port ?? "—"}` : "—" }}
-              </div>
-            </div>
-            <div class="bg-card px-0 py-0">
-              <div class="lbl">{{ t("cd.page") }}</div>
-              <div class="readout mt-0.5 truncate text-[11px] text-muted-foreground" :title="cdp?.url ?? ''">
-                {{ cdp?.connected ? cdp.url || "—" : "—" }}
-              </div>
-            </div>
-            <div class="bg-card px-0 py-0">
-              <div class="lbl">{{ t("cd.mode") }}</div>
-              <div class="readout mt-0.5 text-[11px]" :class="cdp?.connected ? 'text-hazard' : 'text-muted-foreground'">
-                {{ cdp?.connected ? t("cd.modeCdp") : t("cd.modeHttp") }}
-              </div>
-            </div>
-          </div>
-
-          <div v-if="cdpMessage" class="border-t border-border px-3 py-1.5">
-            <span class="readout break-all text-[10px]" :class="cdpMessage.includes(t('cd.okPrefix')) ? 'text-foreground' : 'text-hazard'">
-              {{ cdpMessage }}
-            </span>
-          </div>
-
-          <div class="flex flex-wrap items-center gap-x-3 gap-y-1 border-t border-border/60 px-3 py-1.5 text-[9px] text-faint">
-            <span>{{ t("cd.hint") }}</span>
           </div>
         </section>
 

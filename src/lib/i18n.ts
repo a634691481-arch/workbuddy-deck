@@ -240,6 +240,7 @@ const zh = {
   "nav.logs": "运行日志",
   "nav.archived": "归档任务",
   "nav.settings": "系统设置",
+  "nav.updateDot": "有新版本",
   // 顶部导航：面板窄，用短标签
   "navS.accounts": "账号",
   "navS.tasks": "任务",
@@ -934,6 +935,7 @@ const en: Record<I18nKey, string> = {
   "nav.logs": "LOGS",
   "nav.archived": "ARCHIVED",
   "nav.settings": "SYSTEM",
+  "nav.updateDot": "Update available",
   "navS.accounts": "ACCT",
   "navS.tasks": "TASK",
   "navS.credits": "CRED",
