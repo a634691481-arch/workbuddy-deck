@@ -12,7 +12,8 @@
     "tauri": "tauri",
     "bump": "node scripts/bump.mjs",
     "verify": "vue-tsc --noEmit && cargo clippy --manifest-path src-tauri/Cargo.toml -- -D warnings",
-    "installer": "node scripts/installer.mjs"
+    "installer": "node scripts/installer.mjs",
+    "clean:dev": "cargo clean --profile dev --manifest-path src-tauri/Cargo.toml && cargo clean --profile dev --manifest-path crates/wb-switch-core/Cargo.toml"
   },
   "dependencies": {
     "@fontsource-variable/geist": "^5.3.0",
