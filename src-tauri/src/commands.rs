@@ -907,8 +907,24 @@ pub async fn switch_workbuddy_account(app: tauri::AppHandle, account_id: String)
         if needs_reassign {
             let variant_v = variant.expect("读到了切换前 uid，档位必然存在");
             let (from, to) = (before_uid.clone(), expected_uid.clone());
+            // 库被客户端短暂占用是常态（WAL 写入冲突），先退避重试 3 次再谈兜底，
+            // 避免一次 500ms 的锁冲突就升级成「关掉客户端」。
             let res = tauri::async_runtime::spawn_blocking(move || {
-                wb_switch_core::modules::session::reassign_session_pool(variant_v, &from, &to)
+                let mut last = String::new();
+                for attempt in 0..3 {
+                    match wb_switch_core::modules::session::reassign_session_pool(
+                        variant_v, &from, &to,
+                    ) {
+                        Ok(value) => return Ok(value),
+                        Err(error) => {
+                            last = error;
+                            if attempt < 2 {
+                                std::thread::sleep(std::time::Duration::from_millis(400));
+                            }
+                        }
+                    }
+                }
+                Err(last)
             })
             .await
             .unwrap_or_else(|error| Err(format!("划归任务异常: {error}")));
@@ -932,55 +948,20 @@ pub async fn switch_workbuddy_account(app: tauri::AppHandle, account_id: String)
                         ) }),
                     );
                 }
-                Err(_) => {
-                    // 运行中划不进去（多半是客户端锁库）：直接回退重启路径，
-                    // 关进程后重试划归再拉起——与旧 restart=true 语义等价。
-                    mode = "restart_fallback";
+                Err(error) => {
+                    // 划归失败**不重启**：认证已经是新账号，会话归属保持原样即可。
+                    // 重启是用户明确不要的兜底；这里如实报告，让用户稍后重试切换来补划归。
+                    mode = "hot_no_reassign";
                     let _ = app.emit(
                         "switch-progress",
-                        json!({ "message": "运行中无法完成划归，回退重启路径…" }),
+                        json!({ "message": format!("账号已切换；会话归属未变（{error}），可稍后重试切换") }),
                     );
-                    let app2 = app.clone();
-                    let pg: switch::ProgressFn = Box::new(move |message| {
-                        let _ = app2.emit("switch-progress", json!({ "message": message }));
-                    });
-                    let (from, to) = (before_uid.clone(), expected_uid.clone());
-                    let fallback_report = tauri::async_runtime::spawn_blocking(move || {
-                        if let Err(error) = process::close_workbuddy(variant_v, 20) {
-                            pg(&error);
-                        }
-                        let report = match wb_switch_core::modules::session::reassign_session_pool(variant_v, &from, &to) {
-                            Ok((moved, backup)) => {
-                                pg(&format!(
-                                    "已划归 {} 条会话、{} 个空间；目标账号原有 {} 条已移入隔离区",
-                                    moved.moved_sessions, moved.moved_spaces, moved.parked_sessions
-                                ));
-                                Some(json!({
-                                    "ok": true,
-                                    "sessions": moved.moved_sessions,
-                                    "spaces": moved.moved_spaces,
-                                    "parkedSessions": moved.parked_sessions,
-                                    "parkedSpaces": moved.parked_spaces,
-                                    "backup": backup.to_string_lossy(),
-                                    "fromUid": from,
-                                    "toUid": to,
-                                }))
-                            }
-                            Err(error) => {
-                                // 账号已切对，划归失败不阻断；重试一次切换即可补上。
-                                pg(&format!("划归失败（不影响账号切换）: {error}"));
-                                None
-                            }
-                        };
-                        if let Err(error) = process::launch_workbuddy(variant_v, Some(&pg)) {
-                            pg(&format!("账号已切换，但启动 WorkBuddy 失败: {error}"));
-                        }
-                        report
-                    })
-                    .await;
-                    if let Ok(Some(report)) = fallback_report {
-                        reassign_report = Some(report);
-                    }
+                    reassign_report = Some(json!({
+                        "ok": false,
+                        "error": error,
+                        "fromUid": before_uid,
+                        "toUid": expected_uid,
+                    }));
                 }
             }
         }
@@ -1036,24 +1017,15 @@ pub async fn switch_workbuddy_account(app: tauri::AppHandle, account_id: String)
                             json!({ "message": "客户端未接受新身份，已还原会话归属；请重启 WorkBuddy 后重试切换" }),
                         );
                     }
-                    // CDP 不可用 / 探测不出来：不赌。重启兜底——认证与划归都已就位，
-                    // 重启后客户端按新身份读到划归后的同一套会话。
+                    // CDP 不可用 / 探测不出来：**不重启**。认证与划归都已就位，
+                    // 页面刷新后就是新身份；重启是最重的兜底，用户明确不要。
+                    // 真出现身份没跟上，页面自己也会在下一次请求里纠正，或用户手动 Ctrl+R。
                     None => {
-                        mode = "restart_fallback";
+                        mode = "hot_unverified";
                         let _ = app.emit(
                             "switch-progress",
-                            json!({ "message": "无法确认客户端身份，已自动重启 WorkBuddy…" }),
+                            json!({ "message": "已完成切换（身份未探测到，如界面未更新请按 Ctrl+R 刷新）" }),
                         );
-                        let variant_v = variant.expect("读到了切换前 uid，档位必然存在");
-                        let _ = tauri::async_runtime::spawn_blocking(move || {
-                            if let Err(error) = process::close_workbuddy(variant_v, 20) {
-                                eprintln!("[switch] 关闭 WorkBuddy 失败: {error}");
-                            }
-                            if let Err(error) = process::launch_workbuddy(variant_v, None) {
-                                eprintln!("[switch] 启动 WorkBuddy 失败: {error}");
-                            }
-                        })
-                        .await;
                     }
                 }
             } else if !reloaded && !needs_reassign {

@@ -339,8 +339,21 @@ pub async fn probe_identity_uid(from_uid: &str, to_uid: &str) -> Option<bool> {
     let Some(session) = workbuddy_page(false).await else {
         return None;
     };
+    // 2026-11-27 修：旧实现把整个 localStorage + cookie 拼成字符串搜 uid。
+    // WorkBuddy 的 localStorage 里有**每个**登录过的账号的键
+    // （`workbuddy.appearance.*::<uid>`、`conversationList:failedSeenIds:user:<uid>`），
+    // 两个 uid 永远同时命中 → 恒为 unknown → 每次都走「探测不出来→重启兜底」。
+    //
+    // 现在只读唯一标识当前身份的那个键：`workbuddy.appearance.lastApplied::__identity`
+    // 形如 `<uid>::::personal`。键不存在时才退回旧的全串搜索（老版本客户端）。
     let js = format!(
-        "(function(){{try{{var s=String(JSON.stringify(localStorage))+String(document.cookie);var a=s.indexOf('{from}')>=0,b=s.indexOf('{to}')>=0;if(b&&!a)return 'to';if(a&&!b)return 'from';return 'unknown';}}catch(e){{return 'unknown';}}}})()",
+        "(function(){{try{{
+         var id=(localStorage.getItem('workbuddy.appearance.lastApplied::__identity')||'').split('::::')[0];
+         if(id){{ if(id==='{to}') return 'to'; if(id==='{from}') return 'from'; return 'unknown'; }}
+         var s=String(JSON.stringify(localStorage))+String(document.cookie);
+         var a=s.indexOf('{from}')>=0,b=s.indexOf('{to}')>=0;
+         if(b&&!a)return 'to'; if(a&&!b)return 'from'; return 'unknown';
+         }}catch(e){{return 'unknown';}}}})()",
         from = from_uid,
         to = to_uid,
     );
