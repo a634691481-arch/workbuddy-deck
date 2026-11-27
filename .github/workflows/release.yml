@@ -127,19 +127,55 @@ jobs:
           TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
           TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
         run: |
-          choco install innosetup --no-progress -y
-          npm run installer
+          $ErrorActionPreference = 'Stop'
+          Write-Host "== install Inno Setup =="
+          choco install innosetup -y --no-progress
+          $candidates = @(
+            "$env:ProgramFiles\Inno Setup 6\ISCC.exe",
+            "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe",
+            "$env:LOCALAPPDATA\Programs\Inno Setup 6\ISCC.exe"
+          )
+          $iscc = $candidates | Where-Object { Test-Path $_ } | Select-Object -First 1
+          if (-not $iscc) { throw "ISCC.exe not found. candidates: $($candidates -join ' | ')" }
+          Write-Host "ISCC=$iscc"
+
           $ver = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          Write-Host "== build Inno installer v$ver =="
+          & $iscc "/DAppVersion=$ver" "src-tauri\installer\workbuddy-deck.iss"
+          if ($LASTEXITCODE -ne 0) { throw "ISCC failed exit=$LASTEXITCODE" }
           $setup = "src-tauri/target/release/bundle/innosetup/WorkBuddyDeck-Setup-$ver.exe"
-          if (-not (Test-Path $setup)) { throw "缺少 Inno 安装包: $setup" }
+          if (-not (Test-Path $setup)) { throw "missing $setup" }
+          Write-Host "setup=$setup size=$((Get-Item $setup).Length)"
+
+          if (-not $env:TAURI_SIGNING_PRIVATE_KEY) { throw "TAURI_SIGNING_PRIVATE_KEY is empty" }
+          Write-Host "== sign $setup =="
           npx tauri signer sign $setup
+          if ($LASTEXITCODE -ne 0) { throw "signer failed exit=$LASTEXITCODE" }
+          if (-not (Test-Path "$setup.sig")) { throw "signature file not produced" }
           $sig = (Get-Content "$setup.sig" -Raw).Trim()
+          Write-Host "signature length=$($sig.Length)"
           $url = "https://github.com/${{ github.repository }}/releases/download/$env:TAG/WorkBuddyDeck-Setup-$ver.exe"
+
+          Write-Host "== merge latest.json =="
           gh release download $env:TAG -p latest.json --clobber
-          $manifest = Get-Content latest.json -Raw | ConvertFrom-Json
-          $manifest.platforms.'windows-x86_64' = [pscustomobject]@{ signature = $sig; url = $url }
-          $manifest | ConvertTo-Json -Depth 8 | Set-Content latest.json -Encoding utf8
-          gh release upload $env:TAG $setup latest.json --clobber
+          if (Test-Path latest.json) {
+            $manifest = Get-Content latest.json -Raw | ConvertFrom-Json
+          } else {
+            Write-Host "latest.json not found, creating windows-only manifest"
+            $manifest = [pscustomobject]@{
+              version = $ver
+              notes = ""
+              pub_date = (Get-Date).ToUniversalTime().ToString("yyyy-MM-ddTHH:mm:ssZ")
+              platforms = [pscustomobject]@{}
+            }
+          }
+          $manifest.version = $ver
+          $manifest.platforms | Add-Member -NotePropertyName 'windows-x86_64' -NotePropertyValue ([pscustomobject]@{ signature = $sig; url = $url }) -Force
+          $json = $manifest | ConvertTo-Json -Depth 8
+          [System.IO.File]::WriteAllText("$PWD/latest.json", $json, (New-Object System.Text.UTF8Encoding($false)))
+
+          Write-Host "== upload =="
+          gh release upload $env:TAG $setup $setup.sig latest.json --clobber
 
   # 不再单独打 Intel Mac：那条 job 单跑 10.7 分钟，比其余三个平台（均 4 分钟）加起来还慢，
   # 而它只产一个 x64.dmg。macOS 现在只发 Apple Silicon，Intel 机型不再提供安装包。
