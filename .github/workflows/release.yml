@@ -115,6 +115,32 @@ jobs:
           Write-Output "uploading $zip"
           gh release upload $env:TAG $zip --clobber
 
+      # 安装版走 Inno Setup（带客户端路径向导）。tauri-plugin-updater 只认 NSIS，
+      # 所以这里额外产 Inno 包、用同一把 minisign 私钥签名，并把 windows 条目
+      # 合并进 latest.json —— 应用内更新下载的就是这个 Inno 包，由独立脚本静默安装。
+      - name: Inno installer + updater manifest
+        if: matrix.os == 'windows-latest'
+        shell: pwsh
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ github.ref_type == 'tag' && github.ref_name || inputs.tag }}
+          TAURI_SIGNING_PRIVATE_KEY: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY }}
+          TAURI_SIGNING_PRIVATE_KEY_PASSWORD: ${{ secrets.TAURI_SIGNING_PRIVATE_KEY_PASSWORD }}
+        run: |
+          choco install innosetup --no-progress -y
+          npm run installer
+          $ver = (Get-Content package.json -Raw | ConvertFrom-Json).version
+          $setup = "src-tauri/target/release/bundle/innosetup/WorkBuddyDeck-Setup-$ver.exe"
+          if (-not (Test-Path $setup)) { throw "缺少 Inno 安装包: $setup" }
+          npx tauri signer sign $setup
+          $sig = (Get-Content "$setup.sig" -Raw).Trim()
+          $url = "https://github.com/${{ github.repository }}/releases/download/$env:TAG/WorkBuddyDeck-Setup-$ver.exe"
+          gh release download $env:TAG -p latest.json --clobber
+          $manifest = Get-Content latest.json -Raw | ConvertFrom-Json
+          $manifest.platforms.'windows-x86_64' = [pscustomobject]@{ signature = $sig; url = $url }
+          $manifest | ConvertTo-Json -Depth 8 | Set-Content latest.json -Encoding utf8
+          gh release upload $env:TAG $setup latest.json --clobber
+
   # 不再单独打 Intel Mac：那条 job 单跑 10.7 分钟，比其余三个平台（均 4 分钟）加起来还慢，
   # 而它只产一个 x64.dmg。macOS 现在只发 Apple Silicon，Intel 机型不再提供安装包。
   # 要恢复时把下面这段 git 历史里的 build-intel-mac 拷回来即可（tag 见 git log releases 前版本）。

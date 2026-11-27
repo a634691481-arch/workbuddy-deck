@@ -63,7 +63,8 @@ Name: "{autoprograms}\{#AppName}"; Filename: "{app}\{#AppExe}"; IconFilename: "{
 Name: "{autodesktop}\{#AppName}"; Filename: "{app}\{#AppExe}"; IconFilename: "{app}\icons\icon.ico"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\{#AppExe}"; Description: "立即打开 {#AppName}"; Flags: nowait postinstall skipifsilent runasoriginaluser
+; 静默安装（更新器调用 /VERYSILENT）也要拉起新版，所以不能带 skipifsilent。
+Filename: "{app}\{#AppExe}"; Description: "立即打开 {#AppName}"; Flags: nowait runasoriginaluser
 
 [UninstallRun]
 Filename: "{cmd}"; Parameters: "/C taskkill /IM {#AppExe} /F >nul 2>&1"; Flags: runhidden; RunOnceId: "KillDeck"

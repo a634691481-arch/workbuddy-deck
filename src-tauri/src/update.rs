@@ -464,8 +464,68 @@ pub fn download(app: AppHandle) -> Value {
     json!({ "ok": true, "started": true })
 }
 
-/// 安装已暂存的包并重启（对齐 workbuddy-switch 的 restart）。
-/// 只在用户点了「重启以完成升级」后调用；Windows 上安装器启动后本进程直接退出。
+/// 安装已暂存的包并重启。
+///
+/// 2026-11-27 对齐 WorkDaddy：**安装动作交给独立脚本**，不再调用
+/// tauri-plugin-updater 的 `install()`——它按 NSIS 的 `/S` 静默参数执行，而发行包是
+/// Inno Setup，参数对不上会弹向导、装出第二份程序。
+///
+/// 顺序：等本进程退出 → `Setup.exe /VERYSILENT /SUPPRESSMSGBOXES /NORESTART`
+/// → 拉起新 exe → 轮询 `/__deck_diag` 确认新版本起来了。日志写 %TEMP%\wbdeck-update.log。
+#[cfg(target_os = "windows")]
+fn spawn_inno_update(setup: &std::path::Path) -> Result<(), String> {
+    let q = |p: &std::path::Path| p.to_string_lossy().replace('\'', "''");
+    let log = std::env::temp_dir().join("wbdeck-update.log");
+    let exe = std::env::current_exe().map_err(|e| format!("取当前 exe 失败: {e}"))?;
+    let script_path = std::env::temp_dir().join("wbdeck-apply-update.ps1");
+    let script = format!(
+        r#"$ErrorActionPreference = 'Continue'
+$setup = '{setup}'
+$exe = '{exe}'
+$log = '{log}'
+function Note($m) {{ "$([datetime]::Now.ToString('s')) $m" | Out-File -Append -Encoding utf8 $log }}
+Note "waiting for pid {pid}"
+for ($i = 0; $i -lt 120; $i++) {{
+  if (-not (Get-Process -Id {pid} -ErrorAction SilentlyContinue)) {{ break }}
+  Start-Sleep -Milliseconds 500
+}}
+Note "running installer"
+$p = Start-Process -FilePath $setup -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES','/NORESTART' -PassThru -Wait -WindowStyle Hidden
+Note "installer exit $($p.ExitCode)"
+Start-Sleep -Seconds 2
+if (Test-Path $exe) {{ Start-Process -FilePath $exe -WindowStyle Hidden | Out-Null; Note 'app started' }}
+for ($i = 0; $i -lt 60; $i++) {{
+  try {{
+    $r = Invoke-RestMethod 'http://127.0.0.1:17653/__deck_diag' -TimeoutSec 2
+    Note "ready version=$($r.version)"
+    break
+  }} catch {{ Start-Sleep -Seconds 1 }}
+}}
+"#,
+        setup = q(setup),
+        exe = q(&exe),
+        log = q(&log),
+        pid = std::process::id(),
+    );
+    std::fs::write(&script_path, script).map_err(|e| format!("写更新脚本失败: {e}"))?;
+    use std::os::windows::process::CommandExt;
+    const CREATE_NO_WINDOW: u32 = 0x0800_0000;
+    std::process::Command::new("powershell")
+        .args([
+            "-NoProfile",
+            "-ExecutionPolicy",
+            "Bypass",
+            "-WindowStyle",
+            "Hidden",
+            "-File",
+        ])
+        .arg(&script_path)
+        .creation_flags(CREATE_NO_WINDOW)
+        .spawn()
+        .map_err(|e| format!("启动更新脚本失败: {e}"))?;
+    Ok(())
+}
+
 pub fn restart(app: AppHandle) -> Value {
     let package = PACKAGE.lock().ok().and_then(|mut g| g.take());
     let Some((version, update, bytes)) = package else {
@@ -476,35 +536,53 @@ pub fn restart(app: AppHandle) -> Value {
     }
 
     trace(&format!("restart-install v{version}"));
-    tauri::async_runtime::spawn(async move {
-        // install 可能在主线程弹授权框（macOS），放 blocking 线程别堵 async worker。
-        let installed = tauri::async_runtime::spawn_blocking(move || {
-            update.install(&bytes).map_err(|e| e.to_string())
-        })
-        .await
-        .map_err(|e| e.to_string())
-        .and_then(|r| r);
 
-        if let Err(e) = installed {
+    #[cfg(target_os = "windows")]
+    {
+        let setup = std::env::temp_dir().join(format!("WorkBuddyDeck-Setup-{version}.exe"));
+        if let Err(error) = std::fs::write(&setup, &bytes) {
             INSTALLING.store(false, Ordering::SeqCst);
-            trace(&format!("install failed: {e}"));
-            let _ = app.emit(
-                "update://done",
-                json!({ "ok": false, "error": format!("v{} 已下载，但安装失败：{}（包已保留，可重试）", version, e) }),
-            );
-            return;
+            return json!({ "ok": false, "error": format!("写安装包失败: {error}") });
         }
-        // Windows：install 内部已退出进程；其它平台手动拉起新版本。
-        #[cfg(not(target_os = "windows"))]
-        app.restart();
-        #[cfg(target_os = "windows")]
+        if let Err(error) = spawn_inno_update(&setup) {
+            INSTALLING.store(false, Ordering::SeqCst);
+            return json!({ "ok": false, "error": error });
+        }
         let _ = app.emit(
             "update://done",
-            json!({ "ok": true, "version": version, "staged": false }),
+            json!({ "ok": true, "version": version, "installing": true }),
         );
-    });
+        // 给前端一帧时间收到事件，再退出让安装器接管。
+        tauri::async_runtime::spawn(async move {
+            tokio::time::sleep(Duration::from_millis(600)).await;
+            app.exit(0);
+        });
+        return json!({ "ok": true, "started": true });
+    }
 
-    json!({ "ok": true, "started": true })
+    #[cfg(not(target_os = "windows"))]
+    {
+        tauri::async_runtime::spawn(async move {
+            let installed = tauri::async_runtime::spawn_blocking(move || {
+                update.install(&bytes).map_err(|e| e.to_string())
+            })
+            .await
+            .map_err(|e| e.to_string())
+            .and_then(|r| r);
+
+            if let Err(e) = installed {
+                INSTALLING.store(false, Ordering::SeqCst);
+                trace(&format!("install failed: {e}"));
+                let _ = app.emit(
+                    "update://done",
+                    json!({ "ok": false, "error": format!("v{} 已下载，但安装失败：{}", version, e) }),
+                );
+                return;
+            }
+            app.restart();
+        });
+        json!({ "ok": true, "started": true })
+    }
 }
 
 /// 启动 15s 首查 + 每 30 分钟轮询（对齐 workbuddy-switch）；只发现版本推事件，窗口不轮询。
