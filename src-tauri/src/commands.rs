@@ -849,205 +849,235 @@ pub async fn workbuddy_status() -> Value {
 // 划归有 reassign-preflight 整库备份兜底。
 #[tauri::command(rename_all = "camelCase")]
 pub async fn switch_workbuddy_account(app: tauri::AppHandle, account_id: String) -> Value {
+    let started = std::time::Instant::now();
     if account_id.trim().is_empty() {
         return json!({
-            "ok": false,
-            "error": "缺少 accountId",
-            "result": "blocked",
-            "stage": "",
-            "identity": "",
-            "costMs": 0,
+            "ok": false, "error": "缺少 accountId", "result": "blocked",
+            "stage": "", "identity": "", "costMs": 0, "rolledBack": false,
+        });
+    }
+
+    let target = account::find_account(&account_id);
+    let variant = target.as_ref().map(account::variant_of);
+    let expected_uid = target.as_ref().map(switch::account_uid).unwrap_or_default();
+    if expected_uid.is_empty() {
+        return json!({
+            "ok": false, "error": "账号库里找不到这个账号的 uid", "result": "blocked",
+            "stage": "", "identity": "", "costMs": started.elapsed().as_millis() as u64,
             "rolledBack": false,
         });
     }
-    // 划归需要的前置身份：切换前 uid（读磁盘 auth）与目标 uid（账号库）。
-    // core 的 switch_account_detailed 内部也各读了一遍，这里再取一次用于热收尾，
-    // 口径一致（auth_identity_at / account_uid）。
-    let target = account::find_account(&account_id);
-    let variant = target.as_ref().map(account::variant_of);
-    let before_uid = variant
-        .and_then(|v| auth_file::auth_identity_at(&auth_file::auth_file_path(v)))
+
+    // 「当前可见池」的 uid 以**页面身份**为准，取不到才退回 auth 文件。
+    // 2026-11-27 事故：只信 auth 文件时 uid 与库里实际归属不一致 → UPDATE 0 行，
+    // 认证却已切走，界面按新 uid 查库，看起来像「会话没了」。
+    let page_uid = wb_switch_core::modules::cdp::current_identity_uid().await;
+    let before_uid = page_uid
+        .clone()
+        .or_else(|| {
+            variant.and_then(|v| auth_file::auth_identity_at(&auth_file::auth_file_path(v)))
+        })
         .unwrap_or_default();
-    let expected_uid = target.as_ref().map(switch::account_uid).unwrap_or_default();
+
+    if !before_uid.is_empty() && before_uid == expected_uid {
+        return json!({
+            "ok": true, "result": "already", "mode": "noop", "stage": "done",
+            "identity": "effective", "costMs": started.elapsed().as_millis() as u64,
+            "rolledBack": false,
+        });
+    }
 
     let app_for_progress = app.clone();
     let progress: switch::ProgressFn = Box::new(move |message| {
         let _ = app_for_progress.emit("switch-progress", json!({ "message": message }));
     });
-    let app_for_finish = app.clone();
+
+    // ① 先搬会话，认证一个字都没动。失败 = 什么都没发生，直接放弃本次切换。
+    //    反过来的顺序（先认证后搬）就是上次事故的根。
+    let mut moved: Option<wb_switch_core::modules::session::PoolMove> = None;
+    if !before_uid.is_empty() {
+        let (from, to) = (before_uid.clone(), expected_uid.clone());
+        let vv = variant.expect("有 before_uid 就必然有档位");
+        let _ = app.emit(
+            "switch-progress",
+            json!({ "message": "正在把上下文划归新账号…" }),
+        );
+        let result = tauri::async_runtime::spawn_blocking(move || {
+            let mut last = String::new();
+            for attempt in 0..4 {
+                match wb_switch_core::modules::session::reassign_session_pool(vv, &from, &to) {
+                    Ok(value) => return Ok(value),
+                    Err(error) => {
+                        last = error;
+                        if attempt < 3 {
+                            std::thread::sleep(std::time::Duration::from_millis(600));
+                        }
+                    }
+                }
+            }
+            Err(last)
+        })
+        .await
+        .unwrap_or_else(|error| Err(format!("划归任务异常: {error}")));
+
+        match result {
+            Ok((pool, _backup)) => {
+                moved = Some(pool);
+                let _ = app.emit(
+                    "switch-progress",
+                    json!({ "message": format!(
+                        "已划归 {} 条会话、{} 个空间；目标账号原有 {} 条已移入隔离区",
+                        pool.moved_sessions, pool.moved_spaces, pool.parked_sessions
+                    ) }),
+                );
+            }
+            Err(error) => {
+                let _ = app.emit(
+                    "switch-progress",
+                    json!({ "message": "会话库被占用，已放弃本次切换（账号与会话都没变）" }),
+                );
+                return json!({
+                    "ok": false,
+                    "error": format!("会话库被占用，未做任何改动：{error}"),
+                    "result": "blocked",
+                    "mode": "noop",
+                    "stage": "reassign",
+                    "identity": "",
+                    "costMs": started.elapsed().as_millis() as u64,
+                    "rolledBack": false,
+                });
+            }
+        }
+    }
+
+    // ② 写认证（core 只写认证 + 写后校验，restart=false，不关客户端）。
+    let switch_target_id = account_id.clone();
     let outcome = tauri::async_runtime::spawn_blocking(move || {
-        // 热切换第一步：restart=false，core 只写认证 + 写后校验，不关不拉客户端。
-        switch::switch_account_detailed(Some(&progress), &account_id, false, false, &[], &[], false)
+        switch::switch_account_detailed(Some(&progress), &switch_target_id, false, false, &[], &[], false)
     })
     .await;
 
     let mut payload = match outcome {
         Ok((result, diagnostics)) => switch_payload(result, &diagnostics),
         Err(join_error) => json!({
-            "ok": false,
-            "error": format!("切换任务异常: {join_error}"),
-            "result": "blocked",
-            "stage": "",
-            "identity": "",
-            "costMs": 0,
-            "rolledBack": false,
-            "sessionsDirty": false,
+            "ok": false, "error": format!("切换任务异常: {join_error}"),
+            "result": "blocked", "stage": "", "identity": "",
+            "costMs": started.elapsed().as_millis() as u64, "rolledBack": false,
         }),
     };
-    // 热切换收尾。三步走，每步失败都有明确兜底，任何一步都不会丢会话：
-    //   ① 会话池划归（客户端仍在运行；WAL 短事务 + 5s 忙等，客户端无感）
-    //   ② CDP reload 刷新页面，让客户端按新认证重新查库
-    //   ③ 探测页面身份：已切新号 → 完成；仍是旧号 → 反向划归还原 + 报告；
-    //      探测不了 → 重启兜底（认证已写对、划归已完成，重启后即新身份）
-    let mut mode = "hot";
-    let mut reassign_report: Option<Value> = None;
 
-    if payload.get("ok").and_then(Value::as_bool).unwrap_or(false) {
-        let needs_reassign = !before_uid.is_empty() && before_uid != expected_uid;
-        if needs_reassign {
-            let variant_v = variant.expect("读到了切换前 uid，档位必然存在");
+    if !payload.get("ok").and_then(Value::as_bool).unwrap_or(false) {
+        // 认证没写成：把已经搬过去的会话原样搬回来，回到切换前。
+        if let Some(pool) = moved {
+            let vv = variant.expect("有划归就必然有档位");
             let (from, to) = (before_uid.clone(), expected_uid.clone());
-            // 库被客户端短暂占用是常态（WAL 写入冲突），先退避重试 3 次再谈兜底，
-            // 避免一次 500ms 的锁冲突就升级成「关掉客户端」。
-            let res = tauri::async_runtime::spawn_blocking(move || {
-                let mut last = String::new();
-                for attempt in 0..3 {
-                    match wb_switch_core::modules::session::reassign_session_pool(
-                        variant_v, &from, &to,
-                    ) {
-                        Ok(value) => return Ok(value),
-                        Err(error) => {
-                            last = error;
-                            if attempt < 2 {
-                                std::thread::sleep(std::time::Duration::from_millis(400));
-                            }
-                        }
-                    }
-                }
-                Err(last)
+            let _ = tauri::async_runtime::spawn_blocking(move || {
+                let _ = wb_switch_core::modules::session::reassign_session_pool(vv, &to, &from);
+                pool
             })
-            .await
-            .unwrap_or_else(|error| Err(format!("划归任务异常: {error}")));
-            match res {
-                Ok((moved, backup)) => {
-                    reassign_report = Some(json!({
-                        "ok": true,
-                        "sessions": moved.moved_sessions,
-                        "spaces": moved.moved_spaces,
-                        "parkedSessions": moved.parked_sessions,
-                        "parkedSpaces": moved.parked_spaces,
-                        "backup": backup.to_string_lossy(),
-                        "fromUid": before_uid,
-                        "toUid": expected_uid,
-                    }));
-                    let _ = app.emit(
-                        "switch-progress",
-                        json!({ "message": format!(
-                            "已划归 {} 条会话、{} 个空间（目标账号原有 {} 条已移入隔离区），正在刷新客户端…",
-                            moved.moved_sessions, moved.moved_spaces, moved.parked_sessions
-                        ) }),
-                    );
-                }
-                Err(error) => {
-                    // 划归失败**不重启**：认证已经是新账号，会话归属保持原样即可。
-                    // 重启是用户明确不要的兜底；这里如实报告，让用户稍后重试切换来补划归。
-                    mode = "hot_no_reassign";
-                    let _ = app.emit(
-                        "switch-progress",
-                        json!({ "message": format!("账号已切换；会话归属未变（{error}），可稍后重试切换") }),
-                    );
-                    reassign_report = Some(json!({
-                        "ok": false,
-                        "error": error,
-                        "fromUid": before_uid,
-                        "toUid": expected_uid,
-                    }));
-                }
+            .await;
+            payload["rolledBack"] = json!(true);
+        }
+        payload["mode"] = json!("blocked");
+        let _ = app.emit(
+            "switch-progress",
+            json!({ "message": "写认证失败，已还原会话归属" }),
+        );
+        return payload;
+    }
+
+    // ③ 刷新页面并核实身份。**不重启客户端**；探测不到只标 unverified。
+    let _ = wb_switch_core::modules::cdp::reload_workbuddy_page().await;
+    let mut mode = "hot";
+    let mut identity = "effective";
+    if moved.is_some() {
+        let mut verdict: Option<bool> = None;
+        for _ in 0..8 {
+            tokio::time::sleep(std::time::Duration::from_millis(700)).await;
+            verdict =
+                wb_switch_core::modules::cdp::probe_identity_uid(&before_uid, &expected_uid).await;
+            if verdict.is_some() {
+                break;
             }
         }
-
-        // ② + ③：刷新页面并探测身份（重启兜底分支不需要——进程已被拉起）。
-        if mode == "hot" {
-            tokio::time::sleep(std::time::Duration::from_millis(250)).await;
-            let reloaded = wb_switch_core::modules::cdp::reload_workbuddy_page().await;
-            if needs_reassign && reassign_report.as_ref().is_some_and(|r| r["ok"] == json!(true)) {
-                let mut verdict: Option<bool> = None;
-                for _ in 0..8 {
-                    tokio::time::sleep(std::time::Duration::from_millis(700)).await;
-                    verdict =
-                        wb_switch_core::modules::cdp::probe_identity_uid(&before_uid, &expected_uid)
-                            .await;
-                    if verdict.is_some() {
-                        break;
-                    }
-                }
-                match verdict {
-                    // 客户端已是新身份：热切换完成，会话就是划归后的当前这套。
-                    Some(true) => {
-                        let _ = app.emit(
-                            "switch-progress",
-                            json!({ "message": "热切换完成，上下文以当前为准" }),
-                        );
-                    }
-                    // 客户端还在旧身份：反向划归还原归属，会话保持当前可见，
-                    // 如实告知用户需要重启才能完成切换。
-                    Some(false) => {
-                        mode = "hot_restored";
-                        let variant_v = variant.expect("读到了切换前 uid，档位必然存在");
-                        let (from, to) = (before_uid.clone(), expected_uid.clone());
-                        let restored =
-                            tauri::async_runtime::spawn_blocking(move || {
-                                wb_switch_core::modules::session::reassign_session_pool(
-                                    variant_v, &to, &from,
-                                )
-                            })
-                            .await
-                            .is_ok_and(|r| r.is_ok());
-                        let _ = wb_switch_core::modules::cdp::reload_workbuddy_page().await;
-                        if reassign_report.is_some() {
-                            reassign_report = Some(json!({
-                                "ok": restored,
-                                "reversed": true,
-                                "fromUid": before_uid,
-                                "toUid": expected_uid,
-                            }));
-                        }
-                        let _ = app.emit(
-                            "switch-progress",
-                            json!({ "message": "客户端未接受新身份，已还原会话归属；请重启 WorkBuddy 后重试切换" }),
-                        );
-                    }
-                    // CDP 不可用 / 探测不出来：**不重启**。认证与划归都已就位，
-                    // 页面刷新后就是新身份；重启是最重的兜底，用户明确不要。
-                    // 真出现身份没跟上，页面自己也会在下一次请求里纠正，或用户手动 Ctrl+R。
-                    None => {
-                        mode = "hot_unverified";
-                        let _ = app.emit(
-                            "switch-progress",
-                            json!({ "message": "已完成切换（身份未探测到，如界面未更新请按 Ctrl+R 刷新）" }),
-                        );
-                    }
-                }
-            } else if !reloaded && !needs_reassign {
+        match verdict {
+            Some(true) => {}
+            Some(false) => {
+                mode = "hot_restored";
+                identity = "identity-mismatch";
+                let vv = variant.expect("有划归就必然有档位");
+                let (from, to) = (before_uid.clone(), expected_uid.clone());
+                let _ = tauri::async_runtime::spawn_blocking(move || {
+                    let _ = wb_switch_core::modules::session::reassign_session_pool(vv, &to, &from);
+                })
+                .await;
+                let _ = wb_switch_core::modules::cdp::reload_workbuddy_page().await;
                 let _ = app.emit(
                     "switch-progress",
-                    json!({ "message": "已写入认证，请手动刷新客户端" }),
+                    json!({ "message": "客户端未接受新身份，已还原会话归属（未重启）" }),
+                );
+            }
+            None => {
+                mode = "hot_unverified";
+                identity = "identity-unverified";
+                let _ = app.emit(
+                    "switch-progress",
+                    json!({ "message": "已完成切换（身份未探测到，如界面未更新按 Ctrl+R）" }),
                 );
             }
         }
     }
-    payload["mode"] = json!(mode);
-    if let Some(report) = reassign_report {
-        payload["sessionReassign"] = report;
+
+    // ④ 审计：热切换也留痕。
+    let cost_ms = started.elapsed().as_millis() as i64;
+    {
+        use wb_switch_core::modules::switch_history::{record, SessionDigest, SwitchEntry};
+        let label = target
+            .as_ref()
+            .and_then(|a| a.get("nickname").or_else(|| a.get("email")))
+            .and_then(Value::as_str)
+            .unwrap_or("")
+            .to_string();
+        let _ = record(SwitchEntry {
+            ts: wb_switch_core::modules::config::now_ms(),
+            result: "ok".into(),
+            stage: "done".into(),
+            account_id: account_id.clone(),
+            to_uid: expected_uid.clone(),
+            to_label: label,
+            from_uid: before_uid.clone(),
+            from_label: String::new(),
+            variant: variant.map(|v| v.as_str().to_string()).unwrap_or_default(),
+            mode: format!("replace-{mode}"),
+            identity: identity.into(),
+            cost_ms,
+            sessions: moved.map(|pool| SessionDigest {
+                copied: pool.moved_sessions as i64,
+                source_total: (pool.moved_sessions + pool.parked_sessions) as i64,
+                failed: 0,
+                replaced: true,
+            }),
+            error: None,
+        });
     }
-    // `switch-progress` 的最后一条只是阶段文案，不代表流程结束。
-    // 统一补终态事件，让全局提示条无论成功、失败还是回滚都能关闭。
-    let _ = app_for_finish.emit(
+
+    payload["mode"] = json!(mode);
+    payload["costMs"] = json!(cost_ms);
+    if let Some(pool) = moved {
+        payload["sessionReassign"] = json!({
+            "ok": true,
+            "sessions": pool.moved_sessions,
+            "spaces": pool.moved_spaces,
+            "parkedSessions": pool.parked_sessions,
+            "parkedSpaces": pool.parked_spaces,
+            "fromUid": before_uid,
+            "toUid": expected_uid,
+        });
+    }
+
+    let _ = app.emit(
         "switch-finished",
-        json!({
-            "ok": payload.get("ok").and_then(Value::as_bool).unwrap_or(false),
-            "result": payload.get("result").cloned().unwrap_or(Value::Null),
-        }),
+        json!({ "ok": true, "result": payload.get("result").cloned().unwrap_or(Value::Null) }),
     );
     payload
 }

@@ -332,6 +332,19 @@ pub async fn reload_workbuddy_page() -> bool {
 ///
 /// 不猜 localStorage 的键名：直接对整个序列化结果做子串匹配，uid 是 32 位
 /// 十六进制，作为子串足够特异。
+/// 当前页面身份 uid：读 WorkBuddy 唯一标识当前账号的 localStorage 键。
+///
+/// 比 auth 文件可靠——auth 文件可能被外部改写或存在多档位，
+/// 而页面上的 `lastApplied::__identity` 就是客户端此刻在用的身份。
+pub async fn current_identity_uid() -> Option<String> {
+    let session = workbuddy_page(false).await?;
+    let js = "(function(){try{var r=localStorage.getItem('workbuddy.appearance.lastApplied::__identity')||'';var id=r.split('::::')[0];return id||'';}catch(e){return '';}})()";
+    match session.evaluate(js).await {
+        Ok(Value::String(id)) if !id.is_empty() => Some(id),
+        _ => None,
+    }
+}
+
 pub async fn probe_identity_uid(from_uid: &str, to_uid: &str) -> Option<bool> {
     if from_uid.is_empty() || to_uid.is_empty() || from_uid == to_uid {
         return None;

@@ -539,6 +539,7 @@ pub fn restart(app: AppHandle) -> Value {
 
     #[cfg(target_os = "windows")]
     {
+        let _ = &update;
         let setup = std::env::temp_dir().join(format!("WorkBuddyDeck-Setup-{version}.exe"));
         if let Err(error) = std::fs::write(&setup, &bytes) {
             INSTALLING.store(false, Ordering::SeqCst);
@@ -557,7 +558,7 @@ pub fn restart(app: AppHandle) -> Value {
             tokio::time::sleep(Duration::from_millis(600)).await;
             app.exit(0);
         });
-        return json!({ "ok": true, "started": true });
+        json!({ "ok": true, "started": true })
     }
 
     #[cfg(not(target_os = "windows"))]
